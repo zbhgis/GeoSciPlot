@@ -1,0 +1,15 @@
+{
+  "title": "GeoSciPlot",
+  "subtitle": "地学科研绘图参考图库",
+  "lede": "收集公开发表的地学 / 科研图表，供绘图风格与配色参考。",
+  "repo": "GeoSciPlot",
+  "branch": "main",
+  "owner": "zbhgis",
+  "activeSource": 1,
+  "oss": {
+    "bucket": "",
+    "region": "oss-cn-hangzhou"
+  },
+  "tracker": "/api/v1/track",
+  "api": ""
+}

@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GeoSciPlot · 本地管理</title>
+<style>
+:root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22;--ok:#3fb950;--bad:#f85149}
+@media (prefers-color-scheme:light){:root{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;--ok:#1a7f37;--bad:#cf222e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 ui-sans-serif,system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.wrap{max-width:980px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:22px;margin:0;font-weight:600}
+h2{font-size:13px;margin:34px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:500;color:var(--dim);letter-spacing:.06em}
+.sub{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);margin:8px 0 0}
+.status{margin-top:14px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--card);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--dim);display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.status b{font-weight:500;color:var(--text)}
+.badge{padding:1px 7px;border:1px solid var(--line2);border-radius:3px}
+.badge.ok{color:var(--ok);border-color:var(--ok)}
+.badge.warn{color:var(--bad);border-color:var(--bad)}
+#drop{border:1px dashed var(--line2);border-radius:8px;padding:34px 20px;text-align:center;color:var(--faint);cursor:pointer;transition:border-color .16s,background-color .16s}
+#drop:hover,#drop.on{border-color:var(--accent);color:var(--accent);background:var(--card)}
+#drop .big{font-size:15px;color:var(--text);margin-bottom:6px}
+#file{display:none}
+.item{border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px;background:var(--card);display:grid;grid-template-columns:190px 1fr;gap:16px}
+@media (max-width:700px){.item{grid-template-columns:1fr}}
+.thumb{width:100%;border-radius:6px;border:1px solid var(--line);background:var(--line);display:block}
+.meta{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);margin-top:8px;word-break:break-all;line-height:1.7}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px}
+@media (max-width:700px){.fields{grid-template-columns:1fr}}
+label{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;color:var(--faint);margin-bottom:4px;letter-spacing:.05em}
+input,textarea,select{width:100%;padding:7px 9px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--text);font-family:inherit;font-size:13px}
+input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{resize:vertical;min-height:52px}
+.full{grid-column:1/-1}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:8px 14px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer}
+button:hover{color:var(--accent);border-color:var(--accent)}
+button.primary{color:var(--ok);border-color:var(--ok)}
+button.primary:hover{background:var(--card)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.tiny{padding:4px 9px;font-size:11px}
+.log{margin-top:12px}
+.step{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.step .mark{width:14px;flex:none}
+.step .nm{color:var(--text)}
+.step .out{color:var(--faint);font-size:11px;white-space:pre-wrap;flex:1;min-width:0}
+details{margin-left:24px}
+details summary{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);cursor:pointer}
+details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radius:5px;background:var(--card);font-size:11px;line-height:1.55;max-height:280px;overflow:auto;white-space:pre-wrap}
+.note{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);line-height:1.8}
+.hint{padding:9px 12px;border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:4px;background:var(--card);font-size:12px;color:var(--dim);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GeoSciPlot · 本地管理</h1>
+  <p class="sub">只监听 127.0.0.1，仅本机可访问 · 推送使用你本机已配置的 git 凭据</p>
+
+  <div class="status" id="status"><span>读取仓库状态…</span></div>
+
+  <div id="initBox" style="display:none">
+    <h2>初始化仓库</h2>
+    <div class="hint">当前目录还不是 git 仓库。填好远端地址后点初始化：会执行 git init、首次提交并推送。</div>
+    <div class="row">
+      <input id="remote" style="max-width:460px" placeholder="git@github.com:zbhgis/GeoSciPlot.git">
+      <button class="primary" id="btnInit">初始化并推送</button>
+    </div>
+  </div>
+
+  <h2>1 · 添加图片</h2>
+  <div id="drop">
+    <div class="big">把图片拖到这里，或点击选择</div>
+    <div class="mono" style="font-size:11px">支持多张 · PNG / JPG / WebP / BMP / TIFF · 单张建议 ≤ 20MB</div>
+  </div>
+  <input id="file" type="file" multiple accept="image/*">
+  <p class="note" id="uploadNote" style="margin-top:8px"></p>
+
+  <h2>2 · 填写信息</h2>
+  <div id="list"></div>
+  <p class="note" id="emptyNote">还没有待发布的图片。上传后这里会出现每张图的表单。</p>
+
+  <h2>3 · 发布</h2>
+  <div class="row">
+    <input id="msg" style="flex:1 1 320px;max-width:460px" placeholder="提交信息（留空自动生成）">
+    <label class="mono" style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px"><input type="checkbox" id="doPush" checked style="width:auto"> 同时推送到 GitHub</label>
+  </div>
+  <div class="row">
+    <button class="primary" id="btnPublish">发布（生成站点 + 提交）</button>
+    <button id="btnPush">仅执行 git push</button>
+  </div>
+  <div class="log" id="log"></div>
+
+  <h2>说明</h2>
+  <p class="note">
+    · 上传的图片会立即写入 <b>raw/</b>；点发布后才会压缩出缩略图、更新索引并生成站点。<br>
+    · 图片 id 由内容算出（sha1 前 10 位），与文件名无关 —— 重复上传同一张图会被识别出来。<br>
+    · 若上传后不发布，图片仍留在 raw/，下次生成会以「未命名」收录，可在 meta/titles.csv 里补。<br>
+    · 发布 = 写 meta/titles.csv → prepare.py → build_site.py → git add/commit/push，日志见上方。
+  </p>
+</div>
+
+<script>
+var pending = [];
+var status = {};
+
+function el(tag, cls, txt) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (txt !== undefined) e.textContent = txt;
+  return e;
+}
+function api(path, body) {
+  return fetch(path, body ? {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  } : undefined).then(function (r) { return r.json(); });
+}
+
+/* ── 仓库状态 ── */
+function loadStatus() {
+  return api("/api/status").then(function (s) {
+    status = s;
+    var box = document.getElementById("status");
+    box.innerHTML = "";
+    box.appendChild(el("span", "", "仓库：" + (s.isRepo ? "已初始化" : "未初始化")));
+    var b = el("span", "badge " + (s.remote ? "ok" : "warn"), s.remote || "无 origin");
+    box.appendChild(b);
+    box.appendChild(el("span", "", "分支 " + s.branch));
+    box.appendChild(el("span", "", "索引 " + s.count + " 张"));
+    box.appendChild(el("span", "", "未提交 " + s.dirty + " 项"));
+    box.appendChild(el("span", "", "期刊 " + s.journals.length + " 种 · 共 " + s.count + " 张图"));
+    document.getElementById("initBox").style.display = s.isRepo ? "none" : "block";
+    document.getElementById("remote").value = s.defaultRemote || "";
+    fillDatalist("jours", s.journals);
+    return s;
+  });
+}
+function fillDatalist(id, values) {
+  var dl = document.getElementById(id);
+  if (!dl) return;
+  dl.innerHTML = "";
+  (values || []).forEach(function (v) {
+    var o = document.createElement("option");
+    o.value = v;
+    dl.appendChild(o);
+  });
+}
+
+/* ── 上传 ── */
+function readB64(file) {
+  return new Promise(function (res, rej) {
+    var r = new FileReader();
+    r.onload = function () { res(String(r.result).split(",")[1] || ""); };
+    r.onerror = function () { rej(new Error("读取失败")); };
+    r.readAsDataURL(file);
+  });
+}
+
+function handleFiles(fileList) {
+  var files = [].slice.call(fileList || []);
+  if (!files.length) return;
+  var note = document.getElementById("uploadNote");
+  var i = 0, added = 0, dup = 0, failed = 0;
+  note.textContent = "上传中… 0/" + files.length;
+
+  (function next() {
+    if (i >= files.length) {
+      note.textContent = "上传完成：新增 " + added + " 张" +
+        (dup ? "，内容重复 " + dup + " 张（已标记）" : "") +
+        (failed ? "，失败 " + failed + " 张" : "");
+      return;
+    }
+    var f = files[i++];
+    readB64(f).then(function (b64) {
+      return api("/api/upload", { files: [{ name: f.name, b64: b64 }] });
+    }).then(function (res) {
+      var rec = (res.files || [])[0];
+      note.textContent = "上传中… " + i + "/" + files.length;
+      if (rec && rec.error) { failed++; }
+      else if (rec) {
+        if (rec.duplicate) dup++; else added++;
+        addItem(rec);
+      } else { failed++; }
+    }).catch(function () { failed++; }).then(next);
+  })();
+}
+
+function addItem(rec) {
+  pending.push(rec);
+  var node = buildItemNode(rec);
+  document.getElementById("list").appendChild(node);
+  document.getElementById("emptyNote").style.display = "none";
+}
+
+function buildItemNode(rec) {
+  var node = el("div", "item");
+  rec.node = node;
+
+  var left = el("div");
+  var img = document.createElement("img");
+  img.className = "thumb";
+  img.src = rec.preview || "";
+  img.alt = rec.name;
+  left.appendChild(img);
+  var meta = el("div", "meta");
+  meta.appendChild(el("div", "", "id " + rec.id));
+  meta.appendChild(el("div", "", (rec.width || "?") + "×" + (rec.height || "?") + " · " + Math.round((rec.bytes || 0) / 1024) + " KB"));
+  meta.appendChild(el("div", "", rec.savedAs || rec.name));
+  if (rec.duplicate) {
+    var d = el("div", "", "⚠ 内容已存在（重复）");
+    d.style.color = "var(--bad)";
+    meta.appendChild(d);
+  }
+  left.appendChild(meta);
+  node.appendChild(left);
+
+  var right = el("div");
+  var fields = el("div", "fields");
+
+  function field(labelText, key, opts) {
+    opts = opts || {};
+    var box = el("div", opts.full ? "full" : "");
+    box.appendChild(el("label", "", labelText));
+    var input;
+    if (opts.type === "textarea") {
+      input = document.createElement("textarea");
+    } else {
+      input = document.createElement("input");
+      input.type = opts.type || "text";
+      if (opts.list) input.setAttribute("list", opts.list);
+      if (opts.placeholder) input.placeholder = opts.placeholder;
+    }
+    input.addEventListener("input", function () { rec[key] = input.value; });
+    box.appendChild(input);
+    fields.appendChild(box);
+    return input;
+  }
+
+  field("期刊 journal", "journal", { list: "jours", placeholder: "如：Nature Climate Change" });
+  field("论文发表 published", "published", { type: "month" });
+  field("标签 tags", "tags", { placeholder: "用 | 分隔，如：多面板|极地投影" });
+  field("说明 desc", "desc", { type: "textarea", full: true, placeholder: "一句话说明图面要点（有助于搜索）" });
+
+  right.appendChild(fields);
+
+  var row = el("div", "row");
+  var rm = el("button", "tiny", "移除");
+  rm.addEventListener("click", function () {
+    pending = pending.filter(function (x) { return x !== rec; });
+    node.parentNode.removeChild(node);
+    if (!pending.length) document.getElementById("emptyNote").style.display = "block";
+  });
+  row.appendChild(rm);
+  var hint = el("span", "note", "（仅从界面移除；文件已写入 raw/）");
+  row.appendChild(hint);
+  right.appendChild(row);
+
+  node.appendChild(right);
+  return node;
+}
+
+/* ── 发布 / 初始化 / 推送 ── */
+function renderLog(log) {
+  var box = document.getElementById("log");
+  box.innerHTML = "";
+  (log || []).forEach(function (s) {
+    var row = el("div", "step");
+    var mark = el("span", "mark", s.ok ? "✓" : "✗");
+    mark.style.color = s.ok ? "var(--ok)" : "var(--bad)";
+    row.appendChild(mark);
+    row.appendChild(el("span", "nm", s.step));
+    var first = String(s.out || "").split("\n").filter(function (l) { return l.trim(); }).slice(-1)[0] || "";
+    row.appendChild(el("span", "out", first));
+    box.appendChild(row);
+    if (s.out && String(s.out).split("\n").length > 1) {
+      var d = document.createElement("details");
+      var sm = document.createElement("summary");
+      sm.textContent = "查看完整输出";
+      d.appendChild(sm);
+      var pre = document.createElement("pre");
+      pre.textContent = s.out;
+      d.appendChild(pre);
+      box.appendChild(d);
+    }
+  });
+}
+
+function publish() {
+  if (!pending.length) { alert("还没有待发布的图片"); return; }
+  var items = pending.map(function (p) {
+    return {
+      id: p.id,
+      journal: p.journal || "", published: p.published || "",
+      tags: (p.tags || "").split("|").map(function (t) { return t.trim(); }).filter(Boolean),
+      desc: p.desc || ""
+    };
+  });
+  var btn = document.getElementById("btnPublish");
+  btn.disabled = true;
+  btn.textContent = "发布中…";
+  api("/api/publish", {
+    items: items,
+    message: document.getElementById("msg").value,
+    push: document.getElementById("doPush").checked
+  }).then(function (res) {
+    renderLog(res.log);
+    if (res.hint) {
+      var h = el("div", "hint", res.hint);
+      document.getElementById("log").appendChild(h);
+    }
+    if (res.ok) {
+      pending = [];
+      document.getElementById("list").innerHTML = "";
+      document.getElementById("emptyNote").style.display = "block";
+      document.getElementById("uploadNote").textContent = "";
+    }
+  }).catch(function (e) {
+    renderLog([{ step: "请求失败", ok: false, out: String(e) }]);
+  }).then(function () {
+    btn.disabled = false;
+    btn.textContent = "发布（生成站点 + 提交）";
+    loadStatus();
+  });
+}
+
+document.getElementById("drop").addEventListener("click", function () {
+  document.getElementById("file").click();
+});
+document.getElementById("file").addEventListener("change", function (e) {
+  handleFiles(e.target.files);
+  e.target.value = "";
+});
+["dragenter", "dragover"].forEach(function (ev) {
+  document.getElementById("drop").addEventListener(ev, function (e) {
+    e.preventDefault();
+    document.getElementById("drop").classList.add("on");
+  });
+});
+["dragleave", "drop"].forEach(function (ev) {
+  document.getElementById("drop").addEventListener(ev, function (e) {
+    e.preventDefault();
+    document.getElementById("drop").classList.remove("on");
+  });
+});
+document.getElementById("drop").addEventListener("drop", function (e) {
+  if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+});
+document.getElementById("btnPublish").addEventListener("click", publish);
+document.getElementById("btnPush").addEventListener("click", function () {
+  api("/api/push", {}).then(function (res) { renderLog(res.log); });
+});
+document.getElementById("btnInit").addEventListener("click", function () {
+  var btn = document.getElementById("btnInit");
+  btn.disabled = true;
+  btn.textContent = "初始化中…";
+  api("/api/init", { remote: document.getElementById("remote").value }).then(function (res) {
+    renderLog(res.log);
+    btn.disabled = false;
+    btn.textContent = "初始化并推送";
+    loadStatus();
+  });
+});
+
+loadStatus();
+</script>
+<datalist id="jours"></datalist>
+</body>
+</html>

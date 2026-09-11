@@ -1,0 +1,14 @@
+# 生成的静态站点（部署产物，由 scripts/build_site.py 生成）
+site/
+
+# 原图收件箱：本地投放用，不进仓库
+# （images/full/ 已保存每张原图的逐字节副本，且文件名规范；不重复入库）
+raw/
+
+# Python
+__pycache__/
+*.pyc
+
+# 系统
+.DS_Store
+Thumbs.db

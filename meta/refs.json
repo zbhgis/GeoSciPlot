@@ -1,0 +1,230 @@
+{
+  "generated": "2026-09-12",
+  "count": 10,
+  "thumbMax": 480,
+  "items": [
+    {
+      "id": "d57d821bbd",
+      "journal": "Nature Climate Change",
+      "published": "2024-01",
+      "tags": [
+        "时间序列",
+        "前后期对比",
+        "极地地图",
+        "滞留时间"
+      ],
+      "desc": "(a) 1990–2020 滞留时间序列与各阶段均值；(b)(c) 1990–2006 与 2007–2019 结冰时间空间分布对比（月份色标）。",
+      "title": "北极海冰滞留时间与结冰时间前后期对比",
+      "category": "极地与海冰",
+      "width": 1280,
+      "height": 862,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/d57d821bbd.webp",
+      "full": "full/2026-09-11/d57d821bbd.png",
+      "bytes": 852441,
+      "origName": "1280X1280 (5).PNG",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "d24f57a016",
+      "journal": "Nature Climate Change",
+      "published": "2023-08",
+      "tags": [
+        "单面板",
+        "极地投影",
+        "日期色标"
+      ],
+      "desc": "单一极地投影地图，用日期型色标（JAN–JUN，第 110–270 天）展示 10 年径流起始日中位数。",
+      "title": "北半球径流起始日期十年中位数分布",
+      "category": "水文与冰冻圈",
+      "width": 653,
+      "height": 652,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/d24f57a016.webp",
+      "full": "full/2026-09-11/d24f57a016.png",
+      "bytes": 516640,
+      "origName": "cead16ea-ae7b-43b5-be37-ef216a064139.png",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "d11638adde",
+      "journal": "Nature Cities",
+      "published": "2025-01",
+      "tags": [
+        "全球地图",
+        "比例符号",
+        "Equal Earth投影",
+        "城市"
+      ],
+      "desc": "以圆面积表示城市中心数量（100/200/400），颜色表示不可达比例（0–0.959），Equal Earth 投影。",
+      "title": "全球城市中心可达性（不可达比例）",
+      "category": "城市与可达性",
+      "width": 1280,
+      "height": 729,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/d11638adde.webp",
+      "full": "full/2026-09-11/d11638adde.png",
+      "bytes": 616172,
+      "origName": "1280X1280 (2).PNG",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "ad3eef7baa",
+      "journal": "Nature Climate Change",
+      "published": "2023-06",
+      "tags": [
+        "多面板",
+        "极地投影",
+        "流场箭头",
+        "频率分布",
+        "年代对比"
+      ],
+      "desc": "(a) 北极海冰浓度底图叠加洋流箭头与采样点；(b) 1990–2006 与 2007–2019 两期海冰厚度频率分布对比，标注样本量与标准差。",
+      "title": "北极海冰浓度与海冰厚度年代际变化",
+      "category": "极地与海冰",
+      "width": 825,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/ad3eef7baa.webp",
+      "full": "full/2026-09-11/ad3eef7baa.png",
+      "bytes": 742618,
+      "origName": "1280X1280 (3).PNG",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "8ae853d256",
+      "journal": "Nature",
+      "published": "2024-03",
+      "tags": [
+        "全球地图",
+        "碳汇",
+        "分级色标",
+        "符号标注",
+        "Nature风格"
+      ],
+      "desc": "各国标注净固碳量变化百分比（USA +0%、Uruguay −79%、Tanzania −120%、China 0%）；底部用三角/圆/方形符号区分减缓潜力所处阶段，图例说明 Rangeland system 范围。",
+      "title": "全球草地碳汇变化分布图（净固碳量变化）",
+      "category": "全球变化与碳循环",
+      "width": 1280,
+      "height": 801,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/8ae853d256.webp",
+      "full": "full/2026-09-11/8ae853d256.png",
+      "bytes": 562145,
+      "origName": "1280X1280 (1).PNG",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "86d9ff84c3",
+      "journal": "Global Change Biology",
+      "published": "2024-05",
+      "tags": [
+        "六边形分箱",
+        "箱线图",
+        "元分析",
+        "显著性标注"
+      ],
+      "desc": "六边形分箱地图叠加方向性条形（Vicinity/Expert，−1–1），左下嵌入分组箱线图并标注样本量与 p 值。",
+      "title": "六边形分箱地图与响应比箱线图",
+      "category": "统计与不确定性",
+      "width": 1280,
+      "height": 689,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/86d9ff84c3.webp",
+      "full": "full/2026-09-11/86d9ff84c3.png",
+      "bytes": 370789,
+      "origName": "1280X12807.PNG",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "488433461e",
+      "journal": "Nature Climate Change",
+      "published": "2024-09",
+      "tags": [
+        "多面板",
+        "不确定性",
+        "连续色标",
+        "高纬度"
+      ],
+      "desc": "三联横向图：(a) 生态系统呼吸变化百分比；(b) 相对标准差；(c) 数据驱动不确定性占比，并标注模型/输入数据主导区间。",
+      "title": "高纬生态系统呼吸变化与不确定性分解",
+      "category": "全球变化与碳循环",
+      "width": 1280,
+      "height": 444,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/488433461e.webp",
+      "full": "full/2026-09-11/488433461e.png",
+      "bytes": 409903,
+      "origName": "1280X1280 (4).PNG",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "47c11ba057",
+      "journal": "Nature Communications",
+      "published": "2023-04",
+      "tags": [
+        "全球地图",
+        "环形图",
+        "分区统计",
+        "GLOF"
+      ],
+      "desc": "(a) 全球冰湖特征：分区环形图按坝体类型展示水量（全球合计 160.3 Gt）；(b) GLOF 特征：按坝型分区统计。",
+      "title": "全球冰湖与冰湖溃决洪水（GLOF）特征",
+      "category": "冰冻圈与灾害",
+      "width": 684,
+      "height": 752,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/47c11ba057.webp",
+      "full": "full/2026-09-11/47c11ba057.png",
+      "bytes": 351210,
+      "origName": "下载.png",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "2a2c0b0953",
+      "journal": "Nature Geoscience",
+      "published": "2023-10",
+      "tags": [
+        "多面板",
+        "时间序列",
+        "极地地图",
+        "冻土",
+        "通量"
+      ],
+      "desc": "(a) 六大河与中小河流输沙通量占比横条；(b) 1984–2016 输沙通量时间序列与每十年变化率；(c) 环北极地图叠加冻土类型与各河流变化百分比。",
+      "title": "泛北极河流输沙通量变化与多年冻土分布",
+      "category": "水文与冰冻圈",
+      "width": 1131,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/2a2c0b0953.webp",
+      "full": "full/2026-09-11/2a2c0b0953.png",
+      "bytes": 819711,
+      "origName": "351df599-229b-4f21-bdfa-b29010759d92.png",
+      "added": "2026-09-11"
+    },
+    {
+      "id": "182f883d0c",
+      "journal": "Nature",
+      "published": "2020-02",
+      "tags": [
+        "多面板",
+        "流域对比",
+        "象形符号",
+        "环形标注",
+        "人口"
+      ],
+      "desc": "五个流域（AMU/TRM/YEL/IND/GAN）融水量变化与人口变化对比；右侧用图标表示可用融水、城市人口与灌溉需求之间的竞争关系。",
+      "title": "高亚洲水塔流域融水变化与用水竞争",
+      "category": "水文与水资源",
+      "width": 1280,
+      "height": 876,
+      "ext": "png",
+      "thumb": "thumb/2026-09-11/182f883d0c.webp",
+      "full": "full/2026-09-11/182f883d0c.png",
+      "bytes": 469707,
+      "origName": "1280X1280.PNG",
+      "added": "2026-09-11"
+    }
+  ]
+}
