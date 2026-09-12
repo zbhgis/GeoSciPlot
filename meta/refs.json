@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 22,
+  "count": 28,
   "thumbMax": 480,
   "items": [
     {
@@ -175,6 +175,22 @@
       "added": "2026-09-12"
     },
     {
+      "id": "8a690db53e",
+      "doi": "https://doi.org/10.1038/s41467-022-33009-1",
+      "tags": [
+        "半环形",
+        "单一组图"
+      ],
+      "width": 1280,
+      "height": 387,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/8a690db53e.webp",
+      "full": "full/2026-09-12/8a690db53e.png",
+      "bytes": 473406,
+      "origName": "41bfbced-cb30-46cb-8089-b7c1639c9924.png",
+      "added": "2026-09-12"
+    },
+    {
       "id": "7c64f88fd1",
       "doi": "https://doi.org/10.1126/sciadv.ady3258",
       "tags": [
@@ -203,6 +219,22 @@
       "full": "full/2026-09-12/7b644aba88.png",
       "bytes": 782618,
       "origName": "1280X1280 (6).PNG",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "79c4c29df3",
+      "doi": "https://doi.org/10.1038/s41561-025-01875-1",
+      "tags": [
+        "半环形",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 674,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/79c4c29df3.webp",
+      "full": "full/2026-09-12/79c4c29df3.png",
+      "bytes": 578912,
+      "origName": "df5a46eb-8b9f-431b-a712-6386ba5b7c0a.png",
       "added": "2026-09-12"
     },
     {
@@ -237,6 +269,22 @@
       "added": "2026-09-12"
     },
     {
+      "id": "521a01163d",
+      "doi": "https://doi.org/10.1038/s41558-023-01695-4",
+      "tags": [
+        "半环形",
+        "复杂组图"
+      ],
+      "width": 925,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/521a01163d.webp",
+      "full": "full/2026-09-12/521a01163d.png",
+      "bytes": 910198,
+      "origName": "1280X1280 (10).PNG",
+      "added": "2026-09-12"
+    },
+    {
       "id": "488433461e",
       "doi": "https://doi.org/10.1038/s41586-024-07274-7",
       "tags": [
@@ -265,6 +313,22 @@
       "full": "full/2026-09-12/46c12930b7.png",
       "bytes": 662977,
       "origName": "0dbe947a-8ce8-4a9c-b7c0-80a1619727ae.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "430beb0511",
+      "doi": "https://doi.org/10.1038/s41561-025-01757-6",
+      "tags": [
+        "半环形",
+        "单一组图"
+      ],
+      "width": 1280,
+      "height": 785,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/430beb0511.webp",
+      "full": "full/2026-09-12/430beb0511.png",
+      "bytes": 1031532,
+      "origName": "585097b4-044e-4e7f-ba73-3131db9f6f91.png",
       "added": "2026-09-12"
     },
     {
@@ -344,6 +408,38 @@
       "full": "full/2026-09-12/24956502bd.png",
       "bytes": 1192407,
       "origName": "9b8e2151-6d74-4f72-afc2-4a09018e49f1.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "1ebb794295",
+      "doi": "https://doi.org/10.1038/s41586-025-09230-5",
+      "tags": [
+        "半环形",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 702,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/1ebb794295.webp",
+      "full": "full/2026-09-12/1ebb794295.png",
+      "bytes": 452657,
+      "origName": "1280X1280 (11).PNG",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "0a6ef8898e",
+      "doi": "https://doi.org/10.1038/s41586-025-09319-x",
+      "tags": [
+        "半环形",
+        "单一组图"
+      ],
+      "width": 1280,
+      "height": 770,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/0a6ef8898e.webp",
+      "full": "full/2026-09-12/0a6ef8898e.png",
+      "bytes": 644510,
+      "origName": "800fca8f-5179-47cf-9a76-edeb6d097ef0.png",
       "added": "2026-09-12"
     }
   ]
