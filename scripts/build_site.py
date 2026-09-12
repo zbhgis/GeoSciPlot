@@ -91,14 +91,25 @@ def haystack(item: dict) -> str:
 
 
 CSS = """\
-:root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22}
-@media (prefers-color-scheme:light){:root{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa}}
+:root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22;color-scheme:dark}
+:root[data-theme=dark]{color-scheme:dark}
+@media (prefers-color-scheme:light){:root:not([data-theme]){--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;color-scheme:light}}
+:root[data-theme=light]{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 ui-sans-serif,system-ui,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
-header.site{padding:72px 0 0}
+header.site{padding:72px 0 0;position:relative}
+.hbtns{position:absolute;top:0;right:0;display:flex;gap:8px}
+.tbtn{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border:1px solid var(--line2);border-radius:999px;background:var(--card);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s}
+.tbtn:hover{color:var(--accent);border-color:var(--accent)}
+.tbtn svg{width:14px;height:14px;flex:none}
+@media (max-width:760px){.hbtns{gap:6px}.tbtn{padding:6px 11px;font-size:11px}}
+.tbtn .ic-sun{display:none}.tbtn .ic-moon{display:inline}
+@media (prefers-color-scheme:light){:root:not([data-theme]) .tbtn .ic-sun{display:inline}:root:not([data-theme]) .tbtn .ic-moon{display:none}}
+:root[data-theme=light] .tbtn .ic-sun{display:inline}:root[data-theme=light] .tbtn .ic-moon{display:none}
+:root[data-theme=dark] .tbtn .ic-sun{display:none}:root[data-theme=dark] .tbtn .ic-moon{display:inline}
 .kicker{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0}
 h1{font-size:clamp(44px,6.5vw,68px);line-height:1.08;letter-spacing:-.03em;margin:24px 0 0;font-weight:700}
 .lede{font-size:16px;color:var(--dim);max-width:52ch;margin:20px 0 0}
@@ -213,6 +224,16 @@ JS = """\
         viewsEl.style.color = "var(--text)";
       }).catch(function () { viewsEl.textContent = "—"; });
   }
+
+  var themeBtn = document.getElementById("themeBtn");
+  if (themeBtn) themeBtn.addEventListener("click", function () {
+    var root = document.documentElement;
+    var light = root.getAttribute("data-theme") === "light" ||
+      (!root.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme:light)").matches);
+    var t = light ? "dark" : "light";
+    root.setAttribute("data-theme", t);
+    try { localStorage.setItem("gsp-theme", t); } catch (e) {}
+  });
 
   var grid = document.getElementById("grid");
   if (!grid) { document.querySelectorAll("img[data-rel]").forEach(bind); return; }
@@ -443,9 +464,11 @@ def page_shell(cfg: dict, title: str, body: str, depth: int = 0) -> str:
 <title>geosciplot</title>
 <meta name="description" content="{esc(cfg['subtitle'])} —— {esc(cfg['lede'])}">
 <link rel="stylesheet" href="{up}assets/style.css">
+<script>try{{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t)}}catch(e){{}}</script>
 </head>
 <body>
 <div class="wrap">
+<div class="hbtns"><a class="tbtn" href="https://www.zbhgis.com" title="返回主站 浩瀚地学"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8 8 3l5.5 5M4 7v6h8V7"/></svg><span>主站</span></a><button type="button" class="tbtn" id="themeBtn" title="切换明暗主题" aria-label="切换明暗主题"><svg class="ic-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg><svg class="ic-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/></svg></button></div>
 {body}
 <footer class="site">
   <span>{esc(cfg['title'])} · {esc(cfg['subtitle'])}</span>
