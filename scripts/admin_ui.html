@@ -14,6 +14,10 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 ui-sans-serif
 h1{font-size:22px;margin:0;font-weight:600}
 h2{font-size:13px;margin:34px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:500;color:var(--dim);letter-spacing:.06em}
 .sub{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);margin:8px 0 0}
+.tabs{display:flex;gap:8px;margin:26px 0 0}
+.tab{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;padding:9px 16px;border:1px solid var(--line2);border-radius:6px 6px 0 0;background:transparent;color:var(--dim);cursor:pointer;border-bottom:none}
+.tab.active{color:var(--accent);border-color:var(--accent);background:var(--card)}
+.tabpage{border:1px solid var(--line);border-radius:0 8px 8px 8px;padding:20px;min-height:200px}
 .status{margin-top:14px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--card);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--dim);display:flex;flex-wrap:wrap;gap:14px;align-items:center}
 .status b{font-weight:500;color:var(--text)}
 .badge{padding:1px 7px;border:1px solid var(--line2);border-radius:3px}
@@ -39,6 +43,7 @@ button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 button:hover{color:var(--accent);border-color:var(--accent)}
 button.primary{color:var(--ok);border-color:var(--ok)}
 button.primary:hover{background:var(--card)}
+button.danger{color:var(--bad);border-color:var(--bad)}
 button:disabled{opacity:.45;cursor:not-allowed}
 button.tiny{padding:4px 9px;font-size:11px}
 .log{margin-top:12px}
@@ -51,6 +56,16 @@ details summary{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace
 details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radius:5px;background:var(--card);font-size:11px;line-height:1.55;max-height:280px;overflow:auto;white-space:pre-wrap}
 .note{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);line-height:1.8}
 .hint{padding:9px 12px;border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:4px;background:var(--card);font-size:12px;color:var(--dim);margin-top:10px}
+/* 图片管理列表 */
+.mrow{display:grid;grid-template-columns:130px 1fr auto;gap:14px;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--card);align-items:start}
+@media (max-width:700px){.mrow{grid-template-columns:1fr}}
+.mthumb{width:130px;border-radius:5px;border:1px solid var(--line);display:block}
+.minfo{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);line-height:1.8;word-break:break-all;min-width:0}
+.minfo .t{color:var(--text);font-size:12.5px}
+.mact{display:flex;flex-direction:column;gap:8px}
+.editform{grid-column:1/-1;border-top:1px dashed var(--line2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:9px 12px}
+@media (max-width:700px){.editform{grid-template-columns:1fr}}
+.editform .full{grid-column:1/-1}
 </style>
 </head>
 <body>
@@ -69,41 +84,60 @@ details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radi
     </div>
   </div>
 
-  <h2>1 · 添加图片</h2>
-  <div id="drop">
-    <div class="big">把图片拖到这里，或点击选择</div>
-    <div class="mono" style="font-size:11px">支持多张 · PNG / JPG / WebP / BMP / TIFF · 单张建议 ≤ 20MB</div>
+  <div class="tabs">
+    <button class="tab active" data-tab="add">添加图片</button>
+    <button class="tab" data-tab="manage">图片管理</button>
   </div>
-  <input id="file" type="file" multiple accept="image/*">
-  <p class="note" id="uploadNote" style="margin-top:8px"></p>
 
-  <h2>2 · 填写信息</h2>
-  <div id="list"></div>
-  <p class="note" id="emptyNote">还没有待发布的图片。上传后这里会出现每张图的表单。</p>
+  <div class="tabpage" id="tab-add">
+    <h2 style="margin-top:0">添加图片</h2>
+    <div id="drop">
+      <div class="big">把图片拖到这里，或点击选择</div>
+      <div class="mono" style="font-size:11px">支持多张 · PNG / JPG / WebP / BMP / TIFF · 单张建议 ≤ 20MB</div>
+    </div>
+    <input id="file" type="file" multiple accept="image/*">
+    <p class="note" id="uploadNote" style="margin-top:8px"></p>
 
-  <h2>3 · 发布</h2>
-  <div class="row">
-    <input id="msg" style="flex:1 1 320px;max-width:460px" placeholder="提交信息（留空自动生成）">
-    <label class="mono" style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px"><input type="checkbox" id="doPush" checked style="width:auto"> 同时推送到 GitHub</label>
+    <h2>填写信息</h2>
+    <div id="list"></div>
+    <p class="note" id="emptyNote">还没有待发布的图片。上传后这里会出现每张图的表单。</p>
+
+    <h2>发布</h2>
+    <div class="row">
+      <input id="msg" style="flex:1 1 320px;max-width:460px" placeholder="提交信息（留空自动生成）">
+      <label class="mono" style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px"><input type="checkbox" id="doPush" checked style="width:auto"> 同时推送到 GitHub</label>
+      <label class="mono" style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px"><input type="checkbox" id="doSync" checked style="width:auto"> 同步到服务器</label>
+    </div>
+    <div class="row">
+      <button class="primary" id="btnPublish">发布（生成站点 + 提交）</button>
+      <button id="btnPush">仅执行 git push</button>
+    </div>
+    <div class="log" id="log"></div>
   </div>
-  <div class="row">
-    <button class="primary" id="btnPublish">发布（生成站点 + 提交）</button>
-    <button id="btnPush">仅执行 git push</button>
+
+  <div class="tabpage" id="tab-manage" style="display:none">
+    <h2 style="margin-top:0">图片管理</h2>
+    <div class="row" style="margin:0 0 16px">
+      <button id="btnSync">同步站点到服务器</button>
+      <span class="note">把 site/ 推到服务器（需先在服务器 authorized_keys 里加本机公钥，见 README）</span>
+    </div>
+    <div id="manageList"><p class="note">读取中…</p></div>
   </div>
-  <div class="log" id="log"></div>
 
   <h2>说明</h2>
   <p class="note">
     · 上传的图片会立即写入 <b>raw/</b>；点发布后才会压缩出缩略图、更新索引并生成站点。<br>
     · 图片 id 由内容算出（sha1 前 10 位），与文件名无关 —— 重复上传同一张图会被识别出来。<br>
     · 若上传后不发布，图片仍留在 raw/，下次生成会以「未命名」收录，可在 meta/titles.csv 里补。<br>
-    · 发布 = 写 meta/titles.csv → prepare.py → build_site.py → git add/commit/push，日志见上方。
+    · 删除图片会同时移除缩略图、原图副本、raw/ 原图与索引条目，并同步 GitHub。<br>
+    · 发布 = 写 meta/titles.csv → prepare.py → build_site.py → git add/commit/push →（可选）同步服务器。
   </p>
 </div>
 
 <script>
 var pending = [];
 var status = {};
+var editOpen = null;
 
 function el(tag, cls, txt) {
   var e = document.createElement(tag);
@@ -119,6 +153,19 @@ function api(path, body) {
   } : undefined).then(function (r) { return r.json(); });
 }
 
+/* ── 标签页 ── */
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach(function (t) {
+    t.classList.toggle("active", t.getAttribute("data-tab") === name);
+  });
+  document.getElementById("tab-add").style.display = name === "add" ? "" : "none";
+  document.getElementById("tab-manage").style.display = name === "manage" ? "" : "none";
+  if (name === "manage") loadItems();
+}
+document.querySelectorAll(".tab").forEach(function (t) {
+  t.addEventListener("click", function () { showTab(t.getAttribute("data-tab")); });
+});
+
 /* ── 仓库状态 ── */
 function loadStatus() {
   return api("/api/status").then(function (s) {
@@ -129,9 +176,8 @@ function loadStatus() {
     var b = el("span", "badge " + (s.remote ? "ok" : "warn"), s.remote || "无 origin");
     box.appendChild(b);
     box.appendChild(el("span", "", "分支 " + s.branch));
-    box.appendChild(el("span", "", "索引 " + s.count + " 张"));
+    box.appendChild(el("span", "", "图库 " + s.count + " 张"));
     box.appendChild(el("span", "", "未提交 " + s.dirty + " 项"));
-    box.appendChild(el("span", "", "期刊 " + s.journals.length + " 种 · 共 " + s.count + " 张图"));
     document.getElementById("initBox").style.display = s.isRepo ? "none" : "block";
     document.getElementById("remote").value = s.defaultRemote || "";
     fillDatalist("jours", s.journals);
@@ -149,7 +195,7 @@ function fillDatalist(id, values) {
   });
 }
 
-/* ── 上传 ── */
+/* ── 上传（添加图片页）── */
 function readB64(file) {
   return new Promise(function (res, rej) {
     var r = new FileReader();
@@ -158,14 +204,12 @@ function readB64(file) {
     r.readAsDataURL(file);
   });
 }
-
 function handleFiles(fileList) {
   var files = [].slice.call(fileList || []);
   if (!files.length) return;
   var note = document.getElementById("uploadNote");
   var i = 0, added = 0, dup = 0, failed = 0;
   note.textContent = "上传中… 0/" + files.length;
-
   (function next() {
     if (i >= files.length) {
       note.textContent = "上传完成：新增 " + added + " 张" +
@@ -187,18 +231,15 @@ function handleFiles(fileList) {
     }).catch(function () { failed++; }).then(next);
   })();
 }
-
 function addItem(rec) {
   pending.push(rec);
   var node = buildItemNode(rec);
   document.getElementById("list").appendChild(node);
   document.getElementById("emptyNote").style.display = "none";
 }
-
 function buildItemNode(rec) {
   var node = el("div", "item");
   rec.node = node;
-
   var left = el("div");
   var img = document.createElement("img");
   img.className = "thumb";
@@ -219,15 +260,13 @@ function buildItemNode(rec) {
 
   var right = el("div");
   var fields = el("div", "fields");
-
   function field(labelText, key, opts) {
     opts = opts || {};
     var box = el("div", opts.full ? "full" : "");
     box.appendChild(el("label", "", labelText));
     var input;
-    if (opts.type === "textarea") {
-      input = document.createElement("textarea");
-    } else {
+    if (opts.type === "textarea") input = document.createElement("textarea");
+    else {
       input = document.createElement("input");
       input.type = opts.type || "text";
       if (opts.list) input.setAttribute("list", opts.list);
@@ -238,31 +277,17 @@ function buildItemNode(rec) {
     fields.appendChild(box);
     return input;
   }
-
   field("期刊 journal", "journal", { list: "jours", placeholder: "如：Nature Climate Change" });
   field("论文发表 published", "published", { type: "month" });
-  field("标签 tags", "tags", { placeholder: "用 | 分隔，如：多面板|极地投影" });
-  field("说明 desc", "desc", { type: "textarea", full: true, placeholder: "一句话说明图面要点（有助于搜索）" });
+  field("标签 tags", "tags", { placeholder: "用 | 分隔" });
+  field("说明 desc", "desc", { type: "textarea", full: true });
 
   right.appendChild(fields);
-
-  var row = el("div", "row");
-  var rm = el("button", "tiny", "移除");
-  rm.addEventListener("click", function () {
-    pending = pending.filter(function (x) { return x !== rec; });
-    node.parentNode.removeChild(node);
-    if (!pending.length) document.getElementById("emptyNote").style.display = "block";
-  });
-  row.appendChild(rm);
-  var hint = el("span", "note", "（仅从界面移除；文件已写入 raw/）");
-  row.appendChild(hint);
-  right.appendChild(row);
-
   node.appendChild(right);
   return node;
 }
 
-/* ── 发布 / 初始化 / 推送 ── */
+/* ── 发布 ── */
 function renderLog(log) {
   var box = document.getElementById("log");
   box.innerHTML = "";
@@ -287,7 +312,6 @@ function renderLog(log) {
     }
   });
 }
-
 function publish() {
   if (!pending.length) { alert("还没有待发布的图片"); return; }
   var items = pending.map(function (p) {
@@ -304,13 +328,11 @@ function publish() {
   api("/api/publish", {
     items: items,
     message: document.getElementById("msg").value,
-    push: document.getElementById("doPush").checked
+    push: document.getElementById("doPush").checked,
+    sync: document.getElementById("doSync").checked
   }).then(function (res) {
     renderLog(res.log);
-    if (res.hint) {
-      var h = el("div", "hint", res.hint);
-      document.getElementById("log").appendChild(h);
-    }
+    if (res.hint) document.getElementById("log").appendChild(el("div", "hint", res.hint));
     if (res.ok) {
       pending = [];
       document.getElementById("list").innerHTML = "";
@@ -326,32 +348,7 @@ function publish() {
   });
 }
 
-document.getElementById("drop").addEventListener("click", function () {
-  document.getElementById("file").click();
-});
-document.getElementById("file").addEventListener("change", function (e) {
-  handleFiles(e.target.files);
-  e.target.value = "";
-});
-["dragenter", "dragover"].forEach(function (ev) {
-  document.getElementById("drop").addEventListener(ev, function (e) {
-    e.preventDefault();
-    document.getElementById("drop").classList.add("on");
-  });
-});
-["dragleave", "drop"].forEach(function (ev) {
-  document.getElementById("drop").addEventListener(ev, function (e) {
-    e.preventDefault();
-    document.getElementById("drop").classList.remove("on");
-  });
-});
-document.getElementById("drop").addEventListener("drop", function (e) {
-  if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
-});
-document.getElementById("btnPublish").addEventListener("click", publish);
-document.getElementById("btnPush").addEventListener("click", function () {
-  api("/api/push", {}).then(function (res) { renderLog(res.log); });
-});
+/* ── 初始化 / 推送 ── */
 document.getElementById("btnInit").addEventListener("click", function () {
   var btn = document.getElementById("btnInit");
   btn.disabled = true;
@@ -361,6 +358,116 @@ document.getElementById("btnInit").addEventListener("click", function () {
     btn.disabled = false;
     btn.textContent = "初始化并推送";
     loadStatus();
+  });
+});
+document.getElementById("btnPush").addEventListener("click", function () {
+  api("/api/push", {}).then(function (res) { renderLog(res.log); loadStatus(); });
+});
+
+/* ── 图片管理（查 / 改 / 删）── */
+function loadItems() {
+  return api("/api/items").then(function (refs) {
+    renderManage(refs.items || []);
+  });
+}
+function renderManage(items) {
+  var box = document.getElementById("manageList");
+  box.innerHTML = "";
+  editOpen = null;
+  if (!items.length) { box.appendChild(el("p", "note", "图库为空")); return; }
+  items.forEach(function (it) { box.appendChild(manageRow(it)); });
+}
+function manageRow(it) {
+  var node = el("div", "mrow");
+  var img = document.createElement("img");
+  img.className = "mthumb";
+  img.src = "/images/" + (it.thumb || "");
+  img.alt = it.id;
+  node.appendChild(img);
+
+  var info = el("div", "minfo");
+  info.appendChild(el("div", "t", (it.title || "（未命名）") + " · " + it.id));
+  info.appendChild(el("div", "", "期刊：" + (it.journal || "—") + " · 发表：" + (it.published || "—") + " · 添加：" + (it.added || "—")));
+  info.appendChild(el("div", "", "标签：" + ((it.tags || []).join("、") || "—")));
+  if (it.desc) info.appendChild(el("div", "", it.desc));
+  node.appendChild(info);
+
+  var act = el("div", "mact");
+  var btnEdit = el("button", "tiny", "编辑");
+  btnEdit.addEventListener("click", function () { openEdit(node, it); });
+  var btnDel = el("button", "tiny danger", "删除");
+  btnDel.addEventListener("click", function () {
+    if (!confirm("确定删除图片 " + it.id + "？\n将同时移除缩略图、原图副本、raw/ 原图与索引，并同步 GitHub。")) return;
+    btnDel.disabled = true;
+    api("/api/delete", { id: it.id, push: document.getElementById("doPush").checked,
+                         sync: document.getElementById("doSync").checked }).then(function (res) {
+      renderLog(res.log);
+      if (res.hint) document.getElementById("log").appendChild(el("div", "hint", res.hint));
+      loadItems();
+      loadStatus();
+    });
+  });
+  act.appendChild(btnEdit);
+  act.appendChild(btnDel);
+  node.appendChild(act);
+  return node;
+}
+var editOpen = null;
+function openEdit(node, it) {
+  if (editOpen) editOpen.remove();
+  var form = el("div", "editform");
+  function field(labelText, key, opts) {
+    opts = opts || {};
+    var box = el("div", opts.full ? "full" : "");
+    box.appendChild(el("label", "", labelText));
+    var input;
+    if (opts.type === "textarea") input = document.createElement("textarea");
+    else {
+      input = document.createElement("input");
+      input.type = opts.type || "text";
+      if (opts.list) input.setAttribute("list", opts.list);
+    }
+    input.value = it[key] || "";
+    input.addEventListener("input", function () { it[key] = input.value; });
+    box.appendChild(input);
+    form.appendChild(box);
+  }
+  field("期刊 journal", "journal", { list: "jours" });
+  field("论文发表 published", "published", { type: "month" });
+  field("标签 tags", "tags", { full: true, placeholder: "用 | 分隔" });
+  field("说明 desc", "desc", { type: "textarea", full: true });
+
+  var btnRow = el("div", "full");
+  btnRow.style.display = "flex";
+  btnRow.style.gap = "8px";
+  var save = el("button", "primary tiny", "保存");
+  var cancel = el("button", "tiny", "取消");
+  btnRow.appendChild(save);
+  btnRow.appendChild(cancel);
+  form.appendChild(btnRow);
+  node.appendChild(form);
+  editOpen = form;
+  save.addEventListener("click", function () {
+    save.disabled = true;
+    api("/api/update", { items: [{ id: it.id, journal: it.journal, published: it.published,
+                                   tags: it.tags, desc: it.desc }],
+                          push: document.getElementById("doPush").checked,
+                          sync: document.getElementById("doSync").checked }).then(function (res) {
+      renderLog(res.log);
+      if (res.hint) document.getElementById("log").appendChild(el("div", "hint", res.hint));
+      editOpen.remove(); editOpen = null;
+      loadItems(); loadStatus();
+    });
+  });
+  cancel.addEventListener("click", function () { form.remove(); editOpen = null; });
+}
+document.getElementById("btnSync").addEventListener("click", function () {
+  var btn = document.getElementById("btnSync");
+  btn.disabled = true;
+  api("/api/sync-server", {}).then(function (res) {
+    renderLog(res.log);
+    if (res.hint) document.getElementById("log").appendChild(el("div", "hint", res.hint));
+    btn.disabled = false;
   });
 });
 
