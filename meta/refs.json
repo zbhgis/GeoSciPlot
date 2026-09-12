@@ -1,8 +1,31 @@
 {
   "generated": "2026-09-12",
-  "count": 9,
+  "count": 10,
   "thumbMax": 480,
   "items": [
+    {
+      "id": "182f883d0c",
+      "journal": "Nature",
+      "published": "2020-02",
+      "tags": [
+        "多面板",
+        "流域对比",
+        "象形符号",
+        "环形标注",
+        "人口"
+      ],
+      "desc": "五个流域（AMU/TRM/YEL/IND/GAN）融水量变化与人口变化对比；右侧用图标表示可用融水、城市人口与灌溉需求之间的竞争关系。",
+      "title": "",
+      "category": "",
+      "width": 1280,
+      "height": 876,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/182f883d0c.webp",
+      "full": "full/2026-09-12/182f883d0c.png",
+      "bytes": 469707,
+      "origName": "1280X1280.PNG",
+      "added": "2026-09-12"
+    },
     {
       "id": "d57d821bbd",
       "journal": "Nature Climate Change",
