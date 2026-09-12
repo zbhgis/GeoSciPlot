@@ -1,8 +1,51 @@
 {
   "generated": "2026-09-12",
-  "count": 1,
+  "count": 7,
   "thumbMax": 480,
   "items": [
+    {
+      "id": "da17c93c86",
+      "doi": "https://doi.org/10.1038/s41467-025-66316-4",
+      "tags": [
+        "古地理"
+      ],
+      "width": 685,
+      "height": 393,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/da17c93c86.webp",
+      "full": "full/2026-09-12/da17c93c86.png",
+      "bytes": 337118,
+      "origName": "ec57b55a-d612-4acc-8708-a0c163e3d041.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "aac9a3f009",
+      "doi": "https://doi.org/10.1126/sciadv.adr9417",
+      "tags": [
+        "古地理"
+      ],
+      "width": 1229,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/aac9a3f009.webp",
+      "full": "full/2026-09-12/aac9a3f009.png",
+      "bytes": 1468167,
+      "origName": "1280X1280 (1).PNG",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "a0c68c6e3d",
+      "doi": "",
+      "tags": [],
+      "width": 825,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/a0c68c6e3d.webp",
+      "full": "full/2026-09-12/a0c68c6e3d.png",
+      "bytes": 766530,
+      "origName": "1280X1280 (2).PNG",
+      "added": "2026-09-12"
+    },
     {
       "id": "7c64f88fd1",
       "doi": "https://doi.org/10.1126/sciadv.ady3258",
@@ -17,6 +60,51 @@
       "full": "full/2026-09-12/7c64f88fd1.png",
       "bytes": 1190862,
       "origName": "1280X1280_2.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "6ee2a2324c",
+      "doi": "https://doi.org/10.1038/s41467-025-63604-x",
+      "tags": [
+        "古地理"
+      ],
+      "width": 1011,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/6ee2a2324c.webp",
+      "full": "full/2026-09-12/6ee2a2324c.png",
+      "bytes": 2301146,
+      "origName": "a9018eac-89f2-4f3e-8d4f-125431347a68.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "46c12930b7",
+      "doi": "https://doi.org/10.1038/s41467-026-70651-5",
+      "tags": [
+        "古地理"
+      ],
+      "width": 1104,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/46c12930b7.webp",
+      "full": "full/2026-09-12/46c12930b7.png",
+      "bytes": 662977,
+      "origName": "0dbe947a-8ce8-4a9c-b7c0-80a1619727ae.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "24956502bd",
+      "doi": "https://doi.org/10.1038/s41561-024-01496-0",
+      "tags": [
+        "古地理"
+      ],
+      "width": 1079,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/24956502bd.webp",
+      "full": "full/2026-09-12/24956502bd.png",
+      "bytes": 1192407,
+      "origName": "9b8e2151-6d74-4f72-afc2-4a09018e49f1.png",
       "added": "2026-09-12"
     }
   ]
