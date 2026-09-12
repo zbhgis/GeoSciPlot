@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 6,
+  "count": 5,
   "thumbMax": 480,
   "items": [
     {
@@ -112,29 +112,6 @@
       "full": "full/2026-09-11/47c11ba057.png",
       "bytes": 351210,
       "origName": "下载.png",
-      "added": "2026-09-11"
-    },
-    {
-      "id": "2a2c0b0953",
-      "journal": "Nature Geoscience",
-      "published": "2023-10",
-      "tags": [
-        "多面板",
-        "时间序列",
-        "极地地图",
-        "冻土",
-        "通量"
-      ],
-      "desc": "(a) 六大河与中小河流输沙通量占比横条；(b) 1984–2016 输沙通量时间序列与每十年变化率；(c) 环北极地图叠加冻土类型与各河流变化百分比。",
-      "title": "泛北极河流输沙通量变化与多年冻土分布",
-      "category": "水文与冰冻圈",
-      "width": 1131,
-      "height": 1280,
-      "ext": "png",
-      "thumb": "thumb/2026-09-11/2a2c0b0953.webp",
-      "full": "full/2026-09-11/2a2c0b0953.png",
-      "bytes": 819711,
-      "origName": "351df599-229b-4f21-bdfa-b29010759d92.png",
       "added": "2026-09-11"
     }
   ]
