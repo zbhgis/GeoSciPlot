@@ -49,7 +49,7 @@ THUMB_Q = 78            # 缩略图 WebP 质量
 SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
 
 # 人工可编辑字段（CSV 列 → refs.json 字段）
-MANUAL_FIELDS = ["journal", "published", "desc"]
+MANUAL_FIELDS = ["doi"]
 MANUAL_LIST_FIELDS = ["tags"]
 # 仅保留历史数据、不再在前端使用（迁移期兼容）
 KEEP_FIELDS = ["title", "category"]
@@ -100,13 +100,13 @@ def load_titles() -> dict[str, dict]:
 def export_titles(items: list[dict]) -> None:
     """导出人工编辑表（utf-8-sig：Excel 打开中文不乱码）。"""
     TITLES_CSV.parent.mkdir(parents=True, exist_ok=True)
-    cols = ["id"] + MANUAL_FIELDS + KEEP_FIELDS[:1] + MANUAL_LIST_FIELDS
+    cols = ["id"] + MANUAL_FIELDS + KEEP_FIELDS + MANUAL_LIST_FIELDS
     with TITLES_CSV.open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
         w.writerow(cols)
         for it in items:
-            w.writerow([it.get("id", ""), it.get("journal", ""), it.get("published", ""),
-                        it.get("desc", ""), it.get("title", ""),
+            w.writerow([it.get("id", ""), it.get("doi", ""),
+                        it.get("title", ""), it.get("category", ""),
                         "|".join(it.get("tags", []))])
     print(f"导出编辑表 → {TITLES_CSV.relative_to(ROOT)}（Excel 编辑后重跑本脚本即回填）")
 
@@ -164,18 +164,20 @@ def prune_unused(keep: set[Path]) -> int:
 
     双保险：调用方已保证 raw/ 非空才会到这里；即便如此，
     keep 为空（什么都没生成）时绝不删除——防止误清空图库。
+
+    注意：只删文件，**绝不删目录**。曾经在这里用 rmdir 清理空日期目录，
+    在个别 Windows 磁盘上出现「非空目录被连树删除」的诡异行为，
+    导致整个图库产物被清空——空的日期目录无害（git 也不跟踪），留着即可。
     """
     if not keep:
         return 0
     removed = 0
-    for p in IMG_DIR.rglob("*"):
-        if p.is_file() and p not in keep:
-            p.unlink()
-            removed += 1
-    # 清掉空目录
-    for d in sorted([d for d in IMG_DIR.rglob("*") if d.is_dir()], reverse=True):
+    # 先物化完整文件列表再删除，避免「边遍历边删」在任何文件系统上的未知行为
+    for p in list(IMG_DIR.rglob("*")):
         try:
-            d.rmdir()
+            if p.is_file() and p not in keep:
+                p.unlink()
+                removed += 1
         except OSError:
             pass
     return removed
@@ -255,10 +257,8 @@ def main() -> int:
 
         item = {
             "id": fid,
-            "journal": manual.get("journal") or old.get("journal", ""),
-            "published": manual.get("published") or old.get("published", ""),
+            "doi": manual.get("doi") or old.get("doi", ""),
             "tags": manual.get("tags") or old.get("tags", []),
-            "desc": manual.get("desc") or old.get("desc", ""),
             # 迁移期兼容字段：保留历史值，前端已不再使用
             "title": manual.get("title") or old.get("title", ""),
             "category": manual.get("category") or old.get("category", ""),

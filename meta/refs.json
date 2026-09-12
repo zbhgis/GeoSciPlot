@@ -1,19 +1,32 @@
 {
   "generated": "2026-09-12",
-  "count": 4,
+  "count": 5,
   "thumbMax": 480,
   "items": [
     {
+      "id": "39e6a2feb0",
+      "doi": "",
+      "tags": [],
+      "title": "",
+      "category": "",
+      "width": 1280,
+      "height": 885,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/39e6a2feb0.webp",
+      "full": "full/2026-09-12/39e6a2feb0.png",
+      "bytes": 630301,
+      "origName": "1280X1280.PNG",
+      "added": "2026-09-12"
+    },
+    {
       "id": "d11638adde",
-      "journal": "Nature Cities",
-      "published": "2025-01",
+      "doi": "10.1038/s42949-024-00129-3",
       "tags": [
         "全球地图",
         "比例符号",
         "Equal Earth投影",
         "城市"
       ],
-      "desc": "以圆面积表示城市中心数量（100/200/400），颜色表示不可达比例（0–0.959），Equal Earth 投影。",
       "title": "全球城市中心可达性（不可达比例）",
       "category": "城市与可达性",
       "width": 1280,
@@ -27,8 +40,7 @@
     },
     {
       "id": "8ae853d256",
-      "journal": "Nature",
-      "published": "2024-03",
+      "doi": "10.1038/s41586-024-07752-w",
       "tags": [
         "全球地图",
         "碳汇",
@@ -36,7 +48,6 @@
         "符号标注",
         "Nature风格"
       ],
-      "desc": "各国标注净固碳量变化百分比（USA +0%、Uruguay −79%、Tanzania −120%、China 0%）；底部用三角/圆/方形符号区分减缓潜力所处阶段，图例说明 Rangeland system 范围。",
       "title": "全球草地碳汇变化分布图（净固碳量变化）",
       "category": "全球变化与碳循环",
       "width": 1280,
@@ -50,15 +61,13 @@
     },
     {
       "id": "86d9ff84c3",
-      "journal": "Global Change Biology",
-      "published": "2024-05",
+      "doi": "10.1111/gcb.17283",
       "tags": [
         "六边形分箱",
         "箱线图",
         "元分析",
         "显著性标注"
       ],
-      "desc": "六边形分箱地图叠加方向性条形（Vicinity/Expert，−1–1），左下嵌入分组箱线图并标注样本量与 p 值。",
       "title": "六边形分箱地图与响应比箱线图",
       "category": "统计与不确定性",
       "width": 1280,
@@ -72,15 +81,13 @@
     },
     {
       "id": "488433461e",
-      "journal": "Nature Climate Change",
-      "published": "2024-09",
+      "doi": "10.1038/s41558-024-02042-z",
       "tags": [
         "多面板",
         "不确定性",
         "连续色标",
         "高纬度"
       ],
-      "desc": "三联横向图：(a) 生态系统呼吸变化百分比；(b) 相对标准差；(c) 数据驱动不确定性占比，并标注模型/输入数据主导区间。",
       "title": "高纬生态系统呼吸变化与不确定性分解",
       "category": "全球变化与碳循环",
       "width": 1280,

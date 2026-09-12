@@ -181,7 +181,7 @@ function loadStatus() {
     box.appendChild(el("span", "", "未提交 " + s.dirty + " 项"));
     document.getElementById("initBox").style.display = s.isRepo ? "none" : "block";
     document.getElementById("remote").value = s.defaultRemote || "";
-    fillDatalist("jours", s.journals);
+    fillDatalist("cats", s.categories);
     return s;
   });
 }
@@ -309,10 +309,10 @@ function buildItemNode(rec) {
     fields.appendChild(box);
     return input;
   }
-  field("期刊 journal", "journal", { list: "jours", placeholder: "如：Nature Climate Change" });
-  field("论文发表 published", "published", { type: "month" });
+  field("标题 title", "title", { placeholder: "图的中文标题（可留空）" });
+  field("分类 category", "category", { list: "cats", placeholder: "如：水文与冰冻圈" });
+  field("DOI doi", "doi", { placeholder: "如：10.1038/s41586-024-07752-w（模拟数据）" });
   field("标签 tags", "tags", { placeholder: "用 | 分隔" });
-  field("说明 desc", "desc", { type: "textarea", full: true });
 
   right.appendChild(fields);
   node.appendChild(right);
@@ -374,9 +374,9 @@ function publish() {
   var items = pending.map(function (p) {
     return {
       id: p.id,
-      journal: p.journal || "", published: p.published || "",
+      title: p.title || "", category: p.category || "",
       tags: (p.tags || "").split("|").map(function (t) { return t.trim(); }).filter(Boolean),
-      desc: p.desc || ""
+      doi: p.doi || ""
     };
   });
   var btn = document.getElementById("btnPublish");
@@ -445,9 +445,22 @@ function manageRow(it) {
 
   var info = el("div", "minfo");
   info.appendChild(el("div", "t", (it.title || "（未命名）") + " · " + it.id));
-  info.appendChild(el("div", "", "期刊：" + (it.journal || "—") + " · 发表：" + (it.published || "—") + " · 添加：" + (it.added || "—")));
+  var doiLine = el("div", "");
+  if (it.doi) {
+    var a = document.createElement("a");
+    a.href = "https://doi.org/" + it.doi;
+    a.textContent = it.doi;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.style.color = "var(--accent)";
+    doiLine.appendChild(document.createTextNode("DOI："));
+    doiLine.appendChild(a);
+  } else {
+    doiLine.textContent = "DOI：—";
+  }
+  info.appendChild(doiLine);
+  info.appendChild(el("div", "", "分类：" + (it.category || "—") + " · 添加：" + (it.added || "—")));
   info.appendChild(el("div", "", "标签：" + ((it.tags || []).join("、") || "—")));
-  if (it.desc) info.appendChild(el("div", "", it.desc));
   node.appendChild(info);
 
   var act = el("div", "mact");
@@ -489,10 +502,10 @@ function openEdit(node, it) {
     box.appendChild(input);
     form.appendChild(box);
   }
-  field("期刊 journal", "journal", { list: "jours" });
-  field("论文发表 published", "published", { type: "month" });
+  field("标题 title", "title");
+  field("分类 category", "category", { list: "cats" });
+  field("DOI doi", "doi", { placeholder: "10.xxxx/xxxxx" });
   field("标签 tags", "tags", { full: true, placeholder: "用 | 分隔" });
-  field("说明 desc", "desc", { type: "textarea", full: true });
 
   var btnRow = el("div", "full");
   btnRow.style.display = "flex";
@@ -507,8 +520,8 @@ function openEdit(node, it) {
   save.addEventListener("click", function () {
     save.disabled = true;
     save.textContent = "保存中…";
-    runJob("/api/update", { items: [{ id: it.id, journal: it.journal, published: it.published,
-                                      tags: it.tags, desc: it.desc }],
+    runJob("/api/update", { items: [{ id: it.id, title: it.title, category: it.category,
+                                      tags: it.tags, doi: it.doi }],
                             push: document.getElementById("doPush").checked,
                             sync: document.getElementById("doSync").checked }, function () {
       editOpen.remove(); editOpen = null;
@@ -529,6 +542,6 @@ document.getElementById("btnSync").addEventListener("click", function () {
 
 loadStatus();
 </script>
-<datalist id="jours"></datalist>
+<datalist id="cats"></datalist>
 </body>
 </html>

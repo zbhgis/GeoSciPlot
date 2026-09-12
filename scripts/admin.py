@@ -49,8 +49,8 @@ PYTHON = sys.executable
 DEFAULT_REMOTE = "git@github.com:zbhgis/GeoSciPlot.git"
 MAX_BODY = 200 * 1024 * 1024          # 单次请求体上限
 SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
-CSV_FIELDS = ["id", "journal", "published", "tags", "desc", "title", "category"]
-MANUAL_TEXT = ("journal", "published", "desc")
+CSV_FIELDS = ["id", "tags", "doi", "title", "category"]
+MANUAL_TEXT = ("doi",)
 MANUAL_LIST = ("tags",)
 IMG_TYPES = {".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg",
              ".jpeg": "image/jpeg", ".gif": "image/gif"}
@@ -154,7 +154,6 @@ def repo_state() -> dict:
         "dirty": dirty,
         "count": len(items),
         "categories": sorted({i.get("category") for i in items if i.get("category")}),
-        "journals": sorted({i.get("journal") for i in items if i.get("journal")}),
         "defaultRemote": DEFAULT_REMOTE,
     }
 
@@ -446,7 +445,7 @@ def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = 
         if not fid:
             continue
         row = rows.get(fid, {k: "" for k in fields})
-        for k in ("journal", "published", "desc", "title", "category"):
+        for k in ("title", "category", "doi"):
             v = (it.get(k) or "").strip()
             if v:
                 row[k] = v

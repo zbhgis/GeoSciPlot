@@ -81,25 +81,14 @@ def esc(s) -> str:
     return html.escape(str(s if s is not None else ""))
 
 
-def year_of(item: dict) -> str:
-    p = str(item.get("published") or "")
-    return p[:4] if len(p) >= 4 and p[:4].isdigit() else ""
-
-
-def caption_of(item: dict) -> str:
-    """卡片副标题：期刊 · 年份（都没有就留空）。"""
-    parts = [p for p in [item.get("journal") or "", year_of(item)] if p]
-    return " · ".join(parts)
-
-
 def haystack(item: dict) -> str:
     return " ".join([
         item.get("id", ""),
-        item.get("journal") or "",
-        str(item.get("published") or ""),
+        item.get("doi") or "",
         str(item.get("added") or ""),
+        item.get("title") or "",
+        item.get("category") or "",
         " ".join(item.get("tags", [])),
-        item.get("desc") or "",
     ]).lower()
 
 
@@ -209,7 +198,7 @@ JS = """\
   grid.querySelectorAll("img[data-rel]").forEach(bind);   // 首屏静态卡片也要绑降级
 
   /* ── 分页 + 筛选 + 排序 ── */
-  var state = { q: "", tag: "*", journal: "*", pub: "*", added: "*", sort: "added", page: 1, per: PAGE };
+  var state = { q: "", tag: "*", added: "*", sort: "added", page: 1, per: PAGE };
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
     if (savedPer === 0 || savedPer >= 12) state.per = savedPer;   // 0 = 显示全部
@@ -225,20 +214,13 @@ JS = """\
 
   function pass(it) {
     if (state.tag !== "*" && (it.tg || []).indexOf(state.tag) === -1) return false;
-    if (state.journal !== "*" && (it.jo || "—") !== state.journal) return false;
-    if (state.pub !== "*" && ((it.pu || "").slice(0, 4) || "—") !== state.pub) return false;
     if (state.added !== "*" && (it.ad || "—") !== state.added) return false;
     if (state.q && (it.se || "").indexOf(state.q) === -1) return false;
     return true;
   }
   function cmp(a, b) {
-    if (state.sort === "published") {
-      var pa = (a.pu || ""), pb = (b.pu || "");
-      if (pa !== pb) return pa < pb ? 1 : -1;
-    } else {
-      var aa = (a.ad || ""), ab = (b.ad || "");
-      if (aa !== ab) return aa < ab ? 1 : -1;
-    }
+    var aa = (a.ad || ""), ab = (b.ad || "");
+    if (aa !== ab) return aa < ab ? 1 : -1;
     return (a.id || "").localeCompare(b.id || "");
   }
   function cardNode(it) {
@@ -276,7 +258,7 @@ JS = """\
     if (prev) prev.disabled = state.page <= 1;
     if (next) next.disabled = state.page >= pages;
     if (count) {
-      var filtered = state.q || state.tag !== "*" || state.journal !== "*" || state.pub !== "*" || state.added !== "*";
+      var filtered = state.q || state.tag !== "*" || state.added !== "*";
       count.textContent = filtered ? "匹配 " + list.length + " / " + ITEMS.length + " 张"
                                    : "共 " + ITEMS.length + " 张";
     }
@@ -298,7 +280,7 @@ JS = """\
       });
     });
   }
-  ["[data-key=tag]", "[data-key=journal]", "[data-key=pub]", "[data-key=added]"].forEach(bindChips);
+  ["[data-key=tag]", "[data-key=added]"].forEach(bindChips);
 
   if (q) {
     q.addEventListener("input", function () { state.q = q.value.trim().toLowerCase(); resetPage(); });
@@ -317,7 +299,7 @@ JS = """\
 
   var reset = document.getElementById("reset");
   if (reset) reset.addEventListener("click", function () {
-    state = { q: "", tag: "*", journal: "*", pub: "*", added: "*", sort: state.sort, page: 1 };
+    state = { q: "", tag: "*", added: "*", sort: state.sort, page: 1 };
     if (q) q.value = "";
     document.querySelectorAll(".chips").forEach(function (box) {
       box.querySelectorAll("button").forEach(function (x, i) {
@@ -344,8 +326,6 @@ JS = """\
   function activeFilters() {
     var parts = [];
     if (state.tag !== "*") parts.push("标签 " + state.tag);
-    if (state.journal !== "*") parts.push("期刊 " + state.journal);
-    if (state.pub !== "*") parts.push("发表 " + state.pub);
     if (state.added !== "*") parts.push("上传 " + state.added);
     if (state.q) parts.push("搜索 " + state.q);
     return parts;
@@ -391,7 +371,7 @@ JS = """\
   var applied = false;
   try {
     var params = new URLSearchParams(location.search);
-    ["q", "tag", "journal", "pub", "added"].forEach(function (k) {
+    ["q", "tag", "added"].forEach(function (k) {
       var v = params.get(k);
       if (!v) return;
       applied = true;
@@ -478,8 +458,6 @@ def card_html(item: dict) -> str:
 
 
 def build_index(cfg: dict, items: list[dict]) -> str:
-    journals = flat([it.get("journal") for it in items])
-    pubs = flat([year_of(it) for it in items])
     addeds = flat([it.get("added") for it in items])
     tag_counter: Counter = Counter()
     for it in items:
@@ -491,8 +469,6 @@ def build_index(cfg: dict, items: list[dict]) -> str:
     data = [{
         "id": it["id"],
         "rel": it.get("thumb", ""),
-        "jo": it.get("journal") or "",
-        "pu": it.get("published") or "",
         "ad": it.get("added") or "",
         "tg": it.get("tags") or [],
         "sub": " · ".join(it.get("tags") or []),
@@ -502,14 +478,13 @@ def build_index(cfg: dict, items: list[dict]) -> str:
     body = f"""<header class="site">
   <h1>{esc(cfg['title'])}</h1>
   <p class="lede">{esc(cfg['lede'])}</p>
-  <div class="meta-row"><span id="count">共 {len(items)} 张</span> · {len(journals)} 种期刊 · {len(tag_counter)} 个标签 · {len(addeds)} 个上传日期 · 点击查看原图</div>
+  <div class="meta-row"><span id="count">共 {len(items)} 张</span> · {len(tag_counter)} 个标签 · {len(addeds)} 个上传日期 · 点击查看原图</div>
 </header>
 
 <div class="toolbar">
-  <input id="q" class="search" type="search" placeholder="搜索 id / 期刊 / 标签 / 说明…" autocomplete="off">
+  <input id="q" class="search" type="search" placeholder="搜索 id / DOI / 标签 / 标题…" autocomplete="off">
   <select id="sort" aria-label="排序">
     <option value="added">按上传日期（新→旧）</option>
-    <option value="published">按论文发表时间（新→旧）</option>
   </select>
   <select id="perpage" aria-label="每页数量">
     <option value="24">每页 24</option>
@@ -523,8 +498,6 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 
 <div id="filters">
 {filter_row("标签", chips(tag_counter, "tag", "全部"))}
-{filter_row("期刊", chips(journals, "journal", "全部"))}
-{filter_row("发表", chips(pubs, "pub", "全部"))}
 {filter_row("上传", chips(addeds, "added", "全部"))}
 </div>
 
@@ -564,15 +537,20 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
     else:
         tags_html = "—"
 
+    doi = str(it.get("doi") or "").strip()
+    if doi:
+        doi_html = f'<a href="https://doi.org/{esc(doi)}" rel="noopener" target="_blank">{esc(doi)}</a>'
+    else:
+        doi_html = "—"
+
     body = f"""<a class="back" href="../">← 返回全部</a>
-<h2 class="id-title">图 {esc(it['id'])}</h2>
+<h2 class="id-title">{esc(it.get('title') or ('图 ' + it['id']))}</h2>
 <figure class="shot">
   <img data-rel="{esc(it.get('full'))}" alt="图 {esc(it['id'])}" width="{w}" height="{h}">
 </figure>
 <dl class="meta">
   <dt>ID</dt><dd class="hl">{esc(it['id'])}</dd>
-  <dt>期刊</dt><dd>{esc(it.get('journal') or '—')}</dd>
-  <dt>论文发表</dt><dd>{esc(it.get('published') or '—')}</dd>
+  <dt>DOI</dt><dd>{doi_html}</dd>
   <dt>上传日期</dt><dd>{esc(it.get('added'))}</dd>
   <dt>被浏览</dt><dd><span id="views">…</span></dd>
   <dt>标签</dt><dd>{tags_html}</dd>
