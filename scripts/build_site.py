@@ -64,12 +64,12 @@ def build_sources(cfg: dict) -> list[dict]:
     oss = cfg.get("oss", {})
     bucket = oss.get("bucket") or "BUCKET"
     region = oss.get("region", "oss-cn-hangzhou")
-    # 首选「本站直出」：rsync 到子域的同源副本，国内访问最快最稳；
-    # jsDelivr / raw 作为 GitHub 内容的备选分发层；OSS 兜底
+    # 首选 GitHub 链接（图片内容源在 GitHub 仓库）：
+    # jsDelivr = 仓库内容的 CDN 分发层，raw = 仓库原始直链；本站直出 / OSS 作为降级备选
     return [
-        {"id": "local", "label": "本站直出", "base": "/images"},
         {"id": "jsdelivr", "label": "jsDelivr", "base": f"https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/images"},
         {"id": "raw", "label": "GitHub raw", "base": f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/images"},
+        {"id": "local", "label": "本站直出", "base": "/images"},
         {"id": "oss", "label": "OSS 兜底", "base": f"https://{bucket}.{region}.aliyuncs.com/{repo.lower()}/images"},
     ]
 
