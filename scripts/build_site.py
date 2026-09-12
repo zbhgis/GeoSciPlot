@@ -86,7 +86,6 @@ def haystack(item: dict) -> str:
         item.get("id", ""),
         item.get("doi") or "",
         str(item.get("added") or ""),
-        item.get("title") or "",
         " ".join(item.get("tags", [])),
     ]).lower()
 
@@ -543,7 +542,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
         doi_html = "—"
 
     body = f"""<a class="back" href="../">← 返回全部</a>
-<h2 class="id-title">{esc(it.get('title') or ('图 ' + it['id']))}</h2>
+<h2 class="id-title">图 {esc(it['id'])}</h2>
 <figure class="shot">
   <img data-rel="{esc(it.get('full'))}" alt="图 {esc(it['id'])}" width="{w}" height="{h}">
 </figure>

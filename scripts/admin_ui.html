@@ -360,7 +360,6 @@ function buildItemNode(rec) {
     fields.appendChild(box);
     return input;
   }
-  field("标题 title", "title", { placeholder: "图的中文标题（可留空）" });
   field("DOI doi", "doi", { placeholder: "如：10.1038/s41586-024-07752-w（模拟数据）" });
 
   var tagBox = el("div", "full");
@@ -429,7 +428,6 @@ function publish() {
   var items = pending.map(function (p) {
     return {
       id: p.id,
-      title: p.title || "",
       tags: (p.tags || "").split("|").map(function (t) { return t.trim(); }).filter(Boolean),
       doi: p.doi || ""
     };
@@ -499,7 +497,7 @@ function manageRow(it) {
   node.appendChild(img);
 
   var info = el("div", "minfo");
-  info.appendChild(el("div", "t", (it.title || "（未命名）") + " · " + it.id));
+  info.appendChild(el("div", "t", "图 " + it.id));
   var doiLine = el("div", "");
   if (it.doi) {
     var a = document.createElement("a");
@@ -557,7 +555,6 @@ function openEdit(node, it) {
     box.appendChild(input);
     form.appendChild(box);
   }
-  field("标题 title", "title");
   field("DOI doi", "doi", { placeholder: "10.xxxx/xxxxx" });
 
   var tagBox = el("div", "full");
@@ -579,7 +576,7 @@ function openEdit(node, it) {
   save.addEventListener("click", function () {
     save.disabled = true;
     save.textContent = "保存中…";
-    runJob("/api/update", { items: [{ id: it.id, title: it.title,
+    runJob("/api/update", { items: [{ id: it.id,
                                       tags: it.tags, doi: it.doi }],
                             push: document.getElementById("doPush").checked,
                             sync: document.getElementById("doSync").checked }, function () {
