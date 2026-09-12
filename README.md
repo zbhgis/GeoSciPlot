@@ -43,6 +43,18 @@ cd site && scp -r ./* root@47.98.133.104:/var/www/geosciplot/
 
 本地预览：`python scripts/build_site.py --preview`，然后 `cd site && python -m http.server 5190`。
 
+## 投稿
+
+欢迎推荐公开发表的地学 / 科研绘图：
+
+1. 打开 [Issues → New issue](https://github.com/zbhgis/GeoSciPlot/issues/new/choose)，选「**图片投稿**」
+2. 把图片直接拖进「图片」输入框上传（可多张），填 DOI（必填）、建议标签、一句说明
+3. 勾选版权确认后提交
+
+维护者会下载图片并录入图库，收录后在本 issue 回复并关闭。
+
+> 仅收录公开发表、允许再分发的图表（CC BY 等开放许可，或作者本人作品）。
+
 ## 目录结构
 
 ```

@@ -1,0 +1,53 @@
+name: 图片投稿
+description: 推荐一张公开发表的地学 / 科研绘图，供绘图风格与配色参考
+title: "[投稿] "
+labels: ["投稿"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢投稿！请按下面几项填写。
+        **图片请直接拖拽（或粘贴）到「图片」输入框里**，会随 issue 一起上传。
+
+  - type: textarea
+    id: images
+    attributes:
+      label: 图片
+      description: 把图片拖进来即可，支持多张。建议使用论文原图（不要截图压缩）
+      placeholder: 把图片文件拖到这里…
+    validations:
+      required: true
+
+  - type: input
+    id: doi
+    attributes:
+      label: DOI
+      description: 该图所属论文的 DOI，形如 10.1038/s41586-024-07752-w
+      placeholder: 10.xxxx/xxxxx
+    validations:
+      required: true
+
+  - type: input
+    id: tags
+    attributes:
+      label: 建议标签
+      description: 用顿号分隔，例如：全球地图、分级色标、象形符号
+      placeholder: 全球地图、分级色标
+    validations:
+      required: false
+
+  - type: textarea
+    id: note
+    attributes:
+      label: 一句说明（选填）
+      description: 图面要点，例如：多面板展示 XX 的时空变化
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: license
+    attributes:
+      label: 版权确认
+      options:
+        - label: 该图公开发表且允许再分发（CC BY 等开放许可 / 作者本人），我会在说明中注明来源
+          required: true
