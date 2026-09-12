@@ -501,6 +501,7 @@ function publish() {
 }
 
 /* ── 初始化 / 推送 ── */
+document.getElementById("btnPublish").addEventListener("click", publish);
 document.getElementById("btnInit").addEventListener("click", function () {
   var btn = document.getElementById("btnInit");
   btn.disabled = true;
