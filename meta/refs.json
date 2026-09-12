@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 21,
+  "count": 22,
   "thumbMax": 480,
   "items": [
     {
@@ -281,6 +281,22 @@
       "full": "full/2026-09-12/42e5c2e035.png",
       "bytes": 863913,
       "origName": "184db76f-e358-43d2-9f19-79d56d8f62b1.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "40cd84432a",
+      "doi": "https://doi.org/10.1038/s41558-023-01695-4",
+      "tags": [
+        "半环形",
+        "局部放大图"
+      ],
+      "width": 1280,
+      "height": 952,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/40cd84432a.webp",
+      "full": "full/2026-09-12/40cd84432a.png",
+      "bytes": 936416,
+      "origName": "1280X1280 (9).PNG",
       "added": "2026-09-12"
     },
     {
