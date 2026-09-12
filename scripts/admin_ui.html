@@ -67,6 +67,12 @@ details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radi
 .editform{grid-column:1/-1;border-top:1px dashed var(--line2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:9px 12px}
 @media (max-width:700px){.editform{grid-template-columns:1fr}}
 .editform .full{grid-column:1/-1}
+/* 标签选择器 */
+.tagpick{display:flex;flex-wrap:wrap;gap:6px}
+.tagpick button{padding:3px 10px;font-size:11px}
+.tagpick button[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+.tagnew{display:flex;gap:6px;margin-top:7px}
+.tagnew input{max-width:260px}
 </style>
 </head>
 <body>
@@ -139,6 +145,51 @@ details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radi
 var pending = [];
 var status = {};
 var editOpen = null;
+var allTags = [];          // 图库里已有的全部标签（供点选）
+
+/* 标签选择器：点选已有标签 + 输入新标签回车添加。返回 {node, get()} */
+function tagPicker(current, onChange) {
+  var sel = (current || []).slice();
+  var known = [];
+  (allTags || []).concat(sel).forEach(function (t) {
+    if (t && known.indexOf(t) === -1) known.push(t);
+  });
+  var chipsBox = el("div", "tagpick");
+  var inp = el("input");
+  inp.placeholder = "没有想要的？输入新标签后回车";
+  inp.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    var v = inp.value.trim();
+    if (!v) return;
+    if (known.indexOf(v) === -1) known.push(v);
+    if (sel.indexOf(v) === -1) sel.push(v);
+    inp.value = "";
+    render();
+    if (onChange) onChange(sel);
+  });
+  function render() {
+    chipsBox.innerHTML = "";
+    known.forEach(function (t) {
+      var on = sel.indexOf(t) > -1;
+      var b = el("button", "tiny", on ? "✓ " + t : t);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(on));
+      b.addEventListener("click", function () {
+        var i = sel.indexOf(t);
+        if (i > -1) sel.splice(i, 1); else sel.push(t);
+        render();
+        if (onChange) onChange(sel);
+      });
+      chipsBox.appendChild(b);
+    });
+  }
+  render();
+  var wrap = el("div", "");
+  wrap.appendChild(chipsBox);
+  wrap.appendChild(el("div", "tagnew", "")).appendChild(inp);
+  return { node: wrap, get: function () { return sel.slice(); } };
+}
 
 function el(tag, cls, txt) {
   var e = document.createElement(tag);
@@ -182,6 +233,7 @@ function loadStatus() {
     document.getElementById("initBox").style.display = s.isRepo ? "none" : "block";
     document.getElementById("remote").value = s.defaultRemote || "";
     fillDatalist("cats", s.categories);
+    allTags = s.tags || [];
     return s;
   });
 }
@@ -312,7 +364,12 @@ function buildItemNode(rec) {
   field("标题 title", "title", { placeholder: "图的中文标题（可留空）" });
   field("分类 category", "category", { list: "cats", placeholder: "如：水文与冰冻圈" });
   field("DOI doi", "doi", { placeholder: "如：10.1038/s41586-024-07752-w（模拟数据）" });
-  field("标签 tags", "tags", { placeholder: "用 | 分隔" });
+
+  var tagBox = el("div", "full");
+  tagBox.appendChild(el("label", "", "标签 tags（点选已有，或输入新标签后回车）"));
+  var tp = tagPicker([], function (sel) { rec.tags = sel.join("|"); });
+  tagBox.appendChild(tp.node);
+  fields.appendChild(tagBox);
 
   right.appendChild(fields);
   node.appendChild(right);
@@ -505,7 +562,12 @@ function openEdit(node, it) {
   field("标题 title", "title");
   field("分类 category", "category", { list: "cats" });
   field("DOI doi", "doi", { placeholder: "10.xxxx/xxxxx" });
-  field("标签 tags", "tags", { full: true, placeholder: "用 | 分隔" });
+
+  var tagBox = el("div", "full");
+  tagBox.appendChild(el("label", "", "标签 tags（点选已有，或输入新标签后回车）"));
+  var tp = tagPicker(it.tags || [], function (sel) { it.tags = sel; });
+  tagBox.appendChild(tp.node);
+  form.appendChild(tagBox);
 
   var btnRow = el("div", "full");
   btnRow.style.display = "flex";

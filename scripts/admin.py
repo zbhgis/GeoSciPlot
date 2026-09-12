@@ -154,6 +154,7 @@ def repo_state() -> dict:
         "dirty": dirty,
         "count": len(items),
         "categories": sorted({i.get("category") for i in items if i.get("category")}),
+        "tags": sorted({t for i in items for t in (i.get("tags") or [])}),
         "defaultRemote": DEFAULT_REMOTE,
     }
 
