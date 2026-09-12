@@ -11,5 +11,9 @@
     "region": "oss-cn-hangzhou"
   },
   "tracker": "/api/v1/track",
-  "api": ""
+  "api": "",
+  "server": {
+    "host": "root@47.98.133.104",
+    "webroot": "/var/www/geosciplot"
+  }
 }
