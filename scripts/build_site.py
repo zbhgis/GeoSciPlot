@@ -64,8 +64,10 @@ def build_sources(cfg: dict) -> list[dict]:
     oss = cfg.get("oss", {})
     bucket = oss.get("bucket") or "BUCKET"
     region = oss.get("region", "oss-cn-hangzhou")
+    # 首选「本站直出」：rsync 到子域的同源副本，国内访问最快最稳；
+    # jsDelivr / raw 作为 GitHub 内容的备选分发层；OSS 兜底
     return [
-        {"id": "local", "label": "本地（仅预览）", "base": "/images"},
+        {"id": "local", "label": "本站直出", "base": "/images"},
         {"id": "jsdelivr", "label": "jsDelivr", "base": f"https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/images"},
         {"id": "raw", "label": "GitHub raw", "base": f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/images"},
         {"id": "oss", "label": "OSS 兜底", "base": f"https://{bucket}.{region}.aliyuncs.com/{repo.lower()}/images"},
@@ -183,10 +185,6 @@ JS = """\
     });
     img.src = CFG.sources[i] + "/" + rel;
     img.setAttribute("data-source", CFG.sources[i]);
-  }
-  }
-  }
-  }
   }
 
   /* 统计打点：所有页面（首页 + 详情页）都要执行。之前放在网格逻辑之后，
@@ -606,13 +604,14 @@ def main() -> int:
                 shutil.rmtree(d, ignore_errors=True)
 
     (SITE / "assets").mkdir(parents=True, exist_ok=True)
-    if args.preview:
-        dst = SITE / "images"
-        if dst.exists():
-            shutil.rmtree(dst)
-        shutil.copytree(IMAGES, dst)
-        n = sum(1 for p in dst.rglob("*") if p.is_file())
-        print(f"· 预览模式：images/ → site/images/（{n} 个文件）")
+    # images/ 始终复制进 site/（预览和生产都需要）：
+    # 本站直出源 /images/ 是子域上最可靠的图片入口，缺了它三源降级会全部失败
+    dst = SITE / "images"
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(IMAGES, dst)
+    n = sum(1 for p in dst.rglob("*") if p.is_file())
+    print(f"· images/ → site/images/（{n} 个文件）")
 
     (SITE / "assets" / "style.css").write_text(CSS, encoding="utf-8")
     inline = {

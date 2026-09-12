@@ -5,7 +5,7 @@
   "repo": "GeoSciPlot",
   "branch": "main",
   "owner": "zbhgis",
-  "activeSource": 1,
+  "activeSource": 0,
   "oss": {
     "bucket": "",
     "region": "oss-cn-hangzhou"

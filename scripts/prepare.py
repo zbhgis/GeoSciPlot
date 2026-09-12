@@ -160,7 +160,13 @@ def make_assets(src: Path, fid: str, day: str) -> tuple[int, int, str, int]:
 
 
 def prune_unused(keep: set[Path]) -> int:
-    """删除 images/ 下不在本次产物集合里的文件（布局迁移时清理旧产物）。"""
+    """删除 images/ 下不在本次产物集合里的文件。
+
+    双保险：调用方已保证 raw/ 非空才会到这里；即便如此，
+    keep 为空（什么都没生成）时绝不删除——防止误清空图库。
+    """
+    if not keep:
+        return 0
     removed = 0
     for p in IMG_DIR.rglob("*"):
         if p.is_file() and p not in keep:
@@ -190,6 +196,15 @@ def main() -> int:
     if titles:
         print(f"· 读入 {TITLES_CSV.relative_to(ROOT)}：{len(titles)} 条人工字段")
     sources = collect_sources()
+
+    # ── 防误删保险 ──
+    # raw/ 为空但索引里有数据 = 投放目录被清空/移动过。
+    # 此时继续跑会触发 prune_unused 把 images/ 里的全部产物删光（历史事故）。
+    if not sources and existing:
+        print(f"! raw/ 为空，但索引里有 {len(existing)} 条数据 —— 跳过处理（防止误清空图库）。")
+        print("  如果确实要清空图库：手动删除 images/、meta/refs.json、meta/titles.csv。")
+        return 0
+
     print(f"扫描 raw/：{len(sources)} 个候选文件，已有索引 {len(existing)} 条\n")
 
     items: list[dict] = []
