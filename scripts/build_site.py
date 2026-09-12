@@ -100,12 +100,14 @@ body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 ui-sans-serif
 a{color:inherit;text-decoration:none}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
-header.site{padding:72px 0 0;position:relative}
-.hbtns{position:absolute;top:0;right:0;display:flex;gap:8px}
-.tbtn{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border:1px solid var(--line2);border-radius:999px;background:var(--card);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s}
-.tbtn:hover{color:var(--accent);border-color:var(--accent)}
-.tbtn svg{width:14px;height:14px;flex:none}
-@media (max-width:760px){.hbtns{gap:6px}.tbtn{padding:6px 11px;font-size:11px}}
+header.site{padding:72px 0 0}
+.fab{position:fixed;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;z-index:50}
+.tbtn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:1px solid var(--line2);border-radius:50%;background:var(--card);color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,transform .16s}
+.tbtn:hover{color:var(--accent);border-color:var(--accent);transform:scale(1.06)}
+.tbtn svg{width:17px;height:17px;flex:none}
+#topBtn{opacity:0;pointer-events:none}
+#topBtn.show{opacity:1;pointer-events:auto}
+@media (max-width:760px){.fab{right:10px;gap:7px}.tbtn{width:36px;height:36px}.tbtn svg{width:15px;height:15px}}
 .tbtn .ic-sun{display:none}.tbtn .ic-moon{display:inline}
 @media (prefers-color-scheme:light){:root:not([data-theme]) .tbtn .ic-sun{display:inline}:root:not([data-theme]) .tbtn .ic-moon{display:none}}
 :root[data-theme=light] .tbtn .ic-sun{display:inline}:root[data-theme=light] .tbtn .ic-moon{display:none}
@@ -235,6 +237,13 @@ JS = """\
     root.setAttribute("data-theme", t);
     try { localStorage.setItem("gsp-theme", t); } catch (e) {}
   });
+  var topBtn = document.getElementById("topBtn");
+  if (topBtn) {
+    topBtn.addEventListener("click", function () { window.scrollTo({ top: 0, behavior: "smooth" }); });
+    var onScroll = function () { topBtn.classList.toggle("show", window.scrollY > 260); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  }
 
   var grid = document.getElementById("grid");
   if (!grid) { document.querySelectorAll("img[data-rel]").forEach(bind); return; }
@@ -455,8 +464,10 @@ JS = """\
 """
 
 
-def page_shell(cfg: dict, title: str, body: str, depth: int = 0) -> str:
+def page_shell(cfg: dict, title: str, body: str, depth: int = 0, gh_url: str = "") -> str:
     up = "../" if depth else ""
+    gh = gh_url or "https://github.com/{}/{}/{}".format(
+        cfg.get("owner") or "OWNER", cfg["repo"], cfg.get("branch", "main"))
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -470,7 +481,7 @@ def page_shell(cfg: dict, title: str, body: str, depth: int = 0) -> str:
 </head>
 <body>
 <div class="wrap">
-<div class="hbtns"><a class="tbtn" href="https://www.zbhgis.com" title="返回主站 浩瀚地学"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8 8 3l5.5 5M4 7v6h8V7"/></svg><span>主站</span></a><button type="button" class="tbtn" id="themeBtn" title="切换明暗主题" aria-label="切换明暗主题"><svg class="ic-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg><svg class="ic-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/></svg></button></div>
+<div class="fab"><a class="tbtn" href="https://www.zbhgis.com" title="返回主站 浩瀚地学"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8 8 3l5.5 5M4 7v6h8V7"/></svg></a><a class="tbtn" href="{gh}" rel="noopener" target="_blank" title="在 GitHub 查看（详情页直达当前图片）"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a><button type="button" class="tbtn" id="themeBtn" title="切换明暗主题" aria-label="切换明暗主题"><svg class="ic-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg><svg class="ic-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/></svg></button><button type="button" class="tbtn" id="topBtn" title="回到顶部" aria-label="回到顶部"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-9M4.5 8 8 4.5 11.5 8"/></svg></button></div>
 {body}
 <footer class="site">
   <span>{esc(cfg['title'])} · {esc(cfg['subtitle'])}</span>
@@ -613,7 +624,9 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
   <dt>标签</dt><dd>{tags_html}</dd>
 </dl>
 {chr(10).join(pager)}"""
-    return page_shell(cfg, f"图 {it['id']}", body, depth=1)
+    gh_img = "https://github.com/{}/{}/blob/{}/{}".format(
+        cfg.get("owner") or "OWNER", cfg["repo"], cfg.get("branch", "main"), it.get("full", ""))
+    return page_shell(cfg, f"图 {it['id']}", body, depth=1, gh_url=gh_img)
 
 
 def main() -> int:
