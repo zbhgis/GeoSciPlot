@@ -111,6 +111,12 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .reset{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:7px 11px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--faint);cursor:pointer}
 .reset:hover{color:var(--accent);border-color:var(--accent)}
 #filters[hidden]{display:none}
+.seg{display:flex}
+.seg button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:7px 12px;border:1px solid var(--line2);background:transparent;color:var(--dim);cursor:pointer}
+.seg button+button{border-left:none}
+.seg button:first-child{border-radius:4px 0 0 4px}
+.seg button:last-child{border-radius:0 4px 4px 0}
+.seg button[aria-pressed=true]{color:var(--accent);border-color:var(--accent);position:relative;z-index:1}
 .dateinp{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:6px 9px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--dim);color-scheme:dark light}
 .fgroup{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:10px 0 0;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .flabel{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);min-width:44px;letter-spacing:.06em}
@@ -204,7 +210,6 @@ JS = """\
     if (localStorage.getItem("gsp-sort")) { state.sort = localStorage.getItem("gsp-sort"); }
   } catch (e) {}
   var q = document.getElementById("q");
-  var sortSel = document.getElementById("sort");
   var empty = document.getElementById("empty");
   var count = document.getElementById("count");
   var info = document.getElementById("pageinfo");
@@ -219,8 +224,14 @@ JS = """\
     return true;
   }
   function cmp(a, b) {
+    if (state.sort === "random") {
+      if (a._rk === undefined) a._rk = Math.random();
+      if (b._rk === undefined) b._rk = Math.random();
+      return a._rk - b._rk;
+    }
+    var dir = state.sort === "added_asc" ? 1 : -1;
     var aa = (a.ad || ""), ab = (b.ad || "");
-    if (aa !== ab) return aa < ab ? 1 : -1;
+    if (aa !== ab) return (aa < ab ? -1 : 1) * dir;
     return (a.id || "").localeCompare(b.id || "");
   }
   function cardNode(it) {
@@ -286,12 +297,18 @@ JS = """\
     q.addEventListener("input", function () { state.q = q.value.trim().toLowerCase(); resetPage(); });
     q.addEventListener("keydown", function (e) { if (e.key === "Escape") { q.value = ""; state.q = ""; resetPage(); } });
   }
-  if (sortSel) {
-    sortSel.value = state.sort;
-    sortSel.addEventListener("change", function () {
-      state.sort = sortSel.value;
-      try { localStorage.setItem("gsp-sort", state.sort); } catch (e) {}
-      resetPage();
+  var sortseg = document.getElementById("sortseg");
+  if (sortseg) {
+    if (["added", "added_asc", "random"].indexOf(state.sort) === -1) state.sort = "added";
+    var sortBtns = sortseg.querySelectorAll("button");
+    sortBtns.forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-sort") === state.sort));
+      b.addEventListener("click", function () {
+        state.sort = b.getAttribute("data-sort");
+        try { localStorage.setItem("gsp-sort", state.sort); } catch (e) {}
+        sortBtns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+        resetPage();
+      });
     });
   }
   var fFrom = document.getElementById("f-from"), fTo = document.getElementById("f-to");
@@ -489,9 +506,11 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 
 <div class="toolbar">
   <input id="q" class="search" type="search" placeholder="搜索 id / DOI / 标签 / 标题…" autocomplete="off">
-  <select id="sort" aria-label="排序">
-    <option value="added">按上传日期（新→旧）</option>
-  </select>
+  <span class="seg" id="sortseg" role="group" aria-label="排序">
+    <button type="button" data-sort="added" aria-pressed="true">新到旧</button>
+    <button type="button" data-sort="added_asc" aria-pressed="false">旧到新</button>
+    <button type="button" data-sort="random" aria-pressed="false">随机</button>
+  </span>
   <select id="perpage" aria-label="每页数量">
     <option value="24">每页 24</option>
     <option value="48" selected>每页 48</option>
