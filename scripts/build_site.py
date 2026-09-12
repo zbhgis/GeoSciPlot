@@ -111,6 +111,7 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .reset{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:7px 11px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--faint);cursor:pointer}
 .reset:hover{color:var(--accent);border-color:var(--accent)}
 #filters[hidden]{display:none}
+.dateinp{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:6px 9px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--dim);color-scheme:dark light}
 .fgroup{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:10px 0 0;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .flabel{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);min-width:44px;letter-spacing:.06em}
 .chips{display:flex;flex-wrap:wrap;gap:7px}
@@ -196,7 +197,7 @@ JS = """\
   grid.querySelectorAll("img[data-rel]").forEach(bind);   // 首屏静态卡片也要绑降级
 
   /* ── 分页 + 筛选 + 排序 ── */
-  var state = { q: "", tag: "*", added: "*", sort: "added", page: 1, per: PAGE };
+  var state = { q: "", tag: "*", from: "", to: "", sort: "added", page: 1, per: PAGE };
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
     if (savedPer === 0 || savedPer >= 12) state.per = savedPer;   // 0 = 显示全部
@@ -212,7 +213,8 @@ JS = """\
 
   function pass(it) {
     if (state.tag !== "*" && (it.tg || []).indexOf(state.tag) === -1) return false;
-    if (state.added !== "*" && (it.ad || "—") !== state.added) return false;
+    if (state.from && (it.ad || "") < state.from) return false;
+    if (state.to && (it.ad || "") > state.to) return false;
     if (state.q && (it.se || "").indexOf(state.q) === -1) return false;
     return true;
   }
@@ -256,7 +258,7 @@ JS = """\
     if (prev) prev.disabled = state.page <= 1;
     if (next) next.disabled = state.page >= pages;
     if (count) {
-      var filtered = state.q || state.tag !== "*" || state.added !== "*";
+      var filtered = state.q || state.tag !== "*" || state.from || state.to;
       count.textContent = filtered ? "匹配 " + list.length + " / " + ITEMS.length + " 张"
                                    : "共 " + ITEMS.length + " 张";
     }
@@ -278,7 +280,7 @@ JS = """\
       });
     });
   }
-  ["[data-key=tag]", "[data-key=added]"].forEach(bindChips);
+  ["[data-key=tag]"].forEach(bindChips);
 
   if (q) {
     q.addEventListener("input", function () { state.q = q.value.trim().toLowerCase(); resetPage(); });
@@ -292,12 +294,18 @@ JS = """\
       resetPage();
     });
   }
+  var fFrom = document.getElementById("f-from"), fTo = document.getElementById("f-to");
+  if (fFrom) fFrom.addEventListener("change", function () { state.from = fFrom.value; resetPage(); });
+  if (fTo) fTo.addEventListener("change", function () { state.to = fTo.value; resetPage(); });
   if (prev) prev.addEventListener("click", function () { state.page -= 1; render(); });
   if (next) next.addEventListener("click", function () { state.page += 1; render(); });
 
   var reset = document.getElementById("reset");
   if (reset) reset.addEventListener("click", function () {
-    state = { q: "", tag: "*", added: "*", sort: state.sort, page: 1 };
+    state = { q: "", tag: "*", from: "", to: "", sort: state.sort, page: 1 };
+    var fF = document.getElementById("f-from"), fT = document.getElementById("f-to");
+    if (fF) fF.value = "";
+    if (fT) fT.value = "";
     if (q) q.value = "";
     document.querySelectorAll(".chips").forEach(function (box) {
       box.querySelectorAll("button").forEach(function (x, i) {
@@ -324,7 +332,7 @@ JS = """\
   function activeFilters() {
     var parts = [];
     if (state.tag !== "*") parts.push("标签 " + state.tag);
-    if (state.added !== "*") parts.push("上传 " + state.added);
+    if (state.from || state.to) parts.push("上传 " + (state.from || "…") + " ~ " + (state.to || "…"));
     if (state.q) parts.push("搜索 " + state.q);
     return parts;
   }
@@ -369,7 +377,7 @@ JS = """\
   var applied = false;
   try {
     var params = new URLSearchParams(location.search);
-    ["q", "tag", "added"].forEach(function (k) {
+    ["q", "tag", "from", "to"].forEach(function (k) {
       var v = params.get(k);
       if (!v) return;
       applied = true;
@@ -496,7 +504,9 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 
 <div id="filters">
 {filter_row("标签", chips(tag_counter, "tag", "全部"))}
-{filter_row("上传", chips(addeds, "added", "全部"))}
+{filter_row("上传", '<input type="date" id="f-from" class="dateinp">\n'
+  + ' <span class="flabel" style="min-width:auto">至</span>\n'
+  + '<input type="date" id="f-to" class="dateinp">')}
 </div>
 
 <main class="grid" id="grid">
