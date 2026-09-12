@@ -267,6 +267,27 @@ def apply_to_refs(updates: dict[str, dict]) -> int:
 
 # ────────────────────────── 动作 ──────────────────────────
 
+def do_raw_list() -> dict:
+    """列出 raw/ 中尚未入库的图片（页面刷新后恢复「待发布」列表用）。"""
+    known = {i["id"] for i in load_refs().get("items", [])}
+    out = []
+    if RAW_DIR.exists():
+        for f in sorted(RAW_DIR.rglob("*")):
+            if not f.is_file() or f.suffix.lower() not in SUPPORTED:
+                continue
+            fid = content_id(f)
+            rec = {"name": f.name, "savedAs": f.name, "id": fid,
+                   "bytes": f.stat().st_size, "duplicate": fid in known,
+                   "preview": preview_b64(f)}
+            try:
+                with Image.open(f) as im:
+                    rec["width"], rec["height"] = im.size
+            except Exception:
+                pass
+            out.append(rec)
+    return {"files": out}
+
+
 def do_upload(files: list[dict]) -> dict:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     known = {i["id"] for i in load_refs().get("items", [])}
@@ -573,6 +594,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(repo_state())
         elif path == "/api/items":
             self._json(load_refs())
+        elif path == "/api/raw":
+            self._json(do_raw_list())
         elif path.startswith("/api/job/"):
             self._json(job_snapshot(path[len("/api/job/"):]))
         elif path.startswith("/images/"):

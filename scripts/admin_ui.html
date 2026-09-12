@@ -597,6 +597,15 @@ document.getElementById("btnSync").addEventListener("click", function () {
 });
 
 loadStatus();
+/* 刷新/重开页面后自动恢复：raw/ 里还没入库的图重新挂回「待发布」表单 */
+api("/api/raw").then(function (r) {
+  var files = (r.files || []).filter(function (f) { return !f.duplicate; });
+  files.forEach(function (f) { addItem(f); });
+  if (files.length) {
+    document.getElementById("uploadNote").textContent =
+      "检测到 raw/ 里有 " + files.length + " 张已上传未发布的图，已恢复到下方，填完信息点发布即可";
+  }
+});
 </script>
 </body>
 </html>
