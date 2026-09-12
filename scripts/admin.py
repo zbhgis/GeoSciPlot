@@ -40,6 +40,7 @@ IMG_DIR = ROOT / "images"
 META_DIR = ROOT / "meta"
 TITLES_CSV = META_DIR / "titles.csv"
 REFS_JSON = META_DIR / "refs.json"
+SITE = ROOT / "site"                     # build_site.py 的产物目录（「同步服务器」用）
 UI_HTML = Path(__file__).resolve().parent / "admin_ui.html"
 
 PYTHON = sys.executable
