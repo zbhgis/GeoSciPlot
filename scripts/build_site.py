@@ -57,21 +57,24 @@ def load_cfg() -> dict:
     return cfg
 
 
-def build_sources(cfg: dict) -> list[dict]:
+def build_sources(cfg: dict, preview: bool = False) -> list[dict]:
     owner = cfg.get("owner") or "OWNER"
     repo = cfg["repo"]
     branch = cfg.get("branch", "main")
     oss = cfg.get("oss", {})
     bucket = oss.get("bucket") or "BUCKET"
     region = oss.get("region", "oss-cn-hangzhou")
-    # 首选 GitHub 链接（图片内容源在 GitHub 仓库）：
-    # jsDelivr = 仓库内容的 CDN 分发层，raw = 仓库原始直链；本站直出 / OSS 作为降级备选
-    return [
+    # 图片一律走 GitHub 链接（jsDelivr CDN → raw 直链 → OSS 兜底），
+    # 本站不存图片不分发图片（服务器带宽留给站点本身）。
+    sources = [
         {"id": "jsdelivr", "label": "jsDelivr", "base": f"https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/images"},
         {"id": "raw", "label": "GitHub raw", "base": f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/images"},
-        {"id": "local", "label": "本站直出", "base": "/images"},
         {"id": "oss", "label": "OSS 兜底", "base": f"https://{bucket}.{region}.aliyuncs.com/{repo.lower()}/images"},
     ]
+    if preview:
+        # 本地预览：图片副本就在 site/images/，同源加载即可
+        sources.insert(0, {"id": "local", "label": "本地（仅预览）", "base": "/images"})
+    return sources
 
 
 def esc(s) -> str:
@@ -593,7 +596,8 @@ def main() -> int:
         print("! 索引为空")
         return 1
 
-    sources = build_sources(cfg)
+    sources = build_sources(cfg, preview=args.preview)
+    active = 0 if args.preview else int(cfg.get("activeSource", 0))
     active = 0 if args.preview else int(cfg.get("activeSource", 1))
     active = max(0, min(active, len(sources) - 1))
 
@@ -604,14 +608,14 @@ def main() -> int:
                 shutil.rmtree(d, ignore_errors=True)
 
     (SITE / "assets").mkdir(parents=True, exist_ok=True)
-    # images/ 始终复制进 site/（预览和生产都需要）：
-    # 本站直出源 /images/ 是子域上最可靠的图片入口，缺了它三源降级会全部失败
-    dst = SITE / "images"
-    if dst.exists():
-        shutil.rmtree(dst)
-    shutil.copytree(IMAGES, dst)
-    n = sum(1 for p in dst.rglob("*") if p.is_file())
-    print(f"· images/ → site/images/（{n} 个文件）")
+    if args.preview:
+        # 仅预览构建复制图片副本（生产走 GitHub 链接，本站不分发图片）
+        dst = SITE / "images"
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(IMAGES, dst)
+        n = sum(1 for p in dst.rglob("*") if p.is_file())
+        print(f"· 预览模式：images/ → site/images/（{n} 个文件）")
 
     (SITE / "assets" / "style.css").write_text(CSS, encoding="utf-8")
     inline = {
