@@ -184,22 +184,12 @@ JS = """\
     img.src = CFG.sources[i] + "/" + rel;
     img.setAttribute("data-source", CFG.sources[i]);
   }
-
-  /* 统计打点：所有页面（首页 + 详情页）都要执行 —— 之前放在网格逻辑之后，
-     详情页因没有 #grid 提前 return，打点从未跑过（被浏览一直为空的根因） */
-  if (CFG.tracker && !location.hostname.match(/^(localhost|127\.0\.0\.1|)$/)) {
-    try {
-      if (navigator.doNotTrack === "1") return;
-      fetch(CFG.tracker, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ path: "/geosciplot" + location.pathname, referrer: document.referrer || undefined }),
-        keepalive: true,
-      }).catch(function () {});
-    } catch (e) {}
+  }
+  }
+  }
   }
 
-  /* 统计打点：所有页面（首页 + 详情页）都要执行 —— 之前放在网格逻辑之后，
+  /* 统计打点：所有页面（首页 + 详情页）都要执行。之前放在网格逻辑之后，
      详情页因没有 #grid 提前 return，打点从未跑过（被浏览一直为空的根因） */
   if (CFG.tracker && !location.hostname.match(/^(localhost|127\.0\.0\.1|)$/)) {
     try {
