@@ -73,6 +73,13 @@ details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radi
 .modal .mmsg{font-size:13px;line-height:1.9;white-space:pre-wrap}
 .modal .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
 .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:6px;padding:10px 16px;font-size:12.5px;color:var(--text);z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.mgroup{display:flex;align-items:center;gap:10px;margin:0 0 12px;flex-wrap:wrap}
+.mlabel{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);min-width:36px;letter-spacing:.05em}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chips button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;padding:4px 11px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--dim);cursor:pointer;transition:color .15s,border-color .15s}
+.chips button:hover{color:var(--text)}
+.chips button[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
+.chips button .n{opacity:.55}
 /* 标签选择器 */
 .tagpick{display:flex;flex-wrap:wrap;gap:6px}
 .tagpick button{padding:3px 10px;font-size:11px}
@@ -130,12 +137,16 @@ details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radi
 
   <div class="tabpage" id="tab-manage" style="display:none">
     <h2 style="margin-top:0">图片管理</h2>
-    <div class="row" style="margin:0 0 14px">
-      <input id="mSearch" placeholder="搜索 id / DOI / 标题 / 标签…" style="flex:1 1 220px;max-width:320px" autocomplete="off">
-      <select id="mTag" aria-label="按标签筛选" style="width:auto"><option value="*">全部标签</option></select>
+    <div class="row" style="margin:0 0 12px">
+      <input id="mSearch" placeholder="搜索 id / DOI / 标题 / 标题…" style="flex:1 1 220px;max-width:320px" autocomplete="off">
       <select id="mDoi" aria-label="按 DOI 状态筛选" style="width:auto"><option value="*">DOI 全部</option><option value="yes">已填 DOI</option><option value="no">未填 DOI</option></select>
+      <input type="date" id="mFrom" style="width:auto" aria-label="上传起始日期">
+      <span class="note">至</span>
+      <input type="date" id="mTo" style="width:auto" aria-label="上传截止日期">
+      <button id="mReset">重置筛选</button>
       <span class="note" id="mCount"></span>
     </div>
+    <div class="mgroup" style="margin:0 0 14px"><span class="mlabel">标签</span><div class="chips" id="mTagChips"></div></div>
     <div class="row" style="margin:0 0 16px">
       <button id="btnSync">同步站点到服务器</button>
       <span class="note">把 site/ 推到服务器（需先在服务器 authorized_keys 里加本机公钥，见 README）</span>
@@ -529,12 +540,14 @@ document.getElementById("btnPush").addEventListener("click", function () {
   });
 });
 
-/* ── 图片管理（查 / 改 / 删 + 搜索筛选）── */
+/* ── 图片管理（查 / 改 / 删 + 复刻主页的搜索筛选机制）── */
 var mItems = [];
-var mFilter = { q: "", tag: "*", doi: "*" };
+var mFilter = { q: "", tag: "*", from: "", to: "", doi: "*" };
 function mFiltered() {
   return mItems.filter(function (it) {
     if (mFilter.tag !== "*" && (it.tags || []).indexOf(mFilter.tag) === -1) return false;
+    if (mFilter.from && (it.added || "") < mFilter.from) return false;
+    if (mFilter.to && (it.added || "") > mFilter.to) return false;
     if (mFilter.doi === "yes" && !it.doi) return false;
     if (mFilter.doi === "no" && it.doi) return false;
     if (mFilter.q) {
@@ -544,41 +557,60 @@ function mFiltered() {
     return true;
   });
 }
+function mTagCounts() {
+  var c = {};
+  mItems.forEach(function (it) { (it.tags || []).forEach(function (t) { c[t] = (c[t] || 0) + 1; }); });
+  return c;
+}
+function mRenderChips() {
+  var box = document.getElementById("mTagChips");
+  if (!box) return;
+  var counts = mTagCounts();
+  box.innerHTML = "";
+  var mk = function (label, val, n) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(mFilter.tag === val));
+    b.innerHTML = label + (n !== undefined ? ' <span class="n">' + n + "</span>" : "");
+    b.addEventListener("click", function () {
+      mFilter.tag = (mFilter.tag === val ? "*" : val);
+      mRenderChips(); mRender();
+    });
+    box.appendChild(b);
+  };
+  mk("全部", "*");
+  Object.keys(counts).sort().forEach(function (t) { mk(t, t, counts[t]); });
+}
 function mWire() {
   var s = document.getElementById("mSearch");
-  var t = document.getElementById("mTag");
   var d = document.getElementById("mDoi");
+  var f = document.getElementById("mFrom");
+  var t = document.getElementById("mTo");
+  var r = document.getElementById("mReset");
   if (s && !s.dataset.wired) {
     s.dataset.wired = "1";
     s.addEventListener("input", function () { mFilter.q = s.value.trim().toLowerCase(); mRender(); });
-    t.addEventListener("change", function () { mFilter.tag = t.value; mRender(); });
     d.addEventListener("change", function () { mFilter.doi = d.value; mRender(); });
+    f.addEventListener("change", function () { mFilter.from = f.value; mRender(); });
+    t.addEventListener("change", function () { mFilter.to = t.value; mRender(); });
+    r.addEventListener("click", function () {
+      mFilter = { q: "", tag: "*", from: "", to: "", doi: "*" };
+      s.value = ""; d.value = "*"; f.value = ""; t.value = "";
+      mRenderChips(); mRender();
+    });
   }
-}
-function mSyncControls() {
-  var t = document.getElementById("mTag");
-  if (!t) return;
-  var cur = mFilter.tag;
-  t.innerHTML = '<option value="*">全部标签</option>';
-  (allTags || []).forEach(function (tag) {
-    var o = document.createElement("option");
-    o.value = tag; o.textContent = tag;
-    t.appendChild(o);
-  });
-  t.value = cur;
-  if (t.selectedIndex === -1) { t.value = "*"; mFilter.tag = "*"; }
 }
 function mRender() {
   var list = mFiltered();
   var c = document.getElementById("mCount");
-  if (c) c.textContent = (mFilter.q || mFilter.tag !== "*" || mFilter.doi !== "*")
+  if (c) c.textContent = (mFilter.q || mFilter.tag !== "*" || mFilter.from || mFilter.to || mFilter.doi !== "*")
     ? "匹配 " + list.length + " / " + mItems.length + " 张" : "共 " + mItems.length + " 张";
   renderManage(list);
 }
 function loadItems() {
   return api("/api/items").then(function (refs) {
     mItems = refs.items || [];
-    mSyncControls();
+    mRenderChips();
     mRender();
   });
 }
