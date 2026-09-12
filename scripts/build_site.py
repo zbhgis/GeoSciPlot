@@ -175,7 +175,7 @@ JS = """\
         img.removeAttribute("src");
         var ph = document.createElement("div");
         ph.className = "ph";
-        ph.textContent = "图片加载失败（所有源均不可用）";
+        ph.textContent = "图片加载失败（图片托管于 GitHub，需具备 GitHub 访问能力）";
         img.parentNode.replaceChild(ph, img);
       }
     });
@@ -438,7 +438,7 @@ def page_shell(cfg: dict, title: str, body: str, depth: int = 0) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{esc(title)} · {esc(cfg['title'])}</title>
+<title>geosciplot</title>
 <meta name="description" content="{esc(cfg['subtitle'])} —— {esc(cfg['lede'])}">
 <link rel="stylesheet" href="{up}assets/style.css">
 </head>
@@ -446,8 +446,8 @@ def page_shell(cfg: dict, title: str, body: str, depth: int = 0) -> str:
 <div class="wrap">
 {body}
 <footer class="site">
-  <span>{esc(cfg['title'])} · {esc(cfg['subtitle'])}</span>
-  <span><a href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener">GitHub 仓库</a> · 图表版权归各原作者，详见各图说明</span>
+  <span>{esc(cfg['title'])} · {esc(cfg['subtitle'])} · 图片存储于 GitHub，访问需具备 GitHub 访问能力</span>
+  <span><a href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener">GitHub 仓库</a> · 图表版权归各原作者</span>
 </footer>
 </div>
 <script src="{up}assets/gallery.js"></script>
