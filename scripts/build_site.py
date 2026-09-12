@@ -361,8 +361,8 @@ JS = """\
       .then(function (d) {
         if (!d || !d.items) return;
         var map = {};
-        d.items.forEach(function (x) { map[x.path.replace(/\/$/, "")] = x.views; });
-        var n = map[location.pathname.replace(/\/$/, "")] || 0;
+        d.items.forEach(function (x) { map[x.path.replace(/\\/$/, "")] = x.views; });
+        var n = map["/geosciplot" + location.pathname.replace(/\\/$/, "")] || 0;
         viewsEl.textContent = n ? n + " 次" : "首次";
         viewsEl.style.color = "var(--text)";
       }).catch(function () {});
@@ -412,7 +412,7 @@ JS = """\
       fetch(CFG.tracker, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ path: location.pathname, referrer: document.referrer || undefined }),
+        body: JSON.stringify({ path: "/geosciplot" + location.pathname, referrer: document.referrer || undefined }),
         keepalive: true,
       }).catch(function () {});
     } catch (e) {}
