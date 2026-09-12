@@ -14,7 +14,7 @@
 设计要点：
   · 图片没有标题，卡片只显示缩略图与 id
   · 筛选维度：期刊 / 论文发表年份 / 添加日期（= 上传日期，即 images 下的日期目录）
-  · 分页：每页 48 张，只渲染当前页 → 只请求当前页的缩略图（1000 张也不会一次拉 23MB）
+  · 分页：每页 30 张，只渲染当前页 → 只请求当前页的缩略图
   · 首页首屏的卡片由 Python 直接输出静态 HTML（对爬虫/AI 引擎友好），
     翻页与筛选时改由 JS 渲染
 """
@@ -36,7 +36,7 @@ REFS_JSON = ROOT / "meta" / "refs.json"
 SITE = ROOT / "site"
 IMAGES = ROOT / "images"
 
-PAGE_SIZE = 48
+PAGE_SIZE = 30
 
 DEFAULT_CFG = {
     "title": "GeoSciPlot",
@@ -254,7 +254,7 @@ JS = """\
   var state = { q: "", tag: "*", from: "", to: "", sort: "added", page: 1, per: PAGE };
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
-    if (savedPer === 0 || savedPer >= 12) state.per = savedPer;   // 0 = 显示全部
+    if ([20, 30, 50].indexOf(savedPer) > -1) state.per = savedPer;   // 仅接受合法档位，旧值自动回默认 30
     if (localStorage.getItem("gsp-sort")) { state.sort = localStorage.getItem("gsp-sort"); }
   } catch (e) {}
   var q = document.getElementById("q");
@@ -554,10 +554,9 @@ def build_index(cfg: dict, items: list[dict]) -> str:
     <button type="button" data-sort="random" aria-pressed="false" title="随机排序"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5h2.2c3.2 0 4.6 7 7.6 7H14M2 11.5h2.2c1.3 0 2.2-.9 3-2M8.8 6.5c.8-1.1 1.7-2 3-2H14M12.3 3l1.7 1.5L12.3 6M12.3 10l1.7 1.5-1.7 1.5"/></svg><span>随机</span></button>
   </span>
   <select id="perpage" aria-label="每页数量">
-    <option value="24">每页 24</option>
-    <option value="48" selected>每页 48</option>
-    <option value="96">每页 96</option>
-    <option value="0">显示全部</option>
+    <option value="20">每页 20</option>
+    <option value="30" selected>每页 30</option>
+    <option value="50">每页 50</option>
   </select>
   <button id="filterBtn" class="reset" aria-expanded="true" aria-controls="filters">筛选 ▴</button>
   <button id="reset" class="reset">重置筛选</button>
