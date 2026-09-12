@@ -111,12 +111,11 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .reset{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:7px 11px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--faint);cursor:pointer}
 .reset:hover{color:var(--accent);border-color:var(--accent)}
 #filters[hidden]{display:none}
-.seg{display:flex}
-.seg button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:7px 12px;border:1px solid var(--line2);background:transparent;color:var(--dim);cursor:pointer}
-.seg button+button{border-left:none}
-.seg button:first-child{border-radius:4px 0 0 4px}
-.seg button:last-child{border-radius:0 4px 4px 0}
-.seg button[aria-pressed=true]{color:var(--accent);border-color:var(--accent);position:relative;z-index:1}
+.sorter{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line2);border-radius:999px;background:var(--card)}
+.sorter button{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;padding:6px 13px;border:none;border-radius:999px;background:transparent;color:var(--dim);cursor:pointer;transition:color .15s,background-color .15s}
+.sorter button:hover{color:var(--text)}
+.sorter button[aria-pressed=true]{background:var(--accent);color:var(--bg)}
+.sorter button svg{width:13px;height:13px;flex:none}
 .dateinp{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:6px 9px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--dim);color-scheme:dark light}
 .fgroup{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:10px 0 0;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .flabel{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);min-width:44px;letter-spacing:.06em}
@@ -507,10 +506,10 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 
 <div class="toolbar">
   <input id="q" class="search" type="search" placeholder="搜索 id / DOI / 标签 / 标题…" autocomplete="off">
-  <span class="seg" id="sortseg" role="group" aria-label="排序">
-    <button type="button" data-sort="added" aria-pressed="true">新到旧</button>
-    <button type="button" data-sort="added_asc" aria-pressed="false">旧到新</button>
-    <button type="button" data-sort="random" aria-pressed="false">随机</button>
+  <span class="sorter" id="sortseg" role="group" aria-label="排序">
+    <button type="button" data-sort="added" aria-pressed="true" title="上传日期 新→旧"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.8 7.3 8 10.5l3.2-3.2M3 13.5h10"/></svg><span>新到旧</span></button>
+    <button type="button" data-sort="added_asc" aria-pressed="false" title="上传日期 旧→新"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-8M4.8 8.7 8 5.5l3.2 3.2M3 2.5h10"/></svg><span>旧到新</span></button>
+    <button type="button" data-sort="random" aria-pressed="false" title="随机排序"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5h2.2c3.2 0 4.6 7 7.6 7H14M2 11.5h2.2c1.3 0 2.2-.9 3-2M8.8 6.5c.8-1.1 1.7-2 3-2H14M12.3 3l1.7 1.5L12.3 6M12.3 10l1.7 1.5-1.7 1.5"/></svg><span>随机</span></button>
   </span>
   <select id="perpage" aria-label="每页数量">
     <option value="24">每页 24</option>
