@@ -232,7 +232,6 @@ function loadStatus() {
     box.appendChild(el("span", "", "未提交 " + s.dirty + " 项"));
     document.getElementById("initBox").style.display = s.isRepo ? "none" : "block";
     document.getElementById("remote").value = s.defaultRemote || "";
-    fillDatalist("cats", s.categories);
     allTags = s.tags || [];
     return s;
   });
@@ -362,7 +361,6 @@ function buildItemNode(rec) {
     return input;
   }
   field("标题 title", "title", { placeholder: "图的中文标题（可留空）" });
-  field("分类 category", "category", { list: "cats", placeholder: "如：水文与冰冻圈" });
   field("DOI doi", "doi", { placeholder: "如：10.1038/s41586-024-07752-w（模拟数据）" });
 
   var tagBox = el("div", "full");
@@ -431,7 +429,7 @@ function publish() {
   var items = pending.map(function (p) {
     return {
       id: p.id,
-      title: p.title || "", category: p.category || "",
+      title: p.title || "",
       tags: (p.tags || "").split("|").map(function (t) { return t.trim(); }).filter(Boolean),
       doi: p.doi || ""
     };
@@ -516,7 +514,7 @@ function manageRow(it) {
     doiLine.textContent = "DOI：—";
   }
   info.appendChild(doiLine);
-  info.appendChild(el("div", "", "分类：" + (it.category || "—") + " · 添加：" + (it.added || "—")));
+  info.appendChild(el("div", "", "添加：" + (it.added || "—")));
   info.appendChild(el("div", "", "标签：" + ((it.tags || []).join("、") || "—")));
   node.appendChild(info);
 
@@ -560,7 +558,6 @@ function openEdit(node, it) {
     form.appendChild(box);
   }
   field("标题 title", "title");
-  field("分类 category", "category", { list: "cats" });
   field("DOI doi", "doi", { placeholder: "10.xxxx/xxxxx" });
 
   var tagBox = el("div", "full");
@@ -582,7 +579,7 @@ function openEdit(node, it) {
   save.addEventListener("click", function () {
     save.disabled = true;
     save.textContent = "保存中…";
-    runJob("/api/update", { items: [{ id: it.id, title: it.title, category: it.category,
+    runJob("/api/update", { items: [{ id: it.id, title: it.title,
                                       tags: it.tags, doi: it.doi }],
                             push: document.getElementById("doPush").checked,
                             sync: document.getElementById("doSync").checked }, function () {
@@ -604,6 +601,5 @@ document.getElementById("btnSync").addEventListener("click", function () {
 
 loadStatus();
 </script>
-<datalist id="cats"></datalist>
 </body>
 </html>

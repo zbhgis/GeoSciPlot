@@ -52,7 +52,7 @@ SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
 MANUAL_FIELDS = ["doi"]
 MANUAL_LIST_FIELDS = ["tags"]
 # 仅保留历史数据、不再在前端使用（迁移期兼容）
-KEEP_FIELDS = ["title", "category"]
+KEEP_FIELDS = ["title"]
 
 
 def file_id(path: Path) -> str:
@@ -106,7 +106,7 @@ def export_titles(items: list[dict]) -> None:
         w.writerow(cols)
         for it in items:
             w.writerow([it.get("id", ""), it.get("doi", ""),
-                        it.get("title", ""), it.get("category", ""),
+                        it.get("title", ""),
                         "|".join(it.get("tags", []))])
     print(f"导出编辑表 → {TITLES_CSV.relative_to(ROOT)}（Excel 编辑后重跑本脚本即回填）")
 
@@ -261,7 +261,6 @@ def main() -> int:
             "tags": manual.get("tags") or old.get("tags", []),
             # 迁移期兼容字段：保留历史值，前端已不再使用
             "title": manual.get("title") or old.get("title", ""),
-            "category": manual.get("category") or old.get("category", ""),
             "width": w,
             "height": h,
             "ext": ext,

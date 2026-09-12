@@ -49,7 +49,7 @@ PYTHON = sys.executable
 DEFAULT_REMOTE = "git@github.com:zbhgis/GeoSciPlot.git"
 MAX_BODY = 200 * 1024 * 1024          # 单次请求体上限
 SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
-CSV_FIELDS = ["id", "tags", "doi", "title", "category"]
+CSV_FIELDS = ["id", "tags", "doi", "title"]
 MANUAL_TEXT = ("doi",)
 MANUAL_LIST = ("tags",)
 IMG_TYPES = {".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg",
@@ -153,7 +153,6 @@ def repo_state() -> dict:
         "branch": branch,
         "dirty": dirty,
         "count": len(items),
-        "categories": sorted({i.get("category") for i in items if i.get("category")}),
         "tags": sorted({t for i in items for t in (i.get("tags") or [])}),
         "defaultRemote": DEFAULT_REMOTE,
     }
@@ -240,7 +239,7 @@ def apply_to_csv(updates: dict[str, dict]) -> int:
     n = 0
     for fid, upd in updates.items():
         row = rows.get(fid, {k: "" for k in fields})
-        for k in MANUAL_TEXT + MANUAL_LIST + ("category", "title"):
+        for k in MANUAL_TEXT + MANUAL_LIST + ("title",):
             if k in upd:
                 row[k] = "|".join(upd[k]) if isinstance(upd[k], list) else str(upd[k])
         row["id"] = fid
@@ -258,7 +257,7 @@ def apply_to_refs(updates: dict[str, dict]) -> int:
         upd = updates.get(it.get("id"))
         if not upd:
             continue
-        for k in MANUAL_TEXT + MANUAL_LIST + ("category", "title"):
+        for k in MANUAL_TEXT + MANUAL_LIST + ("title",):
             if k in upd:
                 it[k] = upd[k]
         n += 1
@@ -446,7 +445,7 @@ def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = 
         if not fid:
             continue
         row = rows.get(fid, {k: "" for k in fields})
-        for k in ("title", "category", "doi"):
+        for k in ("title", "doi"):
             v = (it.get(k) or "").strip()
             if v:
                 row[k] = v

@@ -87,7 +87,6 @@ def haystack(item: dict) -> str:
         item.get("doi") or "",
         str(item.get("added") or ""),
         item.get("title") or "",
-        item.get("category") or "",
         " ".join(item.get("tags", [])),
     ]).lower()
 
