@@ -288,6 +288,17 @@ def do_raw_list() -> dict:
     return {"files": out}
 
 
+def do_raw_delete(name: str) -> dict:
+    """删除 raw/ 里的源文件（用户在待发布表单点「移除」时调用，防止下次加载又恢复回来）。"""
+    target = RAW_DIR / safe_name(name or "")
+    if not str(target.resolve()).startswith(str(RAW_DIR.resolve())):
+        return {"ok": False, "error": "非法路径"}
+    if target.exists():
+        target.unlink()
+        return {"ok": True}
+    return {"ok": False, "error": "文件不存在"}
+
+
 def do_upload(files: list[dict]) -> dict:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     known = {i["id"] for i in load_refs().get("items", [])}
@@ -609,6 +620,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/upload":
             # 上传是纯本地快速操作，保持同步返回
             self._json(do_upload(body.get("files") or []))
+        elif path == "/api/raw/delete":
+            self._json(do_raw_delete(body.get("name") or ""))
         elif path in ("/api/publish", "/api/update", "/api/delete",
                       "/api/sync-server", "/api/init", "/api/push"):
             # 长操作：立即返回任务号，后台线程执行，前端轮询 /api/job/<id>

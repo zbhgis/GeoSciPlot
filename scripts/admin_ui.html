@@ -338,6 +338,18 @@ function buildItemNode(rec) {
     d.style.color = "var(--bad)";
     meta.appendChild(d);
   }
+  var btnRm = el("button", "tiny danger", "移除（不入库）");
+  btnRm.style.marginTop = "8px";
+  btnRm.addEventListener("click", function () {
+    if (!confirm("确定不把这张图入库？将删除 raw/ 里的源文件，图库与已发布内容不受影响。")) return;
+    btnRm.disabled = true;
+    api("/api/raw/delete", { name: rec.savedAs || rec.name }).then(function (r) {
+      pending = pending.filter(function (x) { return x !== rec; });
+      node.remove();
+      if (!pending.length) document.getElementById("emptyNote").style.display = "block";
+    }).catch(function () { btnRm.disabled = false; });
+  });
+  meta.appendChild(btnRm);
   left.appendChild(meta);
   node.appendChild(left);
 
@@ -432,14 +444,22 @@ function publish() {
       doi: p.doi || ""
     };
   });
+  var doPush = document.getElementById("doPush").checked;
+  var doSync = document.getElementById("doSync").checked;
+  var summary = "即将发布 " + items.length + " 张图：\n"
+    + "· 生成缩略图与索引、构建站点\n"
+    + (doPush ? "· 推送到 GitHub\n" : "· 不推送 GitHub\n")
+    + (doSync ? "· 同步到服务器" : "· 不同步服务器（需手动 scp）");
+  if (!confirm(summary + "\n\n确认开始？")) return;
   var btn = document.getElementById("btnPublish");
   btn.disabled = true;
   btn.textContent = "发布中…（下方看实时进度）";
+  document.getElementById("log").scrollIntoView({ behavior: "smooth", block: "nearest" });
   runJob("/api/publish", {
     items: items,
     message: document.getElementById("msg").value,
-    push: document.getElementById("doPush").checked,
-    sync: document.getElementById("doSync").checked
+    push: doPush,
+    sync: doSync
   }, function (res) {
     if (res.ok) {
       pending = [];
