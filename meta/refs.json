@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 10,
+  "count": 9,
   "thumbMax": 480,
   "items": [
     {
@@ -89,29 +89,6 @@
       "full": "full/2026-09-11/d11638adde.png",
       "bytes": 616172,
       "origName": "1280X1280 (2).PNG",
-      "added": "2026-09-11"
-    },
-    {
-      "id": "ad3eef7baa",
-      "journal": "Nature Climate Change",
-      "published": "2023-06",
-      "tags": [
-        "多面板",
-        "极地投影",
-        "流场箭头",
-        "频率分布",
-        "年代对比"
-      ],
-      "desc": "(a) 北极海冰浓度底图叠加洋流箭头与采样点；(b) 1990–2006 与 2007–2019 两期海冰厚度频率分布对比，标注样本量与标准差。",
-      "title": "北极海冰浓度与海冰厚度年代际变化",
-      "category": "极地与海冰",
-      "width": 825,
-      "height": 1280,
-      "ext": "png",
-      "thumb": "thumb/2026-09-11/ad3eef7baa.webp",
-      "full": "full/2026-09-11/ad3eef7baa.png",
-      "bytes": 742618,
-      "origName": "1280X1280 (3).PNG",
       "added": "2026-09-11"
     },
     {
