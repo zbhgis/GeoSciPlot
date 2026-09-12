@@ -154,8 +154,10 @@ python scripts/build_site.py --preview  # 本地预览（图片走本地副本�
 
 1. `jsDelivr` — 本仓库内容的 CDN 分发层（默认首选）
 2. `GitHub raw` — 仓库原始直链
-3. `本站直出` — 子域同源副本（`/images/`，rsync 上去的）
-4. `OSS` — 阿里云对象存储兜底
+3. `OSS` — 阿里云对象存储兜底
+
+> 生产构建**不打包图片**：站点只发 HTML/JS，图片全部由 GitHub（jsDelivr/raw）分发，
+> 服务器带宽不被图片消耗。本地预览构建（`--preview`）会把图片副本放进 site/ 同源加载。
 
 > 降级是**逐图自动**的：任一源加载失败，该图自动换下一个源，全部失败才显示占位块。
 > 切换顺序只需改 `gallery.config.json` 的 `activeSource` 数字，无需改代码。
