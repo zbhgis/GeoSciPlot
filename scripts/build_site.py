@@ -106,6 +106,8 @@ header.site a.gh svg{width:17px;height:17px;flex:none}
 .kicker{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0}
 h1{font-size:clamp(44px,6.5vw,68px);line-height:1.08;letter-spacing:-.03em;margin:24px 0 0;font-weight:700}
 .lede{font-size:16px;color:var(--dim);max-width:52ch;margin:20px 0 0}
+.gh-note{display:inline-flex;align-items:center;gap:9px;margin:18px 0 0;padding:9px 16px;border:1px solid var(--accent);border-left-width:3px;border-radius:6px;background:var(--card);font-size:13.5px;color:var(--text)}
+.gh-note svg{width:16px;height:16px;flex:none;color:var(--accent)}
 .meta-row{margin:28px 0 0;padding:14px 0;border-top:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--dim)}
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:22px 0 6px}
 .search{flex:1 1 260px;max-width:380px;padding:8px 12px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
@@ -450,7 +452,7 @@ def page_shell(cfg: dict, title: str, body: str, depth: int = 0) -> str:
 <div class="wrap">
 {body}
 <footer class="site">
-  <span>{esc(cfg['title'])} · {esc(cfg['subtitle'])} · 图片存储于 GitHub，访问需具备 GitHub 访问能力</span>
+  <span>{esc(cfg['title'])} · {esc(cfg['subtitle'])}</span>
   <span><a href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener">GitHub 仓库</a> · 图表版权归各原作者</span>
 </footer>
 </div>
@@ -507,6 +509,7 @@ def build_index(cfg: dict, items: list[dict]) -> str:
     body = f"""<header class="site">
   <a class="gh" href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener" target="_blank" title="在 GitHub 查看本图库">{ghsvg}<span>GitHub</span></a>
   <h1>{esc(cfg['title'])}</h1>
+  <a class="gh-note" href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener" target="_blank" title="在 GitHub 查看图片源文件">{ghsvg}<span>图片存储于 <b>GitHub</b>，访问需具备 GitHub 访问能力（点此查看仓库）</span></a>
   <p class="lede">{esc(cfg['lede'])}</p>
   <div class="meta-row"><span id="count">共 {len(items)} 张</span> · {len(tag_counter)} 个标签 · {len(addeds)} 个上传日期 · 点击查看原图</div>
 </header>
