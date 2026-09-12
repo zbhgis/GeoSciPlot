@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 9,
+  "count": 8,
   "thumbMax": 480,
   "items": [
     {
@@ -46,27 +46,6 @@
       "full": "full/2026-09-11/d57d821bbd.png",
       "bytes": 852441,
       "origName": "1280X1280 (5).PNG",
-      "added": "2026-09-11"
-    },
-    {
-      "id": "d24f57a016",
-      "journal": "Nature Climate Change",
-      "published": "2023-08",
-      "tags": [
-        "单面板",
-        "极地投影",
-        "日期色标"
-      ],
-      "desc": "单一极地投影地图，用日期型色标（JAN–JUN，第 110–270 天）展示 10 年径流起始日中位数。",
-      "title": "北半球径流起始日期十年中位数分布",
-      "category": "水文与冰冻圈",
-      "width": 653,
-      "height": 652,
-      "ext": "png",
-      "thumb": "thumb/2026-09-11/d24f57a016.webp",
-      "full": "full/2026-09-11/d24f57a016.png",
-      "bytes": 516640,
-      "origName": "cead16ea-ae7b-43b5-be37-ef216a064139.png",
       "added": "2026-09-11"
     },
     {
