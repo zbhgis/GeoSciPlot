@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 5,
+  "count": 3,
   "thumbMax": 480,
   "items": [
     {
@@ -17,43 +17,6 @@
       "bytes": 630301,
       "origName": "1280X1280.PNG",
       "added": "2026-09-12"
-    },
-    {
-      "id": "d11638adde",
-      "doi": "10.1038/s42949-024-00129-3",
-      "tags": [
-        "全球地图",
-        "比例符号",
-        "Equal Earth投影",
-        "城市"
-      ],
-      "width": 1280,
-      "height": 729,
-      "ext": "png",
-      "thumb": "thumb/2026-09-11/d11638adde.webp",
-      "full": "full/2026-09-11/d11638adde.png",
-      "bytes": 616172,
-      "origName": "1280X1280 (2).PNG",
-      "added": "2026-09-11"
-    },
-    {
-      "id": "8ae853d256",
-      "doi": "10.1038/s41586-024-07752-w",
-      "tags": [
-        "全球地图",
-        "碳汇",
-        "分级色标",
-        "符号标注",
-        "Nature风格"
-      ],
-      "width": 1280,
-      "height": 801,
-      "ext": "png",
-      "thumb": "thumb/2026-09-11/8ae853d256.webp",
-      "full": "full/2026-09-11/8ae853d256.png",
-      "bytes": 562145,
-      "origName": "1280X1280 (1).PNG",
-      "added": "2026-09-11"
     },
     {
       "id": "86d9ff84c3",
