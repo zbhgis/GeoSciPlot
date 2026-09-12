@@ -232,7 +232,8 @@ JS = """\
     var dir = state.sort === "added_asc" ? 1 : -1;
     var aa = (a.ad || ""), ab = (b.ad || "");
     if (aa !== ab) return (aa < ab ? -1 : 1) * dir;
-    return (a.id || "").localeCompare(b.id || "");
+    // 同日期内按 id 排：与 prepare.py 的静态首屏顺序（reverse）保持一致
+    return (a.id || "").localeCompare(b.id || "") * dir;
   }
   function cardNode(it) {
     var a = document.createElement("a");
