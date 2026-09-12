@@ -466,8 +466,8 @@ JS = """\
 
 def page_shell(cfg: dict, title: str, body: str, depth: int = 0, gh_url: str = "") -> str:
     up = "../" if depth else ""
-    gh = gh_url or "https://github.com/{}/{}/{}".format(
-        cfg.get("owner") or "OWNER", cfg["repo"], cfg.get("branch", "main"))
+    gh = gh_url or "https://github.com/{}/{}".format(
+        cfg.get("owner") or "OWNER", cfg["repo"])
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -624,7 +624,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
   <dt>标签</dt><dd>{tags_html}</dd>
 </dl>
 {chr(10).join(pager)}"""
-    gh_img = "https://github.com/{}/{}/blob/{}/{}".format(
+    gh_img = "https://github.com/{}/{}/blob/{}/images/{}".format(
         cfg.get("owner") or "OWNER", cfg["repo"], cfg.get("branch", "main"), it.get("full", ""))
     return page_shell(cfg, f"图 {it['id']}", body, depth=1, gh_url=gh_img)
 
