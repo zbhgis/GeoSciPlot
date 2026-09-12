@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 7,
+  "count": 8,
   "thumbMax": 480,
   "items": [
     {
@@ -16,6 +16,21 @@
       "full": "full/2026-09-12/da17c93c86.png",
       "bytes": 337118,
       "origName": "ec57b55a-d612-4acc-8708-a0c163e3d041.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "ad3eef7baa",
+      "doi": "https://doi.org/10.1038/s41586-022-05686-x",
+      "tags": [
+        "北极"
+      ],
+      "width": 825,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/ad3eef7baa.webp",
+      "full": "full/2026-09-12/ad3eef7baa.png",
+      "bytes": 742618,
+      "origName": "1280X1280 (3).PNG",
       "added": "2026-09-12"
     },
     {
@@ -35,7 +50,7 @@
     },
     {
       "id": "a0c68c6e3d",
-      "doi": "",
+      "doi": "https://doi.org/10.1038/s41467-022-35609-3",
       "tags": [
         "古地理"
       ],
@@ -52,7 +67,8 @@
       "id": "7c64f88fd1",
       "doi": "https://doi.org/10.1126/sciadv.ady3258",
       "tags": [
-        "古地理"
+        "古地理",
+        "半球"
       ],
       "width": 1280,
       "height": 1280,
