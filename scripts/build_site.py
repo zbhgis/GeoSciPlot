@@ -143,11 +143,11 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 footer.site{margin-top:56px;padding:24px 0 64px;border-top:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between}
 figure.shot{margin:0;display:flex;justify-content:center;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 figure.shot img{max-width:100%;max-height:86vh;object-fit:contain;background:var(--line)}
-dl.meta{display:grid;grid-template-columns:96px 1fr;gap:9px 16px;margin:36px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.65}
-dl.meta dt{font-size:10.5px;color:var(--faint);padding-top:3px;letter-spacing:.06em}
+dl.meta{display:grid;grid-template-columns:104px 1fr;gap:11px 18px;margin:36px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14.5px;line-height:1.7}
+dl.meta dt{font-size:11.5px;color:var(--faint);padding-top:4px;letter-spacing:.06em}
 dl.meta dd{margin:0;color:var(--text);word-break:break-all}
 dl.meta dd .hl{color:var(--text)}
-dl.meta dd a.tag{display:inline-block;margin:0 6px 6px 0;padding:2px 9px;border:1px solid var(--line2);border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--dim);transition:color .16s,border-color .16s}
+dl.meta dd a.tag{display:inline-block;margin:0 8px 8px 0;padding:3px 11px;border:1px solid var(--line2);border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--dim);transition:color .16s,border-color .16s}
 dl.meta dd a.tag:hover{color:var(--accent);border-color:var(--accent)}
 .pager{display:flex;justify-content:space-between;gap:16px;margin:40px 0 0;padding-top:18px;border-top:1px solid var(--line);font-size:13px}
 .pager a{color:var(--dim)}
@@ -195,6 +195,21 @@ JS = """\
         keepalive: true,
       }).catch(function () {});
     } catch (e) {}
+  }
+
+  /* ── 每图浏览量（来自统计服务的按 path 计数） ── */
+  var viewsEl = document.getElementById("views");
+  if (viewsEl) {
+    fetch((CFG.api || "") + "/api/v1/stats/views?prefix=/geosciplot/")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.items) throw 0;
+        var map = {};
+        d.items.forEach(function (x) { map[x.path.replace(/\\/$/, "")] = x.views; });
+        var n = map["/geosciplot" + location.pathname.replace(/\\/$/, "")] || 0;
+        viewsEl.textContent = n ? n + " 次" : "首次";
+        viewsEl.style.color = "var(--text)";
+      }).catch(function () { viewsEl.textContent = "—"; });
   }
 
   var grid = document.getElementById("grid");
@@ -373,21 +388,6 @@ JS = """\
       try { localStorage.setItem("gsp-filters", open ? "hidden" : "shown"); } catch (e) {}
       syncFilterBtn();
     });
-  }
-
-  /* ── 每图浏览量（来自统计服务的按 path 计数） ── */
-  var viewsEl = document.getElementById("views");
-  if (viewsEl && CFG.api) {
-    fetch(CFG.api + "/api/v1/stats/views?prefix=/geosciplot/")
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
-        if (!d || !d.items) return;
-        var map = {};
-        d.items.forEach(function (x) { map[x.path.replace(/\\/$/, "")] = x.views; });
-        var n = map["/geosciplot" + location.pathname.replace(/\\/$/, "")] || 0;
-        viewsEl.textContent = n ? n + " 次" : "首次";
-        viewsEl.style.color = "var(--text)";
-      }).catch(function () {});
   }
 
   /* 支持带参数的链接（标签跳转 / 分享筛选结果）：/?tag=海冰&journal=Nature */
