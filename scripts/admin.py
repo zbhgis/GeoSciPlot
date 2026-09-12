@@ -28,6 +28,8 @@ import re
 import subprocess
 import sys
 import threading
+import time
+import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -155,6 +157,77 @@ def repo_state() -> dict:
         "journals": sorted({i.get("journal") for i in items if i.get("journal")}),
         "defaultRemote": DEFAULT_REMOTE,
     }
+
+
+# ────────────────────────── 后台任务系统 ──────────────────────────
+# 发布/删除/更新/推送都是「生成站点 + git push + scp 服务器」的长操作，
+# 以前在 HTTP 请求里同步执行，git push 一卡界面就停滞几分钟。
+# 现在：POST 立即返回任务号，后台线程跑流水线，前端轮询 /api/job/<id> 看实时进度。
+
+JOBS: dict[str, dict] = {}
+JOBS_LOCK = threading.Lock()
+
+
+def step(log: list[dict], name: str, cmd: list[str] | None, timeout: int = 300) -> tuple[bool, str]:
+    """带「运行中」标记的步骤：先写入 ok=None 条目（前端显示 …），命令结束后回填结果。"""
+    log.append({"step": name, "out": "", "ok": None})
+    if cmd is None:
+        return True, ""
+    code, out = run(cmd, timeout)
+    entry = log[-1]
+    entry["ok"] = code == 0
+    entry["out"] = out
+    return entry["ok"], out
+
+
+def start_job(kind: str, body: dict) -> str:
+    """启动后台任务，立即返回任务号。"""
+    jid = uuid.uuid4().hex[:8]
+    job = {"kind": kind, "log": [], "done": False, "ok": None, "hint": ""}
+    with JOBS_LOCK:
+        JOBS[jid] = job
+        done_ids = [k for k, v in JOBS.items() if v["done"]]
+        for k in done_ids[:-20]:          # 只保留最近 20 个已完成的任务
+            JOBS.pop(k, None)
+
+    def worker():
+        try:
+            if kind == "publish":
+                res = do_publish(body.get("items") or [], body.get("message") or "",
+                                 bool(body.get("push", True)), bool(body.get("sync", True)))
+            elif kind == "update":
+                res = do_update_and_finish(body.get("items") or [], body.get("message") or "",
+                                           bool(body.get("push", True)), bool(body.get("sync", True)))
+            elif kind == "delete":
+                res = do_delete_and_finish((body.get("id") or "").strip(), body.get("message") or "",
+                                           bool(body.get("push", True)), bool(body.get("sync", True)))
+            elif kind == "sync-server":
+                res = do_sync_server()
+            elif kind == "init":
+                res = do_init(body.get("remote") or "")
+            elif kind == "push":
+                res = do_push()
+            else:
+                res = {"ok": False, "log": [{"step": kind, "ok": False, "out": "未知任务类型"}]}
+        except Exception as e:            # 后台线程绝不能静默死掉
+            res = {"ok": False, "hint": "", "log": [{"step": "后台任务异常", "ok": False, "out": repr(e)}]}
+        with JOBS_LOCK:
+            job["log"] = res.get("log", job["log"])
+            job["done"] = True
+            job["ok"] = bool(res.get("ok"))
+            job["hint"] = res.get("hint", "")
+
+    threading.Thread(target=worker, daemon=True, name=f"job-{kind}-{jid}").start()
+    return jid
+
+
+def job_snapshot(jid: str) -> dict:
+    with JOBS_LOCK:
+        job = JOBS.get(jid)
+        if not job:
+            return {"done": True, "ok": False, "log": [], "hint": "任务不存在（服务重启过？刷新页面重试）"}
+        return {"done": job["done"], "ok": job["ok"], "hint": job["hint"],
+                "log": [dict(x) for x in job["log"]]}
 
 
 # ────────────────────────── 元数据读写 ──────────────────────────
@@ -322,10 +395,10 @@ def do_sync_server() -> dict:
 
 
 def pipeline_after_content(log: list[dict], message: str, push: bool, sync: bool) -> dict:
-    """内容变更后的公共收尾：生成站点 → git 提交推送 →（可选）同步服务器。"""
-    code, out = run([PYTHON, "scripts/build_site.py"])
-    log.append({"step": "生成静态站 (build_site.py)", "ok": code == 0, "out": out})
-    if code != 0:
+    """内容变更后的公共收尾：生成站点 → git 提交推送 →（可选）同步服务器。
+    所有步骤用 step() 执行，前端能看到每一步的实时状态。"""
+    ok, out = step(log, "生成静态站 (build_site.py)", [PYTHON, "scripts/build_site.py"])
+    if not ok:
         return {"ok": False, "log": log, "hint": "build_site.py 失败，未提交"}
 
     if not (ROOT / ".git").is_dir():
@@ -336,26 +409,26 @@ def pipeline_after_content(log: list[dict], message: str, push: bool, sync: bool
     if not message.strip():
         message = "update: 图库内容变更"
 
-    code, out = run(["git", "add", "-A"])
-    log.append({"step": "git add", "ok": code == 0, "out": out or "已暂存全部改动"})
-    code, out = run(["git", "commit", "-m", message])
-    ok_commit = code == 0 or "nothing to commit" in out
-    log.append({"step": f"git commit -m \"{message}\"", "ok": ok_commit, "out": out})
-    if not ok_commit:
+    step(log, "git add", ["git", "add", "-A"])
+    ok, out = step(log, f"git commit -m \"{message}\"", ["git", "commit", "-m", message])
+    if not (ok or "nothing to commit" in out):
         return {"ok": False, "log": log, "hint": "提交失败（检查 git user.name / user.email）"}
 
     if push:
-        code, out = run(["git", "push"], timeout=180)
-        log.append({"step": "git push", "ok": code == 0, "out": out})
-        if code != 0:
-            return {"ok": False, "log": log, "hint": "推送失败：检查 origin 与 SSH key"}
+        # 国内网络 push 到 GitHub 可能很慢，后台任务模式下超时放宽到 5 分钟
+        ok, out = step(log, "git push（推送到 GitHub）", ["git", "push"], timeout=300)
+        if not ok:
+            return {"ok": False, "log": log, "hint": "推送失败：检查 origin 与 SSH key（也可能是网络波动，稍后手动 git push）"}
 
     if sync:
+        log.append({"step": "同步服务器（ssh 清理 + scp 上传）", "out": "", "ok": None})
         res = do_sync_server()
-        log.extend(res["log"])
+        log[-1]["ok"] = bool(res["ok"])
+        log[-1]["out"] = "\n".join(x.get("out", "") for x in res["log"])
         if not res["ok"]:
             return {"ok": True, "log": log,
-                    "hint": "GitHub 已同步；服务器同步失败（见日志）——通常是本机公钥还没加到服务器的 authorized_keys"}
+                    "hint": "GitHub 已同步；服务器同步失败（见日志）——通常是本机公钥还没加到服务器的 authorized_keys，"
+                            "也可以手动在 Git Bash 里 cd site && scp -r ./* root@47.98.133.104:/var/www/geosciplot/"}
 
     return {"ok": True, "log": log}
 
@@ -388,12 +461,47 @@ def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = 
     write_titles(fields, rows)
     log.append({"step": "写入标题表", "ok": True, "out": f"meta/titles.csv 更新 {written} 条"})
 
-    code, out = run([PYTHON, "scripts/prepare.py"])
-    log.append({"step": "生成图片与索引 (prepare.py)", "ok": code == 0, "out": out})
-    if code != 0:
+    ok, out = step(log, "生成图片与索引 (prepare.py)", [PYTHON, "scripts/prepare.py"])
+    if not ok:
         return {"ok": False, "log": log, "hint": "prepare.py 失败，未继续后面的步骤"}
 
     return pipeline_after_content(log, message or f"add: {written} 张图", push, sync)
+
+
+def do_push() -> dict:
+    log: list[dict] = []
+    ok, out = step(log, "git push（推送到 GitHub）", ["git", "push"], timeout=300)
+    if not ok:
+        return {"ok": False, "log": log, "hint": "推送失败：检查 origin 与 SSH key（也可能是网络波动，稍后重试）"}
+    return {"ok": True, "log": log}
+
+
+def do_init(remote: str) -> dict:
+    log: list[dict] = []
+    if not remote.strip():
+        remote = DEFAULT_REMOTE
+
+    ok, _ = step(log, "git init", ["git", "init"])
+    if not ok:
+        return {"ok": False, "log": log, "hint": "git init 失败"}
+
+    ok, out = step(log, f"git remote add origin {remote}", ["git", "remote", "add", "origin", remote])
+    if not ok:
+        ok, out = step(log, "remote 已存在，改为 set-url", ["git", "remote", "set-url", "origin", remote])
+        if not ok:
+            return {"ok": False, "log": log, "hint": "设置 origin 失败"}
+
+    step(log, "git add -A", ["git", "add", "-A"])
+    code, out = run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+    branch = out if code == 0 and out else "main"
+    ok, out = step(log, f"git commit（首提）", ["git", "commit", "-m", "init: 初始提交"])
+    if not (ok or "nothing to commit" in out):
+        return {"ok": False, "log": log, "hint": "首次提交失败（检查 git user.name / user.email）"}
+
+    ok, out = step(log, f"git push -u origin {branch}", ["git", "push", "-u", "origin", branch], timeout=300)
+    if not ok:
+        return {"ok": False, "log": log, "hint": "首次推送失败：检查远端仓库与 SSH key"}
+    return {"ok": True, "log": log}
 
 
 def do_update_and_finish(updates: list[dict], message: str, push: bool, sync: bool) -> dict:
@@ -466,6 +574,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(repo_state())
         elif path == "/api/items":
             self._json(load_refs())
+        elif path.startswith("/api/job/"):
+            self._json(job_snapshot(path[len("/api/job/"):]))
         elif path.startswith("/images/"):
             self._serve_local_image(path[len("/images/"):])
         else:
@@ -475,22 +585,12 @@ class Handler(BaseHTTPRequestHandler):
         path = (self.path or "").split("?")[0]
         body = self._read_json()
         if path == "/api/upload":
+            # 上传是纯本地快速操作，保持同步返回
             self._json(do_upload(body.get("files") or []))
-        elif path == "/api/publish":
-            self._json(do_publish(body.get("items") or [], body.get("message") or "",
-                                  bool(body.get("push", True)), bool(body.get("sync", True))))
-        elif path == "/api/update":
-            self._json(do_update_and_finish(body.get("items") or [], body.get("message") or "",
-                                            bool(body.get("push", True)), bool(body.get("sync", True))))
-        elif path == "/api/delete":
-            self._json(do_delete_and_finish((body.get("id") or "").strip(), body.get("message") or "",
-                                            bool(body.get("push", True)), bool(body.get("sync", True))))
-        elif path == "/api/sync-server":
-            self._json(do_sync_server())
-        elif path == "/api/init":
-            self._json(do_init(body.get("remote") or ""))
-        elif path == "/api/push":
-            self._json(do_push())
+        elif path in ("/api/publish", "/api/update", "/api/delete",
+                      "/api/sync-server", "/api/init", "/api/push"):
+            # 长操作：立即返回任务号，后台线程执行，前端轮询 /api/job/<id>
+            self._json({"job": start_job(path[len("/api/"):], body)})
         else:
             self._send(404, b"not found", "text/plain; charset=utf-8")
 

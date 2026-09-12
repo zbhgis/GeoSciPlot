@@ -8,6 +8,7 @@
 :root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22;--ok:#3fb950;--bad:#f85149}
 @media (prefers-color-scheme:light){:root{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;--ok:#1a7f37;--bad:#cf222e}}
 *{box-sizing:border-box}
+@keyframes blink{50%{opacity:.3}}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 ui-sans-serif,system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .wrap{max-width:980px;margin:0 auto;padding:32px 20px 80px}
@@ -293,12 +294,14 @@ function renderLog(log) {
   box.innerHTML = "";
   (log || []).forEach(function (s) {
     var row = el("div", "step");
-    var mark = el("span", "mark", s.ok ? "✓" : "✗");
-    mark.style.color = s.ok ? "var(--ok)" : "var(--bad)";
+    var running = (s.ok === null || s.ok === undefined);
+    var mark = el("span", "mark", running ? "…" : (s.ok ? "✓" : "✗"));
+    mark.style.color = running ? "var(--accent)" : (s.ok ? "var(--ok)" : "var(--bad)");
+    if (running) mark.style.animation = "blink 1s infinite";
     row.appendChild(mark);
     row.appendChild(el("span", "nm", s.step));
     var first = String(s.out || "").split("\n").filter(function (l) { return l.trim(); }).slice(-1)[0] || "";
-    row.appendChild(el("span", "out", first));
+    row.appendChild(el("span", "out", running ? "运行中…" : first));
     box.appendChild(row);
     if (s.out && String(s.out).split("\n").length > 1) {
       var d = document.createElement("details");
@@ -310,6 +313,29 @@ function renderLog(log) {
       d.appendChild(pre);
       box.appendChild(d);
     }
+  });
+}
+/* 长操作统一走后台任务：POST 拿任务号 → 每 0.8s 轮询进度 → 实时滚动日志 → 结束回调 */
+function runJob(path, body, done) {
+  api(path, body).then(function (res) {
+    var jid = res && res.job;
+    if (!jid) {                                  // 兼容同步返回的结果
+      if (res && res.log) renderLog(res.log);
+      if (done) done(res || { ok: false });
+      return;
+    }
+    var timer = setInterval(function () {
+      api("/api/job/" + jid).then(function (s) {
+        renderLog(s.log);
+        if (!s.done) return;
+        clearInterval(timer);
+        if (s.hint) document.getElementById("log").appendChild(el("div", "hint", s.hint));
+        if (done) done({ ok: s.ok, log: s.log, hint: s.hint });
+      }).catch(function () { /* 网络抖动，下轮再取 */ });
+    }, 800);
+  }).catch(function (e) {
+    renderLog([{ step: "请求失败", ok: false, out: String(e) }]);
+    if (done) done({ ok: false });
   });
 }
 function publish() {
@@ -324,24 +350,19 @@ function publish() {
   });
   var btn = document.getElementById("btnPublish");
   btn.disabled = true;
-  btn.textContent = "发布中…";
-  api("/api/publish", {
+  btn.textContent = "发布中…（下方看实时进度）";
+  runJob("/api/publish", {
     items: items,
     message: document.getElementById("msg").value,
     push: document.getElementById("doPush").checked,
     sync: document.getElementById("doSync").checked
-  }).then(function (res) {
-    renderLog(res.log);
-    if (res.hint) document.getElementById("log").appendChild(el("div", "hint", res.hint));
+  }, function (res) {
     if (res.ok) {
       pending = [];
       document.getElementById("list").innerHTML = "";
       document.getElementById("emptyNote").style.display = "block";
       document.getElementById("uploadNote").textContent = "";
     }
-  }).catch(function (e) {
-    renderLog([{ step: "请求失败", ok: false, out: String(e) }]);
-  }).then(function () {
     btn.disabled = false;
     btn.textContent = "发布（生成站点 + 提交）";
     loadStatus();
@@ -353,15 +374,21 @@ document.getElementById("btnInit").addEventListener("click", function () {
   var btn = document.getElementById("btnInit");
   btn.disabled = true;
   btn.textContent = "初始化中…";
-  api("/api/init", { remote: document.getElementById("remote").value }).then(function (res) {
-    renderLog(res.log);
+  runJob("/api/init", { remote: document.getElementById("remote").value }, function () {
     btn.disabled = false;
     btn.textContent = "初始化并推送";
     loadStatus();
   });
 });
 document.getElementById("btnPush").addEventListener("click", function () {
-  api("/api/push", {}).then(function (res) { renderLog(res.log); loadStatus(); });
+  var btn = document.getElementById("btnPush");
+  btn.disabled = true;
+  btn.textContent = "推送中…";
+  runJob("/api/push", {}, function () {
+    btn.disabled = false;
+    btn.textContent = "仅执行 git push";
+    loadStatus();
+  });
 });
 
 /* ── 图片管理（查 / 改 / 删）── */
@@ -399,10 +426,9 @@ function manageRow(it) {
   btnDel.addEventListener("click", function () {
     if (!confirm("确定删除图片 " + it.id + "？\n将同时移除缩略图、原图副本、raw/ 原图与索引，并同步 GitHub。")) return;
     btnDel.disabled = true;
-    api("/api/delete", { id: it.id, push: document.getElementById("doPush").checked,
-                         sync: document.getElementById("doSync").checked }).then(function (res) {
-      renderLog(res.log);
-      if (res.hint) document.getElementById("log").appendChild(el("div", "hint", res.hint));
+    btnDel.textContent = "删除中…";
+    runJob("/api/delete", { id: it.id, push: document.getElementById("doPush").checked,
+                            sync: document.getElementById("doSync").checked }, function () {
       loadItems();
       loadStatus();
     });
@@ -449,12 +475,11 @@ function openEdit(node, it) {
   editOpen = form;
   save.addEventListener("click", function () {
     save.disabled = true;
-    api("/api/update", { items: [{ id: it.id, journal: it.journal, published: it.published,
-                                   tags: it.tags, desc: it.desc }],
-                          push: document.getElementById("doPush").checked,
-                          sync: document.getElementById("doSync").checked }).then(function (res) {
-      renderLog(res.log);
-      if (res.hint) document.getElementById("log").appendChild(el("div", "hint", res.hint));
+    save.textContent = "保存中…";
+    runJob("/api/update", { items: [{ id: it.id, journal: it.journal, published: it.published,
+                                      tags: it.tags, desc: it.desc }],
+                            push: document.getElementById("doPush").checked,
+                            sync: document.getElementById("doSync").checked }, function () {
       editOpen.remove(); editOpen = null;
       loadItems(); loadStatus();
     });
@@ -464,10 +489,10 @@ function openEdit(node, it) {
 document.getElementById("btnSync").addEventListener("click", function () {
   var btn = document.getElementById("btnSync");
   btn.disabled = true;
-  api("/api/sync-server", {}).then(function (res) {
-    renderLog(res.log);
-    if (res.hint) document.getElementById("log").appendChild(el("div", "hint", res.hint));
+  btn.textContent = "同步中…（下方看实时进度）";
+  runJob("/api/sync-server", {}, function () {
     btn.disabled = false;
+    btn.textContent = "同步站点到服务器";
   });
 });
 
