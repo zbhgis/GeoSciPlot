@@ -67,6 +67,12 @@ details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radi
 .editform{grid-column:1/-1;border-top:1px dashed var(--line2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:9px 12px}
 @media (max-width:700px){.editform{grid-template-columns:1fr}}
 .editform .full{grid-column:1/-1}
+/* 页内确认框（替代原生 confirm——原生弹窗被浏览器拦截后会静默取消，导致按钮“没反应”） */
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:99}
+.modal{background:var(--card);border:1px solid var(--line2);border-radius:10px;padding:18px 20px;max-width:440px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.modal .mmsg{font-size:13px;line-height:1.9;white-space:pre-wrap}
+.modal .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:6px;padding:10px 16px;font-size:12.5px;color:var(--text);z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 /* 标签选择器 */
 .tagpick{display:flex;flex-wrap:wrap;gap:6px}
 .tagpick button{padding:3px 10px;font-size:11px}
@@ -196,6 +202,25 @@ function el(tag, cls, txt) {
   if (cls) e.className = cls;
   if (txt !== undefined) e.textContent = txt;
   return e;
+}
+/* 页内确认框：永不被浏览器拦截。ok 回调在用户点「确认」后执行 */
+function toast(msg) {
+  var t = el("div", "toast", msg);
+  document.body.appendChild(t);
+  setTimeout(function () { t.remove(); }, 3500);
+}
+function askConfirm(msg, onOk) {
+  var mask = el("div", "modal-mask");
+  var box = el("div", "modal");
+  box.appendChild(el("div", "mmsg", msg));
+  var row = el("div", "mrow");
+  var no = el("button", "", "取消");
+  var yes = el("button", "primary", "确认");
+  no.addEventListener("click", function () { mask.remove(); });
+  yes.addEventListener("click", function () { mask.remove(); onOk(); });
+  row.appendChild(no); row.appendChild(yes);
+  box.appendChild(row); mask.appendChild(box);
+  document.body.appendChild(mask);
 }
 function api(path, body) {
   return fetch(path, body ? {
@@ -341,13 +366,14 @@ function buildItemNode(rec) {
   var btnRm = el("button", "tiny danger", "移除（不入库）");
   btnRm.style.marginTop = "8px";
   btnRm.addEventListener("click", function () {
-    if (!confirm("确定不把这张图入库？将删除 raw/ 里的源文件，图库与已发布内容不受影响。")) return;
     btnRm.disabled = true;
-    api("/api/raw/delete", { name: rec.savedAs || rec.name }).then(function (r) {
-      pending = pending.filter(function (x) { return x !== rec; });
-      node.remove();
-      if (!pending.length) document.getElementById("emptyNote").style.display = "block";
-    }).catch(function () { btnRm.disabled = false; });
+    askConfirm("确定不把这张图入库？\n将删除 raw/ 里的源文件，图库与已发布内容不受影响。", function () {
+      api("/api/raw/delete", { name: rec.savedAs || rec.name }).then(function (r) {
+        pending = pending.filter(function (x) { return x !== rec; });
+        node.remove();
+        if (!pending.length) document.getElementById("emptyNote").style.display = "block";
+      }).catch(function () { btnRm.disabled = false; });
+    });
   });
   meta.appendChild(btnRm);
   left.appendChild(meta);
@@ -436,7 +462,7 @@ function runJob(path, body, done) {
   });
 }
 function publish() {
-  if (!pending.length) { alert("还没有待发布的图片"); return; }
+  if (!pending.length) { toast("还没有待发布的图片——先拖图上传，或等 raw/ 自动恢复"); return; }
   var items = pending.map(function (p) {
     return {
       id: p.id,
@@ -450,7 +476,7 @@ function publish() {
     + "· 生成缩略图与索引、构建站点\n"
     + (doPush ? "· 推送到 GitHub\n" : "· 不推送 GitHub\n")
     + (doSync ? "· 同步到服务器" : "· 不同步服务器（需手动 scp）");
-  if (!confirm(summary + "\n\n确认开始？")) return;
+  askConfirm(summary + "\n\n确认开始？", function () {
   var btn = document.getElementById("btnPublish");
   btn.disabled = true;
   btn.textContent = "发布中…（下方看实时进度）";
@@ -470,6 +496,7 @@ function publish() {
     btn.disabled = false;
     btn.textContent = "发布（生成站点 + 提交）";
     loadStatus();
+  });
   });
 }
 
@@ -541,13 +568,14 @@ function manageRow(it) {
   btnEdit.addEventListener("click", function () { openEdit(node, it); });
   var btnDel = el("button", "tiny danger", "删除");
   btnDel.addEventListener("click", function () {
-    if (!confirm("确定删除图片 " + it.id + "？\n将同时移除缩略图、原图副本、raw/ 原图与索引，并同步 GitHub。")) return;
-    btnDel.disabled = true;
-    btnDel.textContent = "删除中…";
-    runJob("/api/delete", { id: it.id, push: document.getElementById("doPush").checked,
-                            sync: document.getElementById("doSync").checked }, function () {
-      loadItems();
-      loadStatus();
+    askConfirm("确定删除图片 " + it.id + "？\n将同时移除缩略图、原图副本、raw/ 原图与索引，并同步 GitHub。", function () {
+      btnDel.disabled = true;
+      btnDel.textContent = "删除中…";
+      runJob("/api/delete", { id: it.id, push: document.getElementById("doPush").checked,
+                              sync: document.getElementById("doSync").checked }, function () {
+        loadItems();
+        loadStatus();
+      });
     });
   });
   act.appendChild(btnEdit);
