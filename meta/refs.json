@@ -1,8 +1,40 @@
 {
   "generated": "2026-09-12",
-  "count": 8,
+  "count": 21,
   "thumbMax": 480,
   "items": [
+    {
+      "id": "e16605fe37",
+      "doi": "https://doi.org/10.1038/s41561-025-01894-y",
+      "tags": [
+        "北极",
+        "单一组图"
+      ],
+      "width": 1280,
+      "height": 816,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/e16605fe37.webp",
+      "full": "full/2026-09-12/e16605fe37.png",
+      "bytes": 676439,
+      "origName": "b5f61314-6e95-406a-aa14-f6ebd278c71a.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "df2462bc78",
+      "doi": "https://doi.org/10.1126/science.abn9768",
+      "tags": [
+        "北极",
+        "单一组图"
+      ],
+      "width": 1280,
+      "height": 705,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/df2462bc78.webp",
+      "full": "full/2026-09-12/df2462bc78.png",
+      "bytes": 560634,
+      "origName": "8755e06d-64a6-40e3-bb2b-3bea65adea68.png",
+      "added": "2026-09-12"
+    },
     {
       "id": "da17c93c86",
       "doi": "https://doi.org/10.1038/s41467-025-66316-4",
@@ -16,6 +48,53 @@
       "full": "full/2026-09-12/da17c93c86.png",
       "bytes": 337118,
       "origName": "ec57b55a-d612-4acc-8708-a0c163e3d041.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "d57d821bbd",
+      "doi": "https://doi.org/10.1038/s41586-022-05686-x",
+      "tags": [
+        "北极",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 862,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/d57d821bbd.webp",
+      "full": "full/2026-09-12/d57d821bbd.png",
+      "bytes": 852441,
+      "origName": "1280X1280 (5).PNG",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "d24f57a016",
+      "doi": "https://doi.org/10.5194/essd-2026-216",
+      "tags": [
+        "北极"
+      ],
+      "width": 653,
+      "height": 652,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/d24f57a016.webp",
+      "full": "full/2026-09-12/d24f57a016.png",
+      "bytes": 516640,
+      "origName": "e0d12e0d-615c-4693-a992-28bbcd758a3e.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "c8322053b8",
+      "doi": "https://doi.org/10.1038/s41561-026-01960-z",
+      "tags": [
+        "北极",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 1231,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/c8322053b8.webp",
+      "full": "full/2026-09-12/c8322053b8.png",
+      "bytes": 1297944,
+      "origName": "bf89f8e1-4b79-403b-957a-4e7de32782ea.png",
       "added": "2026-09-12"
     },
     {
@@ -64,6 +143,38 @@
       "added": "2026-09-12"
     },
     {
+      "id": "8d671d31c6",
+      "doi": "https://doi.org/10.1126/science.adr2355",
+      "tags": [
+        "北极",
+        "复杂组图",
+        "局部放大图"
+      ],
+      "width": 1280,
+      "height": 1270,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/8d671d31c6.webp",
+      "full": "full/2026-09-12/8d671d31c6.png",
+      "bytes": 1331927,
+      "origName": "1280X1280 (7).PNG",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "8cae0ac2e4",
+      "doi": "https://doi.org/10.1126/science.adh2339",
+      "tags": [
+        "北极"
+      ],
+      "width": 1234,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/8cae0ac2e4.webp",
+      "full": "full/2026-09-12/8cae0ac2e4.png",
+      "bytes": 723767,
+      "origName": "68956f8e-b0d3-4c71-b219-09aaacb25f2c.png",
+      "added": "2026-09-12"
+    },
+    {
       "id": "7c64f88fd1",
       "doi": "https://doi.org/10.1126/sciadv.ady3258",
       "tags": [
@@ -77,6 +188,21 @@
       "full": "full/2026-09-12/7c64f88fd1.png",
       "bytes": 1190862,
       "origName": "1280X1280_2.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "7b644aba88",
+      "doi": "https://doi.org/10.1126/science.adh2339",
+      "tags": [
+        "北极"
+      ],
+      "width": 1280,
+      "height": 1262,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/7b644aba88.webp",
+      "full": "full/2026-09-12/7b644aba88.png",
+      "bytes": 782618,
+      "origName": "1280X1280 (6).PNG",
       "added": "2026-09-12"
     },
     {
@@ -95,6 +221,38 @@
       "added": "2026-09-12"
     },
     {
+      "id": "6e87b076f0",
+      "doi": "https://doi.org/10.1126/science.aea5828",
+      "tags": [
+        "北极",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 780,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/6e87b076f0.webp",
+      "full": "full/2026-09-12/6e87b076f0.png",
+      "bytes": 749187,
+      "origName": "eaf88b4c-eadc-4e86-a21a-e69c3e33a471.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "488433461e",
+      "doi": "https://doi.org/10.1038/s41586-024-07274-7",
+      "tags": [
+        "北极",
+        "单一组图"
+      ],
+      "width": 1280,
+      "height": 444,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/488433461e.webp",
+      "full": "full/2026-09-12/488433461e.png",
+      "bytes": 409903,
+      "origName": "1280X1280 (4).PNG",
+      "added": "2026-09-12"
+    },
+    {
       "id": "46c12930b7",
       "doi": "https://doi.org/10.1038/s41467-026-70651-5",
       "tags": [
@@ -107,6 +265,54 @@
       "full": "full/2026-09-12/46c12930b7.png",
       "bytes": 662977,
       "origName": "0dbe947a-8ce8-4a9c-b7c0-80a1619727ae.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "42e5c2e035",
+      "doi": "https://doi.org/10.1038/s41558-026-02692-z",
+      "tags": [
+        "北极",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 789,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/42e5c2e035.webp",
+      "full": "full/2026-09-12/42e5c2e035.png",
+      "bytes": 863913,
+      "origName": "184db76f-e358-43d2-9f19-79d56d8f62b1.png",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "3beb30a959",
+      "doi": "https://doi.org/10.1126/science.adh5158",
+      "tags": [
+        "北极",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 1225,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/3beb30a959.webp",
+      "full": "full/2026-09-12/3beb30a959.png",
+      "bytes": 1174070,
+      "origName": "1280X1280 (8).PNG",
+      "added": "2026-09-12"
+    },
+    {
+      "id": "2a2c0b0953",
+      "doi": "https://doi.org/10.1038/s41561-026-01960-z",
+      "tags": [
+        "北极",
+        "复杂组图"
+      ],
+      "width": 1131,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-12/2a2c0b0953.webp",
+      "full": "full/2026-09-12/2a2c0b0953.png",
+      "bytes": 819711,
+      "origName": "3276ffd9-7d41-44e7-afd5-89bb85e5e9d8.png",
       "added": "2026-09-12"
     },
     {
