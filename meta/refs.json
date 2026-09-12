@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 3,
+  "count": 2,
   "thumbMax": 480,
   "items": [
     {
@@ -17,24 +17,6 @@
       "bytes": 630301,
       "origName": "1280X1280.PNG",
       "added": "2026-09-12"
-    },
-    {
-      "id": "86d9ff84c3",
-      "doi": "10.1111/gcb.17283",
-      "tags": [
-        "六边形分箱",
-        "箱线图",
-        "元分析",
-        "显著性标注"
-      ],
-      "width": 1280,
-      "height": 689,
-      "ext": "png",
-      "thumb": "thumb/2026-09-11/86d9ff84c3.webp",
-      "full": "full/2026-09-11/86d9ff84c3.png",
-      "bytes": 370789,
-      "origName": "1280X12807.PNG",
-      "added": "2026-09-11"
     },
     {
       "id": "488433461e",
