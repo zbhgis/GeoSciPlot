@@ -1,6 +1,6 @@
 {
   "generated": "2026-09-12",
-  "count": 5,
+  "count": 4,
   "thumbMax": 480,
   "items": [
     {
@@ -90,28 +90,6 @@
       "full": "full/2026-09-11/488433461e.png",
       "bytes": 409903,
       "origName": "1280X1280 (4).PNG",
-      "added": "2026-09-11"
-    },
-    {
-      "id": "47c11ba057",
-      "journal": "Nature Communications",
-      "published": "2023-04",
-      "tags": [
-        "全球地图",
-        "环形图",
-        "分区统计",
-        "GLOF"
-      ],
-      "desc": "(a) 全球冰湖特征：分区环形图按坝体类型展示水量（全球合计 160.3 Gt）；(b) GLOF 特征：按坝型分区统计。",
-      "title": "全球冰湖与冰湖溃决洪水（GLOF）特征",
-      "category": "冰冻圈与灾害",
-      "width": 684,
-      "height": 752,
-      "ext": "png",
-      "thumb": "thumb/2026-09-11/47c11ba057.webp",
-      "full": "full/2026-09-11/47c11ba057.png",
-      "bytes": 351210,
-      "origName": "下载.png",
       "added": "2026-09-11"
     }
   ]
