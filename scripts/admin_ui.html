@@ -232,6 +232,37 @@ function handleFiles(fileList) {
     }).catch(function () { failed++; }).then(next);
   })();
 }
+/* ── 拖拽区 / 文件选择的事件绑定 ── */
+(function () {
+  var drop = document.getElementById("drop");
+  var file = document.getElementById("file");
+  if (!drop || !file) return;
+  drop.addEventListener("click", function () { file.click(); });
+  file.addEventListener("change", function (e) {
+    handleFiles(e.target.files);
+    e.target.value = "";              // 清空以便可重复选同一文件
+  });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      drop.classList.add("on");
+    });
+  });
+  ["dragleave", "dragend"].forEach(function (ev) {
+    drop.addEventListener(ev, function () { drop.classList.remove("on"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    drop.classList.remove("on");
+    if (e.dataTransfer && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  });
+  // 防止把图拖到页面其它位置时浏览器直接打开图片
+  window.addEventListener("dragover", function (e) { e.preventDefault(); });
+  window.addEventListener("drop", function (e) { e.preventDefault(); });
+})();
+
 function addItem(rec) {
   pending.push(rec);
   var node = buildItemNode(rec);
