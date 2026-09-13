@@ -8,7 +8,7 @@
 
 <p align="center">在线浏览：<a href="https://geosciplot.zbhgis.com">geosciplot.zbhgis.com</a></p>
 
-## 日常维护
+## 维护者 · 日常维护
 
 ```bash
 python scripts/admin.py        # 本地管理界面（仅本机可访问，自动打开 127.0.0.1:5199）
@@ -16,7 +16,7 @@ python scripts/admin.py        # 本地管理界面（仅本机可访问，自�
 
 流程：**拖图上传 → 填 DOI + 点选标签 → 点发布**。发布自动执行：生成缩略图/索引 → 构建站点 → git push。
 
-上线服务器（生产包只含 HTML/JS，很小）：
+上线服务器（生产包只含 HTML/JS，很小；需服务器 SSH 权限）：
 
 ```bash
 cd site && scp -r ./* root@47.98.133.104:/var/www/geosciplot/
@@ -43,31 +43,34 @@ cd site && scp -r ./* root@47.98.133.104:/var/www/geosciplot/
 
 本地预览：`python scripts/build_site.py --preview`，然后 `cd site && python -m http.server 5190`。
 
-## 在新电脑上配置
+## 本地运行
+
+**只想本地看看效果（任何人）**
 
 ```bash
-# 1) 装依赖（Python 3.9+ 与 Pillow，只需这两个）
-pip install -r requirements.txt
-
-# 2) 克隆仓库（图片与索引随仓库一起来，开箱可用）
-git clone git@github.com:zbhgis/GeoSciPlot.git
+pip install -r requirements.txt          # 只有 Python 3.9+ 与 Pillow 两个要求
+git clone https://github.com/zbhgis/GeoSciPlot.git
 cd GeoSciPlot
-
-# 3) 启动管理界面
-python scripts/admin.py          # 自动打开 http://127.0.0.1:5199
+python scripts/build_site.py --preview   # 生成静态站（含图片副本）
+cd site && python -m http.server 5190    # 打开 http://127.0.0.1:5190
 ```
 
-**检查清单**
+也可以直接 `python scripts/admin.py` 打开管理界面浏览/编辑——**但「发布」需要仓库写权限**，
+非维护者会在这步失败（这不是 bug，是 GitHub 权限使然）。
 
-- **推送权限**：发布要能把改动推到 GitHub。先确认 `git remote -v` 是 SSH 地址（`git@github.com:…`），
-  且 `ssh -T git@github.com` 能通；不通就配置本机 SSH key 到 GitHub 账号。
-- **`raw/` 与 `site/` 不在仓库里**（已 gitignore）：前者是本地收件箱，后者是构建产物，
-  首次运行时脚本会自动创建，不需要手动准备。
-- **可选 · 服务器同步**：想让管理界面的「同步站点到服务器」按钮可用，
-  需把本机公钥加到服务器的 `~/.ssh/authorized_keys`（`ssh-copy-id root@<服务器>`，输一次密码即可）；
-  没配也能用，改完手动 `scp -r site/* root@<服务器>:/var/www/geosciplot/` 即可。
-- **图片数据**：全部在仓库的 `images/` 里（缩略图 + 原图副本），不依赖本地 `raw/`，
-  所以新电脑上可以正常浏览、编辑信息、增删图片并发布。
+**维护者在新电脑上（需要仓库写权限）**
+
+```bash
+pip install -r requirements.txt
+git clone git@github.com:zbhgis/GeoSciPlot.git   # SSH 克隆；先确保 ssh -T git@github.com 能通
+cd GeoSciPlot
+python scripts/admin.py                          # 打开 http://127.0.0.1:5199
+```
+
+- 图片与索引随仓库一起来（`images/` + `meta/`），开箱即可浏览、编辑、发布
+- `raw/`（本地收件箱）与 `site/`（构建产物）不在仓库里，首次运行会自动创建
+- 想让「同步站点到服务器」按钮可用：`ssh-copy-id root@<服务器>` 加一次公钥；
+  没配也能用，手动 `scp -r site/* root@<服务器>:/var/www/geosciplot/` 即可
 
 ## 投稿
 
