@@ -112,9 +112,8 @@ def export_titles(items: list[dict]) -> None:
 
 def collect_sources() -> list[Path]:
     """扫描 raw/：扁平投放，子目录名不再承担分类含义。"""
-    if not RAW_DIR.exists():
-        print(f"! 找不到投放目录 {RAW_DIR}")
-        sys.exit(1)
+    # 新电脑首次运行：raw/ 不在仓库里（gitignore），自动创建而不是报错退出
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
     out: list[Path] = []
     for p in sorted(RAW_DIR.rglob("*")):
         if not p.is_file() or p.name.startswith("."):

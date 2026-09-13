@@ -43,6 +43,32 @@ cd site && scp -r ./* root@47.98.133.104:/var/www/geosciplot/
 
 本地预览：`python scripts/build_site.py --preview`，然后 `cd site && python -m http.server 5190`。
 
+## 在新电脑上配置
+
+```bash
+# 1) 装依赖（Python 3.9+ 与 Pillow，只需这两个）
+pip install -r requirements.txt
+
+# 2) 克隆仓库（图片与索引随仓库一起来，开箱可用）
+git clone git@github.com:zbhgis/GeoSciPlot.git
+cd GeoSciPlot
+
+# 3) 启动管理界面
+python scripts/admin.py          # 自动打开 http://127.0.0.1:5199
+```
+
+**检查清单**
+
+- **推送权限**：发布要能把改动推到 GitHub。先确认 `git remote -v` 是 SSH 地址（`git@github.com:…`），
+  且 `ssh -T git@github.com` 能通；不通就配置本机 SSH key 到 GitHub 账号。
+- **`raw/` 与 `site/` 不在仓库里**（已 gitignore）：前者是本地收件箱，后者是构建产物，
+  首次运行时脚本会自动创建，不需要手动准备。
+- **可选 · 服务器同步**：想让管理界面的「同步站点到服务器」按钮可用，
+  需把本机公钥加到服务器的 `~/.ssh/authorized_keys`（`ssh-copy-id root@<服务器>`，输一次密码即可）；
+  没配也能用，改完手动 `scp -r site/* root@<服务器>:/var/www/geosciplot/` 即可。
+- **图片数据**：全部在仓库的 `images/` 里（缩略图 + 原图副本），不依赖本地 `raw/`，
+  所以新电脑上可以正常浏览、编辑信息、增删图片并发布。
+
 ## 投稿
 
 欢迎推荐公开发表的地学 / 科研绘图：
