@@ -56,6 +56,7 @@ details{margin-left:24px}
 details summary{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);cursor:pointer}
 details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radius:5px;background:var(--card);font-size:11px;line-height:1.55;max-height:280px;overflow:auto;white-space:pre-wrap}
 .note{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);line-height:1.8}
+#uploadNote{white-space:pre-line}
 .hint{padding:9px 12px;border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:4px;background:var(--card);font-size:12px;color:var(--dim);margin-top:10px}
 /* 图片管理列表 */
 .mrow{display:grid;grid-template-columns:130px 1fr auto;gap:14px;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--card);align-items:start}
@@ -306,13 +307,21 @@ function handleFiles(fileList) {
   var files = [].slice.call(fileList || []);
   if (!files.length) return;
   var note = document.getElementById("uploadNote");
-  var i = 0, added = 0, dup = 0, failed = 0;
+  var i = 0, added = 0;
+  var dupNames = [], failNames = [];
   note.textContent = "上传中… 0/" + files.length;
   (function next() {
     if (i >= files.length) {
-      note.textContent = "上传完成：新增 " + added + " 张" +
-        (dup ? "，跳过 " + dup + " 张重复（内容与图库中现有的图完全一致，已自动清理、不入库）" : "") +
-        (failed ? "，失败 " + failed + " 张" : "");
+      var lines = ["上传完成：新增 " + added + " 张"];
+      if (dupNames.length) {
+        var shown = dupNames.slice(0, 8).join("；");
+        if (dupNames.length > 8) shown += "；…共 " + dupNames.length + " 张";
+        lines.push("· 重复跳过 " + dupNames.length + " 张（内容与图库中已有的图完全一致，已自动清理、不入库）：\n  " + shown);
+      }
+      if (failNames.length) {
+        lines.push("· 失败 " + failNames.length + " 张：" + failNames.slice(0, 8).join("；"));
+      }
+      note.textContent = lines.join("\n");
       return;
     }
     var f = files[i++];
@@ -321,11 +330,12 @@ function handleFiles(fileList) {
     }).then(function (res) {
       var rec = (res.files || [])[0];
       note.textContent = "上传中… " + i + "/" + files.length;
-      if (rec && rec.error) { failed++; }
+      if (rec && rec.error) { failNames.push(f.name + "（" + rec.error + "）"); }
       else if (rec) {
-        if (rec.duplicate) dup++; else { added++; addItem(rec); }
-      } else { failed++; }
-    }).catch(function () { failed++; }).then(next);
+        if (rec.duplicate) dupNames.push(f.name + " → 与图库中的图 " + rec.id + " 相同");
+        else { added++; addItem(rec); }
+      } else { failNames.push(f.name); }
+    }).catch(function () { failNames.push(f.name); }).then(next);
   })();
 }
 /* ── 拖拽区 / 文件选择的事件绑定 ── */

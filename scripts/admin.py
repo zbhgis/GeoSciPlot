@@ -336,6 +336,11 @@ def do_upload(files: list[dict]) -> dict:
             rec["preview"] = preview_b64(target)
         except Exception as e:
             rec["error"] = f"无法解析为图片：{e}"
+            # 坏文件不留仓：解析失败说明根本不是可用图片
+            try:
+                target.unlink()
+            except OSError:
+                pass
         if dup and target.exists():
             # 内容与图库中已有图完全一致：不留副本，直接清掉刚存进来的这份，
             # 免得 raw/ 里堆积永远用不上的重复文件
