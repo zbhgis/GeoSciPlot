@@ -1,8 +1,168 @@
 {
   "generated": "2026-09-13",
-  "count": 29,
+  "count": 40,
   "thumbMax": 480,
   "items": [
+    {
+      "id": "fe4c1eff8b",
+      "doi": "https://doi.org/10.1038/s41467-021-24264-9",
+      "tags": [
+        "样点分布图",
+        "局部放大图",
+        "矩形局部地图"
+      ],
+      "width": 1280,
+      "height": 1020,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/fe4c1eff8b.webp",
+      "full": "full/2026-09-13/fe4c1eff8b.png",
+      "bytes": 2010815,
+      "origName": "9566276c-7555-48af-a0a4-c1664c2103d6.png",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "f9d2c477cd",
+      "doi": "https://doi.org/10.1126/science.ado5008",
+      "tags": [
+        "单一组图",
+        "矩形局部地图"
+      ],
+      "width": 986,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/f9d2c477cd.webp",
+      "full": "full/2026-09-13/f9d2c477cd.png",
+      "bytes": 1715390,
+      "origName": "1280X1280 (15).PNG",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "bd0976b095",
+      "doi": "https://doi.org/10.1038/s41467-022-30671-3",
+      "tags": [
+        "矩形局部地图"
+      ],
+      "width": 1280,
+      "height": 776,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/bd0976b095.webp",
+      "full": "full/2026-09-13/bd0976b095.png",
+      "bytes": 623860,
+      "origName": "1280X1280 (13).PNG",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "a9d7a1f939",
+      "doi": "https://doi.org/10.1038/s41893-026-01835-6",
+      "tags": [
+        "单一组图",
+        "局部放大图",
+        "矩形局部地图"
+      ],
+      "width": 1280,
+      "height": 836,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/a9d7a1f939.webp",
+      "full": "full/2026-09-13/a9d7a1f939.png",
+      "bytes": 1987577,
+      "origName": "ff096cab-609c-4cf5-a455-72bccb4e2bd4.png",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "80a7e16ae7",
+      "doi": "https://doi.org/10.1038/s41586-021-04089-8",
+      "tags": [
+        "矩形局部地图"
+      ],
+      "width": 1056,
+      "height": 1120,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/80a7e16ae7.webp",
+      "full": "full/2026-09-13/80a7e16ae7.png",
+      "bytes": 544605,
+      "origName": "1280X1280 (14).PNG",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "7d67efe458",
+      "doi": "https://doi.org/10.1038/s41561-025-01685-5",
+      "tags": [
+        "矩形局部地图"
+      ],
+      "width": 1020,
+      "height": 1280,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/7d67efe458.webp",
+      "full": "full/2026-09-13/7d67efe458.png",
+      "bytes": 1032755,
+      "origName": "1280X1280 (19).PNG",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "6e40d84cfc",
+      "doi": "https://doi.org/10.1038/s41467-026-71786-1",
+      "tags": [
+        "复杂组图",
+        "矩形局部地图"
+      ],
+      "width": 1280,
+      "height": 460,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/6e40d84cfc.webp",
+      "full": "full/2026-09-13/6e40d84cfc.png",
+      "bytes": 355237,
+      "origName": "1280X1280 (18).PNG",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "67d02a7018",
+      "doi": "https://doi.org/10.1038/s41467-025-59981-y",
+      "tags": [
+        "单一组图",
+        "矩形局部地图"
+      ],
+      "width": 1280,
+      "height": 1120,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/67d02a7018.webp",
+      "full": "full/2026-09-13/67d02a7018.png",
+      "bytes": 1049944,
+      "origName": "1280X1280 (16).PNG",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "648cda7418",
+      "doi": "https://doi.org/10.1038/s41561-026-01978-3",
+      "tags": [
+        "局部放大图",
+        "样点分布图",
+        "矩形局部地图"
+      ],
+      "width": 1280,
+      "height": 1229,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/648cda7418.webp",
+      "full": "full/2026-09-13/648cda7418.png",
+      "bytes": 1909791,
+      "origName": "600e0b82-f337-4e42-b4af-201ef70a1dfc.png",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "56e6508f8a",
+      "doi": "https://doi.org/10.1038/s41561-026-01960-z",
+      "tags": [
+        "矩形局部地图",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 1227,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/56e6508f8a.webp",
+      "full": "full/2026-09-13/56e6508f8a.png",
+      "bytes": 1243376,
+      "origName": "1280X1280 (17).PNG",
+      "added": "2026-09-13"
+    },
     {
       "id": "315473bd6a",
       "doi": "https://doi.org/10.1038/s41558-023-01667-8",
@@ -17,6 +177,22 @@
       "full": "full/2026-09-13/315473bd6a.png",
       "bytes": 842866,
       "origName": "1280X1280 (12).PNG",
+      "added": "2026-09-13"
+    },
+    {
+      "id": "097e220dfd",
+      "doi": "https://doi.org/10.1126/science.adh5158",
+      "tags": [
+        "复杂组图",
+        "矩形局部地图"
+      ],
+      "width": 1280,
+      "height": 1138,
+      "ext": "png",
+      "thumb": "thumb/2026-09-13/097e220dfd.webp",
+      "full": "full/2026-09-13/097e220dfd.png",
+      "bytes": 1197357,
+      "origName": "8e337f4b-b7cb-4c22-87ec-cf60cf883f88.png",
       "added": "2026-09-13"
     },
     {
