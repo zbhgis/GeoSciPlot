@@ -120,6 +120,14 @@ h1 img.logo{height:clamp(44px,5.4vw,58px);width:auto;flex:none}
 .meta-row{margin:28px 0 0;padding:14px 0;border-top:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--dim)}
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:22px 0 6px}
 .search{flex:1 1 260px;max-width:380px;padding:8px 12px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+/* 搜索框 + 搜索按钮（连体） */
+.searchbox{display:inline-flex;align-items:center;gap:0;flex:1 1 300px;max-width:430px;border:1px solid var(--line2);border-radius:4px;background:transparent;transition:border-color .16s}
+.searchbox:focus-within{border-color:var(--accent)}
+.searchbox .sic{width:14px;height:14px;flex:none;margin-left:11px;color:var(--faint)}
+.searchbox .search{flex:1;min-width:0;border:none;background:transparent;padding:8px 10px;max-width:none}
+.searchbox .search:focus{outline:none}
+.searchbox button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:0 14px;height:34px;border:none;border-left:1px solid var(--line2);border-radius:0 3px 3px 0;background:transparent;color:var(--dim);cursor:pointer;transition:color .16s,background-color .16s}
+.searchbox button:hover{color:var(--accent);background:var(--card)}
 .search:focus{outline:none;border-color:var(--accent)}
 .search::placeholder{color:var(--faint)}
 select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:7px 9px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--dim)}
@@ -342,8 +350,19 @@ JS = """\
 
   if (q) {
     q.addEventListener("input", function () { state.q = q.value.trim().toLowerCase(); resetPage(); });
-    q.addEventListener("keydown", function (e) { if (e.key === "Escape") { q.value = ""; state.q = ""; resetPage(); } });
+    q.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { q.value = ""; state.q = ""; resetPage(); }
+      if (e.key === "Enter") { e.preventDefault(); runSearch(); }
+    });
   }
+  var qBtn = document.getElementById("qBtn");
+  function runSearch() {
+    state.q = (q ? q.value : "").trim().toLowerCase();
+    resetPage();
+    var g = document.getElementById("grid");
+    if (g && g.getBoundingClientRect().top < 0) g.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  if (qBtn) qBtn.addEventListener("click", runSearch);
   var sortseg = document.getElementById("sortseg");
   if (sortseg) {
     if (["added", "added_asc", "random"].indexOf(state.sort) === -1) state.sort = "added";
@@ -545,7 +564,7 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 </header>
 
 <div class="toolbar">
-  <input id="q" class="search" type="search" placeholder="搜索 id / DOI / 标签 / 标题…" autocomplete="off">
+  <span class="searchbox"><svg class="sic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14"/></svg><input id="q" class="search" type="search" placeholder="搜索 id / DOI / 标签关键词…" autocomplete="off"><button id="qBtn" type="button" title="搜索" aria-label="搜索">搜索</button></span>
   <select id="perpage" aria-label="每页数量">
     <option value="20">每页 20</option>
     <option value="30" selected>每页 30</option>
