@@ -94,7 +94,6 @@ def haystack(item: dict) -> str:
 CSS = """\
 :root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22;color-scheme:dark}
 :root[data-theme=dark]{color-scheme:dark}
-@media (prefers-color-scheme:light){:root:not([data-theme]){--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;color-scheme:light}}
 :root[data-theme=light]{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 ui-sans-serif,system-ui,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
@@ -109,8 +108,7 @@ header.site{padding:72px 0 0}
 #topBtn{opacity:0;pointer-events:none}
 #topBtn.show{opacity:1;pointer-events:auto}
 @media (max-width:760px){.fab{right:10px;gap:7px}.tbtn{width:36px;height:36px}.tbtn svg{width:15px;height:15px}}
-.tbtn .ic-sun{display:none}.tbtn .ic-moon{display:inline}
-@media (prefers-color-scheme:light){:root:not([data-theme]) .tbtn .ic-sun{display:inline}:root:not([data-theme]) .tbtn .ic-moon{display:none}}
+.tbtn .ic-sun{display:inline}.tbtn .ic-moon{display:none}
 :root[data-theme=light] .tbtn .ic-sun{display:inline}:root[data-theme=light] .tbtn .ic-moon{display:none}
 :root[data-theme=dark] .tbtn .ic-sun{display:none}:root[data-theme=dark] .tbtn .ic-moon{display:inline}
 .kicker{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0}
@@ -232,8 +230,8 @@ JS = """\
   var themeBtn = document.getElementById("themeBtn");
   if (themeBtn) themeBtn.addEventListener("click", function () {
     var root = document.documentElement;
-    var light = root.getAttribute("data-theme") === "light" ||
-      (!root.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme:light)").matches);
+    // 默认暗色（不跟随系统偏好）；仅当访客手动切过才用其选择
+    var light = root.getAttribute("data-theme") === "light";
     var t = light ? "dark" : "light";
     root.setAttribute("data-theme", t);
     try { localStorage.setItem("gsp-theme", t); } catch (e) {}
