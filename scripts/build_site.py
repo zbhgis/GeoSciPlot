@@ -253,7 +253,7 @@ JS = """\
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
     if ([20, 30, 50].indexOf(savedPer) > -1) state.per = savedPer;   // 仅接受合法档位，旧值自动回默认 30
-    if (localStorage.getItem("gsp-sort")) { state.sort = localStorage.getItem("gsp-sort"); }
+    if (localStorage.getItem("gsp-sort2")) { state.sort = localStorage.getItem("gsp-sort2"); }
   } catch (e) {}
   var q = document.getElementById("q");
   var empty = document.getElementById("empty");
@@ -352,7 +352,7 @@ JS = """\
       b.setAttribute("aria-pressed", String(b.getAttribute("data-sort") === state.sort));
       b.addEventListener("click", function () {
         state.sort = b.getAttribute("data-sort");
-        try { localStorage.setItem("gsp-sort", state.sort); } catch (e) {}
+        try { localStorage.setItem("gsp-sort2", state.sort); } catch (e) {}
         sortBtns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
         resetPage();
       });
@@ -546,11 +546,6 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 
 <div class="toolbar">
   <input id="q" class="search" type="search" placeholder="搜索 id / DOI / 标签 / 标题…" autocomplete="off">
-  <span class="sorter" id="sortseg" role="group" aria-label="排序">
-    <button type="button" data-sort="added" aria-pressed="true" title="上传日期 新→旧"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.8 7.3 8 10.5l3.2-3.2M3 13.5h10"/></svg><span>新到旧</span></button>
-    <button type="button" data-sort="added_asc" aria-pressed="false" title="上传日期 旧→新"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-8M4.8 8.7 8 5.5l3.2 3.2M3 2.5h10"/></svg><span>旧到新</span></button>
-    <button type="button" data-sort="random" aria-pressed="false" title="随机排序"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5h2.2c3.2 0 4.6 7 7.6 7H14M2 11.5h2.2c1.3 0 2.2-.9 3-2M8.8 6.5c.8-1.1 1.7-2 3-2H14M12.3 3l1.7 1.5L12.3 6M12.3 10l1.7 1.5-1.7 1.5"/></svg><span>随机</span></button>
-  </span>
   <select id="perpage" aria-label="每页数量">
     <option value="20">每页 20</option>
     <option value="30" selected>每页 30</option>
@@ -564,7 +559,13 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 {filter_row("标签", chips(tag_counter, "tag", "全部"))}
 {filter_row("上传", '<input type="date" id="f-from" class="dateinp">\n'
   + ' <span class="flabel" style="min-width:auto">至</span>\n'
-  + '<input type="date" id="f-to" class="dateinp">')}
+  + '<input type="date" id="f-to" class="dateinp">\n'
+  + ' <span class="flabel" style="min-width:auto;margin-left:18px">排序</span>\n'
+  + ' <span class="sorter" id="sortseg" role="group" aria-label="排序" style="vertical-align:middle">'
+  + '<button type="button" data-sort="added" aria-pressed="true" title="上传日期 新→旧"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.8 7.3 8 10.5l3.2-3.2M3 13.5h10"/></svg><span>新到旧</span></button>'
+  + '<button type="button" data-sort="added_asc" aria-pressed="false" title="上传日期 旧→新"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-8M4.8 8.7 8 5.5l3.2 3.2M3 2.5h10"/></svg><span>旧到新</span></button>'
+  + '<button type="button" data-sort="random" aria-pressed="false" title="随机排序"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5h2.2c3.2 0 4.6 7 7.6 7H14M2 11.5h2.2c1.3 0 2.2-.9 3-2M8.8 6.5c.8-1.1 1.7-2 3-2H14M12.3 3l1.7 1.5L12.3 6M12.3 10l1.7 1.5-1.7 1.5"/></svg><span>随机</span></button>'
+  + '</span>')}
 </div>
 
 <main class="grid" id="grid">
