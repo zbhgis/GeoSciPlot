@@ -327,14 +327,23 @@ def do_upload(files: list[dict]) -> dict:
         target.write_bytes(data)
 
         fid = content_id(target)
+        dup = fid in known
         rec = {"name": name, "savedAs": target.name, "id": fid,
-               "bytes": len(data), "duplicate": fid in known, "preview": ""}
+               "bytes": len(data), "duplicate": dup, "preview": ""}
         try:
             with Image.open(target) as im:
                 rec["width"], rec["height"] = im.size
             rec["preview"] = preview_b64(target)
         except Exception as e:
             rec["error"] = f"无法解析为图片：{e}"
+        if dup and target.exists():
+            # 内容与图库中已有图完全一致：不留副本，直接清掉刚存进来的这份，
+            # 免得 raw/ 里堆积永远用不上的重复文件
+            try:
+                target.unlink()
+                rec["cleaned"] = True
+            except OSError:
+                pass
         out.append(rec)
     return {"files": out}
 

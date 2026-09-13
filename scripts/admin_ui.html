@@ -311,7 +311,7 @@ function handleFiles(fileList) {
   (function next() {
     if (i >= files.length) {
       note.textContent = "上传完成：新增 " + added + " 张" +
-        (dup ? "，内容重复 " + dup + " 张（已标记）" : "") +
+        (dup ? "，跳过 " + dup + " 张重复（内容与图库中现有的图完全一致，已自动清理、不入库）" : "") +
         (failed ? "，失败 " + failed + " 张" : "");
       return;
     }
@@ -323,8 +323,7 @@ function handleFiles(fileList) {
       note.textContent = "上传中… " + i + "/" + files.length;
       if (rec && rec.error) { failed++; }
       else if (rec) {
-        if (rec.duplicate) dup++; else added++;
-        addItem(rec);
+        if (rec.duplicate) dup++; else { added++; addItem(rec); }
       } else { failed++; }
     }).catch(function () { failed++; }).then(next);
   })();
@@ -419,7 +418,7 @@ function buildItemNode(rec) {
     fields.appendChild(box);
     return input;
   }
-  field("DOI doi", "doi", { placeholder: "如：10.1038/s41586-024-07752-w（模拟数据）" });
+  field("DOI doi", "doi", { placeholder: "如：10.1038/s41586-024-07752-w" });
 
   var tagBox = el("div", "full");
   tagBox.appendChild(el("label", "", "标签 tags（点选已有，或输入新标签后回车）"));
