@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GeoSciPlot · 本地管理</title>
 <style>
-:root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22;--ok:#3fb950;--bad:#f85149}
-@media (prefers-color-scheme:light){:root{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;--ok:#1a7f37;--bad:#cf222e}}
+:root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22;--ok:#3fb950;--bad:#f85149;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;--ok:#1a7f37;--bad:#cf222e;color-scheme:light}}
 *{box-sizing:border-box}
 @keyframes blink{50%{opacity:.3}}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 ui-sans-serif,system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
@@ -67,6 +67,10 @@ details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radi
 .editform{grid-column:1/-1;border-top:1px dashed var(--line2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:9px 12px}
 @media (max-width:700px){.editform{grid-template-columns:1fr}}
 .editform .full{grid-column:1/-1}
+/* 日期输入：整框可点即弹日历（原生图标在暗色下不明显，点击框体也能打开） */
+input[type=date]{cursor:pointer}
+input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.8}
+input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 /* 页内确认框（替代原生 confirm——原生弹窗被浏览器拦截后会静默取消，导致按钮“没反应”） */
 .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:99}
 .modal{background:var(--card);border:1px solid var(--line2);border-radius:10px;padding:18px 20px;max-width:440px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
@@ -599,6 +603,13 @@ function mWire() {
       mRenderChips(); mRender();
     });
   }
+  /* 日期框：点击任意位置都弹日历（否则只有点右上角小图标才有反应） */
+  document.querySelectorAll("input[type=date]").forEach(function (el) {
+    if (el.dataset.dateWired) return;
+    el.dataset.dateWired = "1";
+    el.addEventListener("click", function () { try { el.showPicker(); } catch (e) {} });
+    el.addEventListener("focus", function () { try { el.showPicker(); } catch (e) {} });
+  });
 }
 function mRender() {
   var list = mFiltered();
