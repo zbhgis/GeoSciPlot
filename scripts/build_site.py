@@ -40,6 +40,9 @@ SITE = ROOT / "site"
 IMAGES = ROOT / "images"
 
 PAGE_SIZE = 30
+# 资源版本号（构建时间戳）：CSS/JS 引用统一带 ?v=，部署后老访客的浏览器
+# 不会再用缓存的旧脚本配新页面（本次搜索改版就踩过：旧 gallery.js 读不到新数据源）
+BUILD_VER = str(int(time.time()))
 
 DEFAULT_CFG = {
     "title": "GeoSciPlot",
@@ -704,7 +707,7 @@ def page_shell(cfg: dict, title: str, body: str, depth: int = 0, gh_url: str = "
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>geosciplot</title>
 <meta name="description" content="{esc(cfg['subtitle'])} —— {esc(cfg['lede'])}">
-<link rel="stylesheet" href="{up}assets/style.css">
+<link rel="stylesheet" href="{up}assets/style.css?v={BUILD_VER}">
 <link rel="icon" type="image/png" href="{up}assets/favicon.png">
 <script>try{{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t)}}catch(e){{}}</script>
 </head>
@@ -717,8 +720,8 @@ def page_shell(cfg: dict, title: str, body: str, depth: int = 0, gh_url: str = "
   <span><a href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener">GitHub 仓库</a> · 图表版权归各原作者</span>
 </footer>
 </div>
-<script src="{up}assets/gallery-data.js"></script>
-<script src="{up}assets/gallery.js"></script>
+<script src="{up}assets/gallery-data.js?v={BUILD_VER}"></script>
+<script src="{up}assets/gallery.js?v={BUILD_VER}"></script>
 </body>
 </html>
 """
