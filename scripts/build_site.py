@@ -951,6 +951,20 @@ def main() -> int:
         shutil.copytree(IMAGES, dst)
         n = sum(1 for p in dst.rglob("*") if p.is_file())
         print(f"· 预览模式：images/ → site/images/（{n} 个文件）")
+    else:
+        # 生产构建：把预览模式遗留的 site/images/ 挪进 site_trash/。
+        # 它有几十 MB（原图 + 缩略图副本），而生产站点图片全部走 jsDelivr/GitHub raw，
+        # 留着会让每次「scp -r site/*」都把整包图片白白传上服务器。
+        stale = SITE / "images"
+        if stale.exists() and stale.is_dir():
+            trash = ROOT / "site_trash"
+            trash.mkdir(parents=True, exist_ok=True)
+            dest = trash / ("images-" + str(int(time.time())))
+            print("· 预览遗留 site/images/ → site_trash/（部署包不再携带，清空 site_trash 时一起走）")
+            try:
+                stale.rename(dest)
+            except OSError:
+                pass
 
     (SITE / "assets" / "style.css").write_text(CSS, encoding="utf-8")
     inline = {
