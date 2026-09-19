@@ -25,10 +25,11 @@ cd site && scp -r ./* root@47.98.133.104:/var/www/geosciplot/
 ## 站点功能
 
 - 瀑布流网格（2/3/4 列响应式），分页 20 / 30（默认）/ 50，只加载当前页缩略图
-- 搜索（id / DOI / 标签）、标签筛选、上传日期区间筛选
+- 首页搜索（id / DOI / 标签）+ 标签筛选、上传日期区间筛选
+- 全站搜索独立页 `/search/`：结果行带缩略图与命中高亮，多词用空格分隔（需同时命中），支持 `?q=` 分享
 - 排序：新到旧 / 旧到新 / 随机
 - 详情页：无压缩原图 + DOI 链接 + 标签跳转 + 浏览计数
-- 明暗主题切换、回到顶部、一键回主站（右侧悬浮按钮）
+- 右侧悬浮按钮队列：全站搜索 / 返回 Home / GitHub / 明暗主题 / 回到顶部（与主站 zbhgis.com 的 rail 同款同序）
 - 筛选结果可通过 URL 参数分享：`/?tag=海冰&from=2026-09-01&to=2026-09-30`
 
 ## 图片加载
@@ -41,7 +42,7 @@ cd site && scp -r ./* root@47.98.133.104:/var/www/geosciplot/
 
 > 图片存储于 GitHub，访问需具备 GitHub 访问能力。
 
-本地预览：`python scripts/build_site.py --preview`，然后 `cd site && python -m http.server 5190`。
+本地预览：`python scripts/build_site.py --preview`，然后 `cd site && python -m http.server 5188`（打开 http://127.0.0.1:5188，搜索页在 /search/）。
 
 ## 本地运行
 
@@ -52,7 +53,7 @@ pip install -r requirements.txt          # 只有 Python 3.9+ 与 Pillow 两个�
 git clone https://github.com/zbhgis/GeoSciPlot.git
 cd GeoSciPlot
 python scripts/build_site.py --preview   # 生成静态站（含图片副本）
-cd site && python -m http.server 5190    # 打开 http://127.0.0.1:5190
+cd site && python -m http.server 5188    # 打开 http://127.0.0.1:5188
 ```
 
 也可以直接 `python scripts/admin.py` 打开管理界面浏览/编辑——**但「发布」需要仓库写权限**，
