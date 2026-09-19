@@ -105,8 +105,8 @@ a{color:inherit;text-decoration:none}
 .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
 /* 桌面/平板给右侧控件队列留出通道：队列占 right:16 + 42 = 58px，
    这里把正文右内边距顶到 74px，避免工具栏、卡片直接压到队列下面。
-   只在队列仍是「垂直居中」的宽度区间生效（>760px），窄屏队列改横排后由 body 底边距接管。 */
-@media (min-width:761px){
+   只在队列仍是「垂直居中」的宽度区间生效（>640px），窄屏队列改横排后由 body 底边距接管。 */
+@media (min-width:641px){
   .wrap{max-width:1180px;padding-right:74px}
 }
 header.site{padding:72px 0 0}
@@ -125,18 +125,15 @@ header.site{padding:72px 0 0}
    否则淡入淡出时会跟着缩放抖动 */
 #topBtn{opacity:0;pointer-events:none}
 #topBtn.show{opacity:1;pointer-events:auto}
-/* 窄屏（≤760px）：垂直居中的队列会压住满宽内容（实测 390px 时压住搜索框、盖掉「重置筛选」），
-   故改为右下角横排；此时它会浮在图片墙之上，故给整组加一层底色衬垫，
-   让四个按钮读起来是「一簇悬浮控件」而不是散落在图上。
+/* 窄屏（≤640px）：垂直居中的队列会压住满宽内容（实测 390px 时压住搜索框、盖掉「重置筛选」），
+   改为右下角横排 —— 断点、定位、尺寸全部对齐主站 zbhgis.com 的 .v3-rail 窄屏方案（统一设计）。
+   按钮本体是 --card 实心圆 + 发丝描边，直接浮在图片墙上也可读，无需组级胶囊衬底。
    同时给 body 补足底部内边距，避免遮住 footer。 */
-@media (max-width:760px){
-  .fab{right:12px;bottom:14px;top:auto;transform:none;flex-direction:row;gap:7px;
-    padding:5px;border:1px solid var(--line);border-radius:999px;
-    background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(6px)}
+@media (max-width:640px){
+  .fab{right:12px;bottom:14px;top:auto;transform:none;flex-direction:row;gap:7px}
   .tbtn{width:36px;height:36px}
   .tbtn svg{width:15px;height:15px}
-  /* 队列现在高 36+5*2+1*2 = 48px，底部内边距按此重算 */
-  body{padding-bottom:calc(14px + 48px + 16px + env(safe-area-inset-bottom))}
+  body{padding-bottom:calc(14px + 36px + 16px + env(safe-area-inset-bottom))}
 }
 .tbtn .ic-sun{display:inline}.tbtn .ic-moon{display:none}
 :root[data-theme=light] .tbtn .ic-sun{display:inline}:root[data-theme=light] .tbtn .ic-moon{display:none}
