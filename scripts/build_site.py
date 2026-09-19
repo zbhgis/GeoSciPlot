@@ -100,14 +100,41 @@ body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 ui-sans-serif
 a{color:inherit;text-decoration:none}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+/* 桌面/平板给右侧控件队列留出通道：队列占 right:16 + 42 = 58px，
+   这里把正文右内边距顶到 74px，避免工具栏、卡片直接压到队列下面。
+   只在队列仍是「垂直居中」的宽度区间生效（>760px），窄屏队列改横排后由 body 底边距接管。 */
+@media (min-width:761px){
+  .wrap{max-width:1180px;padding-right:74px}
+}
 header.site{padding:72px 0 0}
+/* 右侧控件队列：桌面端垂直居中于视口右侧，与主站 zbhgis.com 的 .v3-rail 保持同一形状
+   （42px 正圆 · --card 实底 · 发丝边框 · hover 变强调色并 scale 1.06） */
 .fab{position:fixed;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;z-index:50}
-.tbtn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:1px solid var(--line2);border-radius:50%;background:var(--card);color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,transform .16s}
+.tbtn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:1px solid var(--line2);border-radius:50%;background:var(--card);color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,transform .16s,opacity .25s ease}
 .tbtn:hover{color:var(--accent);border-color:var(--accent);transform:scale(1.06)}
 .tbtn svg{width:17px;height:17px;flex:none}
+/* 控件内联小箭头：尺寸统一由 CSS 定，用 em 让图标跟着字号缩放；
+   颜色一律 currentColor —— 与文字一起被 hover 染色，避免出现"文字变色图标不变"的割裂 */
+.ico{width:1em;height:1em;flex:none;transition:transform .18s ease}
+.ico-l{width:14px;height:14px}
+.ico-r{width:13px;height:13px}
+/* 回到顶部按钮：不参与 hover 的 scale 过渡，单独过渡 opacity，
+   否则淡入淡出时会跟着缩放抖动 */
 #topBtn{opacity:0;pointer-events:none}
 #topBtn.show{opacity:1;pointer-events:auto}
-@media (max-width:760px){.fab{right:10px;gap:7px}.tbtn{width:36px;height:36px}.tbtn svg{width:15px;height:15px}}
+/* 窄屏（≤760px）：垂直居中的队列会压住满宽内容（实测 390px 时压住搜索框、盖掉「重置筛选」），
+   故改为右下角横排；此时它会浮在图片墙之上，故给整组加一层底色衬垫，
+   让四个按钮读起来是「一簇悬浮控件」而不是散落在图上。
+   同时给 body 补足底部内边距，避免遮住 footer。 */
+@media (max-width:760px){
+  .fab{right:12px;bottom:14px;top:auto;transform:none;flex-direction:row;gap:7px;
+    padding:5px;border:1px solid var(--line);border-radius:999px;
+    background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(6px)}
+  .tbtn{width:36px;height:36px}
+  .tbtn svg{width:15px;height:15px}
+  /* 队列现在高 36+5*2+1*2 = 48px，底部内边距按此重算 */
+  body{padding-bottom:calc(14px + 48px + 16px + env(safe-area-inset-bottom))}
+}
 .tbtn .ic-sun{display:inline}.tbtn .ic-moon{display:none}
 :root[data-theme=light] .tbtn .ic-sun{display:inline}:root[data-theme=light] .tbtn .ic-moon{display:none}
 :root[data-theme=dark] .tbtn .ic-sun{display:none}:root[data-theme=dark] .tbtn .ic-moon{display:inline}
@@ -157,11 +184,22 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .card .cap{display:block;padding:7px 9px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;line-height:1.5;color:var(--faint)}
 .card .cap .tags{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph{display:flex;align-items:center;justify-content:center;min-height:120px;padding:18px;font-family:ui-monospace,monospace;font-size:11px;color:var(--faint);text-align:center}
-.pgbar{display:flex;align-items:center;justify-content:center;gap:14px;margin:34px 0 0;padding-top:20px;border-top:1px solid var(--line)}
-.pgbar button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;padding:7px 14px;border:1px solid var(--line2);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer}
-.pgbar button:hover:not(:disabled){color:var(--accent);border-color:var(--accent)}
-.pgbar button:disabled{opacity:.35;cursor:not-allowed}
-.pgbar .info{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--faint);min-width:132px;text-align:center}
+.pgbar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;margin:44px 0 0;padding-top:24px;border-top:1px solid var(--line)}
+/* 步进按钮：只有文字 + 一枚内联箭头，hover 才点亮（与主站 .v3-pager-step 同语言） */
+.pgbar button{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.35;padding:5px 11px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
+.pgbar button:hover:not(:disabled){color:var(--accent);border-color:var(--accent);background:var(--card)}
+.pgbar button:disabled{opacity:.3;cursor:not-allowed}
+/* 箭头 hover 时朝翻页方向平移 2px；禁用态不动 */
+#prev:hover:not(:disabled) .ico-l{transform:translateX(-2px)}
+#next:hover:not(:disabled) .ico-r{transform:translateX(2px)}
+/* 页码：等宽 + 定宽定高，选中态用强调色描边配极淡底，不填色（保持克制的工程感） */
+.pgnum{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 7px;border:1px solid var(--line2);border-radius:6px;background:transparent;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;font-variant-numeric:tabular-nums;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
+.pgnum:hover{color:var(--text);border-color:var(--accent)}
+.pgnum[data-on=true]{color:var(--accent);border-color:var(--accent);background:var(--card)}
+/* 当前页附近被"窗口"截断时用省略号占位，不可点 */
+.pggap{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:30px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--faint);user-select:none}
+/* 页码区与「共 N 张」之间用一条发丝竖线隔开 */
+.pgbar .info{margin-left:8px;padding-left:14px;border-left:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--faint);white-space:nowrap}
 .empty{padding:52px 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--faint);display:none;text-align:center}
 footer.site{margin-top:56px;padding:24px 0 64px;border-top:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between}
 figure.shot{margin:0;display:flex;justify-content:center;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -172,11 +210,35 @@ dl.meta dd{margin:0;color:var(--text);word-break:break-all}
 dl.meta dd .hl{color:var(--text)}
 dl.meta dd a.tag{display:inline-block;margin:0 8px 8px 0;padding:3px 11px;border:1px solid var(--line2);border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--dim);transition:color .16s,border-color .16s}
 dl.meta dd a.tag:hover{color:var(--accent);border-color:var(--accent)}
-.pager{display:flex;justify-content:space-between;gap:16px;margin:40px 0 0;padding-top:18px;border-top:1px solid var(--line);font-size:13px}
-.pager a{color:var(--dim)}
-.pager a:hover{color:var(--accent)}
-.back{display:inline-block;margin:36px 0 20px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--dim)}
-.back:hover{color:var(--accent)}
+/* ── 详情页：上一张 / 下一张（与主站 .v3-prevnext 同语言）
+   两列等宽卡片；缺一张时用虚线占位，避免唯一那张被拉成通栏 ── */
+.pager{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:46px 0 0;padding-top:24px;border-top:1px solid var(--line)}
+.pager a{display:flex;flex-direction:column;gap:7px;min-width:0;padding:12px 14px;border:1px solid var(--line2);border-radius:6px;transition:color .16s,border-color .16s,background-color .16s}
+.pager a:hover{border-color:var(--accent);background:var(--card)}
+.pager .dir{display:inline-flex;align-items:center;gap:5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;letter-spacing:.1em;color:var(--faint);transition:color .16s}
+.pager a:hover .dir{color:var(--accent)}
+.pager a:hover .ico-l{transform:translateX(-2px)}
+.pager a:hover .ico-r{transform:translateX(2px)}
+.pager .ttl{font-size:13.5px;line-height:1.5;color:var(--text);transition:color .16s}
+.pager a:hover .ttl{color:var(--accent)}
+.pager .pn-next{text-align:right}
+.pager .pn-next .dir{justify-content:flex-end}
+.pager .pn-empty{min-height:68px;border:1px dashed var(--line);border-radius:6px}
+/* ── 返回全部：发丝边框小按钮，箭头 hover 左移 ── */
+.back{display:inline-flex;align-items:center;gap:7px;margin:36px 0 20px;padding:5px 11px 5px 9px;border:1px solid var(--line2);border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.35;color:var(--dim);transition:color .16s,border-color .16s,background-color .16s}
+.back:hover{color:var(--accent);border-color:var(--accent);background:var(--card)}
+.back:hover .ico-l{transform:translateX(-2px)}
+/* ── 窄屏收尾（必须写在上面这些规则之后，否则同优先级会被覆盖） ──
+   分页条允许换行、末页提示去掉那根竖线；上一张/下一张改为上下堆叠，
+   右对齐失去意义统一左对齐；被隐藏的占位块正是"堆叠后不再需要"的元素 */
+@media (max-width:640px){
+  .pgbar{gap:5px}
+  .pgbar .info{margin-left:0;padding-left:0;border-left:none}
+  .pager{grid-template-columns:1fr}
+  .pager .pn-next{text-align:left}
+  .pager .pn-next .dir{justify-content:flex-start}
+  .pager .pn-empty{display:none}
+}
 h2.id-title{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:18px;font-weight:500;margin:0 0 20px;color:var(--dim);letter-spacing:.02em}
 """
 
@@ -247,7 +309,8 @@ JS = """\
   var topBtn = document.getElementById("topBtn");
   if (topBtn) {
     topBtn.addEventListener("click", function () { window.scrollTo({ top: 0, behavior: "smooth" }); });
-    var onScroll = function () { topBtn.classList.toggle("show", window.scrollY > 260); };
+    // 阈值 400px 与主站 zbhgis.com 的 .v3-rail-top 保持一致，两站行为统一
+    var onScroll = function () { topBtn.classList.toggle("show", window.scrollY > 400); };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
   }
@@ -269,6 +332,47 @@ JS = """\
   var info = document.getElementById("pageinfo");
   var prev = document.getElementById("prev");
   var next = document.getElementById("next");
+  var pgnums = document.getElementById("pgnums");
+
+  /* 视口越窄，页码窗口收得越小：
+     ≥1000 → 当前页 ±2 且总页数 ≤9 时全列；≥640 → ±1；更窄 → 只列当前页（总数缩到 4 个节点） */
+  function windowSize() {
+    var w = window.innerWidth || 1024;
+    return w < 640 ? 0 : (w < 1000 ? 1 : 2);
+  }
+  function digits(n) { return ("0" + n).slice(-2); }
+
+  /* 页码节点用事件委托：一次绑定，翻页时只重建 innerHTML，不重新挂监听 */
+  function paintNums(page, pages) {
+    if (!pgnums) return;
+    if (pages <= 1) { pgnums.innerHTML = ""; return; }
+    var win = windowSize();
+    var nums = [];
+    for (var i = 1; i <= pages; i++) {
+      if (i === 1 || i === pages || Math.abs(i - page) <= win) nums.push(i);
+    }
+    var html = "", last = 0;
+    nums.forEach(function (i) {
+      if (last && i - last > 1) html += '<span class="pggap">…</span>';
+      html += '<button type="button" class="pgnum" data-page="' + i + '"'
+            + (i === page ? ' data-on="true" aria-current="page"' : '')
+            + ' title="第 ' + i + ' 页">' + i + '</button>';
+      last = i;
+    });
+    pgnums.innerHTML = html;
+  }
+  if (pgnums) {
+    pgnums.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest(".pgnum") : null;
+      if (!b) return;
+      var n = parseInt(b.getAttribute("data-page"), 10);
+      if (!n || n === state.page) return;
+      state.page = n;
+      render();
+      var bar = document.querySelector(".pgbar");
+      if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   function pass(it) {
     if (state.tag !== "*" && (it.tg || []).indexOf(state.tag) === -1) return false;
@@ -320,9 +424,10 @@ JS = """\
     var slice = list.slice((state.page - 1) * per, state.page * per);
     grid.innerHTML = "";
     slice.forEach(function (it) { grid.appendChild(cardNode(it)); });
-    if (info) info.textContent = "第 " + state.page + " / " + pages + " 页";
+    if (info) info.textContent = "共 " + pages + " 页";
     if (prev) prev.disabled = state.page <= 1;
     if (next) next.disabled = state.page >= pages;
+    paintNums(state.page, pages);
     if (count) {
       var filtered = state.q || state.tag !== "*" || state.from || state.to;
       count.textContent = filtered ? "匹配 " + list.length + " / " + ITEMS.length + " 张"
@@ -473,10 +578,23 @@ JS = """\
     render();
   } else {
     var per0 = perSize(ITEMS);
-    if (info) info.textContent = "第 1 / " + Math.max(1, Math.ceil(ITEMS.length / per0)) + " 页";
+    var pages0 = Math.max(1, Math.ceil(ITEMS.length / per0));
+    if (info) info.textContent = "共 " + pages0 + " 页";
+    if (prev) prev.disabled = true;
     if (next) next.disabled = ITEMS.length <= per0;
+    paintNums(1, pages0);
     syncFilterBtn();
   }
+
+  /* 窄屏 / 宽屏切换时页码窗口会变，重算一次节点（不重建卡片） */
+  var lastWin = windowSize();
+  var onResize = function () {
+    if (windowSize() === lastWin) return;
+    lastWin = windowSize();
+    var per1 = perSize(ITEMS.filter(pass));
+    paintNums(state.page, Math.max(1, Math.ceil(ITEMS.filter(pass).length / per1)));
+  };
+  window.addEventListener("resize", onResize);
 
 })();
 """
@@ -556,6 +674,13 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 
     ghsvg = ('<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">'
             '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>')
+    # 分页条的内联箭头：尺寸/颜色/位移全交给 .ico 系列 CSS，这里只出几何形状
+    pg_ico_l = ('<svg class="ico ico-l" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+                'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+                '<path d="M10 3 5 8l5 5"/></svg>')
+    pg_ico_r = ('<svg class="ico ico-r" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+                'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+                '<path d="M6 3l5 5-5 5"/></svg>')
     body = f"""<header class="site">
   <h1><img class="logo" src="assets/logo.png" alt="GeoSciPlot logo">{esc(cfg['title'])}</h1>
   <a class="gh-note" href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener" target="_blank" title="在 GitHub 查看图片源文件">{ghsvg}<span>图片存储于 <b>GitHub</b>，访问需具备 GitHub 访问能力（点此查看仓库）</span></a>
@@ -593,9 +718,10 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 <p class="empty" id="empty">没有符合条件的图片</p>
 
 <div class="pgbar">
-  <button id="prev" disabled>← 上一页</button>
-  <span class="info" id="pageinfo">第 1 / {max(1, -(-len(items) // PAGE_SIZE))} 页</span>
-  <button id="next" disabled>下一页 →</button>
+  <button id="prev" type="button" title="上一页">{pg_ico_l}上一页</button>
+  <span id="pgnums"></span>
+  <button id="next" type="button" title="下一页">下一页{pg_ico_r}</button>
+  <span class="info" id="pageinfo">共 {max(1, -(-len(items) // PAGE_SIZE))} 页</span>
 </div>
 
 <script>window.GALLERY_PAGE = {PAGE_SIZE};
@@ -609,10 +735,33 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
     next_it = items[idx + 1] if idx < len(items) - 1 else None
     w, h = it.get("width", 0), it.get("height", 0)
 
-    pager = ['<div class="pager">']
-    pager.append(f'<a href="../{esc(prev_it["id"])}/">← 上一张</a>' if prev_it else "<span></span>")
-    pager.append(f'<a href="../{esc(next_it["id"])}/">下一张 →</a>' if next_it else "<span></span>")
-    pager.append("</div>")
+    # 上一张 / 下一张：两列等宽卡片。站点没有标题，用「图 {id}」当主文案，
+    # 副文案取标签（无标签则回落到 ID / DOI），让访客能预判点进去是哪张图。
+    # 缺一张时输出虚线占位块，否则唯一那张会被 grid 拉成通栏。
+    chev_l = ('<svg class="ico ico-l" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+              'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+              '<path d="M10 3 5 8l5 5"/></svg>')
+    chev_r = ('<svg class="ico ico-r" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+              'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+              '<path d="M6 3l5 5-5 5"/></svg>')
+
+    def pn_item(it_: dict | None, to_next: bool) -> str:
+        if it_ is None:
+            return '<span class="pn-empty" aria-hidden="true"></span>'
+        cls = "pn-next" if to_next else "pn-prev"
+        label = "下一张" if to_next else "上一张"
+        arrow = chev_r if to_next else chev_l
+        inner = (f'{label}{arrow}' if to_next else f'{arrow}{label}')
+        sub = " · ".join(it_.get("tags") or []) or (it_.get("doi") or "—")
+        return (f'<a class="{cls}" href="../{esc(it_["id"])}/">'
+                f'<span class="dir">{inner}</span>'
+                f'<span class="ttl">图 {esc(it_["id"])}</span>'
+                f'<span class="dir">{esc(sub)}</span></a>')
+
+    pager = ['<div class="pager">',
+             pn_item(prev_it, False),
+             pn_item(next_it, True),
+             '</div>']
 
     # 标签做成可跳转：点击回到首页并自动套用该标签的搜索
     tags = it.get("tags", [])
@@ -629,7 +778,10 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
     else:
         doi_html = "—"
 
-    body = f"""<a class="back" href="../">← 返回全部</a>
+    back_ico = ('<svg class="ico ico-l" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+                'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+                '<path d="M10 3 5 8l5 5"/></svg>')
+    body = f"""<a class="back" href="../">{back_ico}返回全部</a>
 <h2 class="id-title">图 {esc(it['id'])}</h2>
 <figure class="shot">
   <img data-rel="{esc(it.get('full'))}" alt="图 {esc(it['id'])}" width="{w}" height="{h}">
