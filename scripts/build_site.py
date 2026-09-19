@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 import shutil
 import sys
 import time
@@ -856,7 +857,10 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
     else:
         tags_html = "—"
 
+    # refs.json 里 DOI 可能存的是完整 URL（管理端按粘贴原样入库），
+    # 统一剥掉前缀再用，避免拼出 https://doi.org/https://doi.org/… 的坏链
     doi = str(it.get("doi") or "").strip()
+    doi = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", doi, flags=re.I)
     if doi:
         doi_html = f'<a href="https://doi.org/{esc(doi)}" rel="noopener" target="_blank">{esc(doi)}</a>'
     else:
