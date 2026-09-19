@@ -8,9 +8,10 @@
 产出：
     site/index.html              画廊首页（缩略图网格 + 分页 + 搜索 + 多维筛选 + 排序）
     site/{id}/index.html         每图详情页（原图 + 元信息 + 上下张）
+    site/search/index.html       全站搜索独立页（缩略图结果行，任意终端可用）
     site/assets/style.css        样式
     site/assets/gallery.js       三源降级加载 + 分页/筛选/排序 + 统计打点
-    site/assets/gallery-data.js  全量图元数据（全站搜索浮层在任意页面做客户端检索）
+    site/assets/gallery-data.js  全量图元数据（首页网格与搜索页共用）
 
 设计要点：
   · 图片没有标题，卡片只显示缩略图与 id
@@ -242,27 +243,30 @@ dl.meta dd a.tag:hover{color:var(--accent);border-color:var(--accent)}
   .pager .pn-empty{display:none}
 }
 h2.id-title{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:18px;font-weight:500;margin:0 0 20px;color:var(--dim);letter-spacing:.02em}
-/* ── 全站搜索浮层：由右侧队列的搜索按钮打开（任意页面可用）。
-   版式参考主站 zbhgis.com 的 /search：kicker + 大标题 + 等宽结果行 + 命中高亮，
+/* ── 全站搜索独立页（/search/）：版式参考主站 zbhgis.com 的 /search
+   （kicker + 大标题 + 结果行），结果行带缩略图，无图显示虚线占位；
    颜色一律取自主题变量，明暗两套自动跟随 ── */
-.smodal{position:fixed;inset:0;z-index:90;display:none;align-items:flex-start;justify-content:center;padding:9vh 20px 40px;background:color-mix(in srgb,var(--bg) 76%,transparent);backdrop-filter:blur(7px)}
-.smodal.open{display:flex}
-.smodal-panel{width:100%;max-width:620px;max-height:78vh;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line2);border-radius:10px;box-shadow:0 18px 60px rgba(0,0,0,.4);padding:20px 22px 12px}
-.smodal-head{display:flex;align-items:baseline;gap:12px;margin:10px 0 14px}
-.smodal-head h2{margin:0;font-size:24px;font-weight:700;letter-spacing:-.01em}
-.smodal-hint{margin-left:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint)}
-.smodal-q{width:100%;padding:10px 13px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
-.smodal-q:focus{outline:none;border-color:var(--accent)}
-.smodal-count{margin:12px 0 2px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--faint)}
-.smodal-list{overflow:auto;min-height:0;padding-bottom:6px}
-.sres{display:flex;align-items:baseline;gap:14px;padding:9px 6px;border-top:1px solid var(--line)}
+.spage-title{font-size:clamp(30px,4.5vw,44px);letter-spacing:-.02em;margin:18px 0 0}
+.spage-q{display:block;width:100%;max-width:520px;margin:24px 0 0;padding:10px 13px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+.spage-q:focus{outline:none;border-color:var(--accent)}
+.spage-count{margin:14px 0 2px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--faint)}
+.spage-list{margin-top:6px}
+.sres{display:flex;align-items:center;gap:14px;padding:11px 6px;border-top:1px solid var(--line)}
 .sres:hover{background:var(--card)}
-.sres-id{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--text)}
+.sres-media{flex:none;width:96px;height:68px;border:1px solid var(--line2);border-radius:6px;overflow:hidden;background:var(--line)}
+.sres-media img{display:block;width:100%;height:100%;object-fit:cover}
+.sres-noimg{display:flex;align-items:center;justify-content:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);border-style:dashed}
+.sres-body{min-width:0;flex:1}
+.sres-id{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sres:hover .sres-id{color:var(--accent)}
-.sres-meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--dim)}
-.sres-sep{font-style:normal;color:var(--faint);margin:0 6px}
+.sres-meta{display:block;margin-top:3px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sres-meta .sres-sep{font-style:normal;color:var(--faint);margin:0 6px}
 mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;border-radius:2px;padding:0 1px}
-.smodal-empty{padding:18px 6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--faint)}
+.spage-hint,.spage-empty{padding:26px 6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--faint)}
+@media (max-width:640px){
+  .sres{gap:10px}
+  .sres-media{width:72px;height:52px}
+}
 """
 
 JS = """\
@@ -338,16 +342,15 @@ JS = """\
     onScroll();
   }
 
-  /* ── 全站搜索浮层：静态站没有检索后端，直接在 gallery-data.js 的全量元数据上
-     做客户端匹配（id / DOI / 标签 / 日期，多词空格分隔 = 同时命中）。
-     放在网格逻辑之前 —— 详情页没有 #grid 会提前 return，浮层必须两页都能用 ── */
-  var smodal = document.getElementById("smodal");
-  if (smodal) {
-    var sBtn = document.getElementById("searchBtn");
-    var sQ = document.getElementById("smodal-q");
-    var sList = document.getElementById("smodal-list");
-    var sCount = document.getElementById("smodal-count");
-    var sUp = smodal.getAttribute("data-up") || "";
+  /* ── 全站搜索独立页（/search/）：静态站没有检索后端，直接在 gallery-data.js
+     的全量元数据上做客户端匹配（id / DOI / 标签 / 日期，多词空格分隔 = 同时命中）。
+     结果行带缩略图，经 bind() 走三源降级；无 thumb 的条目直接输出「无图」占位。
+     放在网格逻辑之前 —— 搜索页没有 #grid 会提前 return ── */
+  var spageQ = document.getElementById("spage-q");
+  if (spageQ) {
+    var sList = document.getElementById("spage-list");
+    var sCount = document.getElementById("spage-count");
+    var sUp = sList ? (sList.getAttribute("data-up") || "") : "";
 
     function escHtml(s) {
       return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -363,10 +366,10 @@ JS = """\
       return out;
     }
     function renderSearch(raw) {
-      var tokens = raw.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      var tokens = raw.trim().toLowerCase().split(/\\s+/).filter(Boolean);
       if (!tokens.length) {
         sCount.textContent = "";
-        sList.innerHTML = '<p class="smodal-empty">输入 id / DOI / 标签关键词开始检索；多个词用空格分隔（需同时命中）</p>';
+        sList.innerHTML = '<p class="spage-hint">输入 id / DOI / 标签关键词开始检索；多个词用空格分隔（需同时命中）</p>';
         return;
       }
       var hits = ITEMS.filter(function (it) {
@@ -374,36 +377,37 @@ JS = """\
         return tokens.every(function (t) { return hay.indexOf(t) > -1; });
       });
       sCount.textContent = "找到 " + hits.length + " / " + ITEMS.length + " 张";
-      sList.innerHTML = hits.length ? hits.map(function (it) {
+      if (!hits.length) {
+        sList.innerHTML = '<p class="spage-empty">未找到与 “' + escHtml(raw) + '” 相关的图片</p>';
+        return;
+      }
+      sList.innerHTML = hits.map(function (it) {
         var meta = [];
         if ((it.tg || []).length) meta.push(hl((it.tg || []).join(" · "), tokens));
         // refs.json 里 DOI 存的是完整 URL，展示时剥掉协议前缀（检索仍按原文匹配）
-        if (it.doi) meta.push(hl(String(it.doi).replace(/^https?:\/\/doi\.org\//i, ""), tokens));
+        if (it.doi) meta.push(hl(String(it.doi).replace(/^https?:\\/\\/doi\\.org\\//i, ""), tokens));
         if (it.ad) meta.push(escHtml(it.ad));
-        return '<a class="sres" href="' + sUp + escHtml(it.id) + '/">'
-          + '<span class="sres-id">' + hl("图 " + it.id, tokens) + '</span>'
-          + '<span class="sres-meta">' + meta.join('<i class="sres-sep">·</i>') + '</span></a>';
-      }).join("") : '<p class="smodal-empty">未找到与 “' + escHtml(raw) + '” 相关的图片</p>';
+        var media = it.rel
+          ? '<span class="sres-media"><img data-rel="' + escHtml(it.rel) + '" alt="图 ' + escHtml(it.id) + '"></span>'
+          : '<span class="sres-media sres-noimg">无图</span>';
+        return '<a class="sres" href="' + sUp + escHtml(it.id) + '/">' + media
+          + '<span class="sres-body"><span class="sres-id">' + hl("图 " + it.id, tokens) + '</span>'
+          + '<span class="sres-meta">' + meta.join('<i class="sres-sep">·</i>') + '</span></span></a>';
+      }).join("");
+      // 动态插入的缩略图要手动绑三源降级（gallery.js 只自动绑页面已有的 img[data-rel]）
+      sList.querySelectorAll("img[data-rel]").forEach(bind);
     }
-    function openSearch() {
-      smodal.classList.add("open");
-      smodal.setAttribute("aria-hidden", "false");
-      document.body.style.overflow = "hidden";   // 锁背景滚动，避免浮层下面跟着晃
-      renderSearch(sQ ? sQ.value : "");
-      if (sQ) sQ.focus();
-    }
-    function closeSearch() {
-      smodal.classList.remove("open");
-      smodal.setAttribute("aria-hidden", "true");
-      document.body.style.overflow = "";
-    }
-    if (sBtn) sBtn.addEventListener("click", function () {
-      smodal.classList.contains("open") ? closeSearch() : openSearch();
-    });
-    smodal.addEventListener("click", function (e) { if (e.target === smodal) closeSearch(); });
-    if (sQ) sQ.addEventListener("input", function () { renderSearch(sQ.value); });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && smodal.classList.contains("open")) closeSearch();
+    // ?q= 预填：与主站 /search?q= 行为一致，结果可分享
+    var sq = "";
+    try { sq = new URLSearchParams(location.search).get("q") || ""; } catch (e) {}
+    spageQ.value = sq;
+    renderSearch(sq);
+    spageQ.addEventListener("input", function () {
+      renderSearch(spageQ.value);
+      try {
+        var v = spageQ.value.trim();
+        history.replaceState(null, "", v ? "?q=" + encodeURIComponent(v) : location.pathname);
+      } catch (e) {}
     });
   }
 
@@ -709,8 +713,7 @@ def page_shell(cfg: dict, title: str, body: str, depth: int = 0, gh_url: str = "
 </head>
 <body>
 <div class="wrap">
-<div class="fab"><button type="button" class="tbtn" id="searchBtn" title="全站搜索" aria-label="全站搜索" aria-haspopup="dialog" aria-controls="smodal"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14"/></svg></button><a class="tbtn" href="https://www.zbhgis.com" title="返回主站 浩瀚地学"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8 8 3l5.5 5M4 7v6h8V7"/></svg></a><a class="tbtn" href="{gh}" rel="noopener" target="_blank" title="在 GitHub 查看（详情页直达当前图片）"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a><button type="button" class="tbtn" id="themeBtn" title="切换明暗主题" aria-label="切换明暗主题"><svg class="ic-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg><svg class="ic-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/></svg></button><button type="button" class="tbtn" id="topBtn" title="回到顶部" aria-label="回到顶部"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-9M4.5 8 8 4.5 11.5 8"/></svg></button></div>
-<div class="smodal" id="smodal" data-up="{up}" aria-hidden="true"><div class="smodal-panel" role="dialog" aria-modal="true" aria-label="全站搜索"><p class="kicker">GEOSCIPILOT · SEARCH</p><div class="smodal-head"><h2>全站搜索</h2><span class="smodal-hint">Esc 关闭</span></div><input id="smodal-q" class="smodal-q" type="search" placeholder="输入关键词搜索 id / DOI / 标签…" autocomplete="off"><div class="smodal-count" id="smodal-count"></div><div class="smodal-list" id="smodal-list"></div></div></div>
+<div class="fab"><a class="tbtn" href="{up}search/" title="全站搜索" aria-label="全站搜索"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14"/></svg></a><a class="tbtn" href="https://www.zbhgis.com" title="返回主站 浩瀚地学"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8 8 3l5.5 5M4 7v6h8V7"/></svg></a><a class="tbtn" href="{gh}" rel="noopener" target="_blank" title="在 GitHub 查看（详情页直达当前图片）"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a><button type="button" class="tbtn" id="themeBtn" title="切换明暗主题" aria-label="切换明暗主题"><svg class="ic-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></svg><svg class="ic-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z"/></svg></button><button type="button" class="tbtn" id="topBtn" title="回到顶部" aria-label="回到顶部"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-9M4.5 8 8 4.5 11.5 8"/></svg></button></div>
 {body}
 <footer class="site">
   <span>{esc(cfg['title'])} · {esc(cfg['subtitle'])}</span>
@@ -887,6 +890,22 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
     return page_shell(cfg, f"图 {it['id']}", body, depth=1, gh_url=gh_img)
 
 
+def build_search_page(cfg: dict, items: list[dict]) -> str:
+    """全站搜索独立页：版式对齐主站 zbhgis.com 的 /search。
+    结果行由 gallery.js 在客户端渲染（数据来自 gallery-data.js），
+    缩略图与网格卡片一样走三源降级；结果链接经 data-up 前缀回详情页。"""
+    body = f"""<header class="site">
+  <p class="kicker">GEOSCIPILOT · SEARCH</p>
+  <h1 class="spage-title">全站搜索</h1>
+  <p class="lede">检索全部 {len(items)} 张图的 id / DOI / 标签 / 上传日期；多个词用空格分隔（需同时命中）。</p>
+</header>
+
+<input id="spage-q" class="spage-q" type="search" placeholder="输入关键词搜索 id / DOI / 标签…" autocomplete="off" autofocus>
+<div class="spage-count" id="spage-count"></div>
+<div class="spage-list" id="spage-list" data-up="../"></div>"""
+    return page_shell(cfg, "全站搜索", body, depth=1)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="GeoSciPlot 静态站生成")
     ap.add_argument("--preview", action="store_true",
@@ -914,7 +933,7 @@ def main() -> int:
     if SITE.exists():
         trash = ROOT / "site_trash"
         for d in SITE.iterdir():
-            if d.is_dir() and d.name not in ("assets", "images") and (d / "index.html").exists():
+            if d.is_dir() and d.name not in ("assets", "images", "search") and (d / "index.html").exists():
                 trash.mkdir(parents=True, exist_ok=True)
                 dest = trash / (d.name + "-" + str(int(time.time())))
                 print(f"· 过期详情页 {d.name} → site_trash/（不删除）")
@@ -963,6 +982,9 @@ def main() -> int:
         encoding="utf-8")
 
     (SITE / "index.html").write_text(build_index(cfg, items), encoding="utf-8")
+    search_dir = SITE / "search"
+    search_dir.mkdir(parents=True, exist_ok=True)
+    (search_dir / "index.html").write_text(build_search_page(cfg, items), encoding="utf-8")
     for i, it in enumerate(items):
         d = SITE / it["id"]
         d.mkdir(parents=True, exist_ok=True)
