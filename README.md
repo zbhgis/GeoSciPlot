@@ -42,7 +42,7 @@ cd site && scp -r ./* root@47.98.133.104:/var/www/geosciplot/
 
 > 图片存储于 GitHub，访问需具备 GitHub 访问能力。
 
-本地预览：`python scripts/build_site.py --preview`，然后 `cd site && python -m http.server 5188`（打开 http://127.0.0.1:5188，搜索页在 /search/）。
+本地预览：`python scripts/build_site.py --preview`，然后 `cd site && python -m http.server 7332`（打开 http://127.0.0.1:7332，搜索页在 /search/；冷门端口，避免与本机其他服务冲突）。
 
 ## 本地运行
 
@@ -53,7 +53,7 @@ pip install -r requirements.txt          # 只有 Python 3.9+ 与 Pillow 两个�
 git clone https://github.com/zbhgis/GeoSciPlot.git
 cd GeoSciPlot
 python scripts/build_site.py --preview   # 生成静态站（含图片副本）
-cd site && python -m http.server 5188    # 打开 http://127.0.0.1:5188
+cd site && python -m http.server 7332    # 打开 http://127.0.0.1:7332
 ```
 
 也可以直接 `python scripts/admin.py` 打开管理界面浏览/编辑——**但「发布」需要仓库写权限**，
