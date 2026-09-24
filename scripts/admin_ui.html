@@ -76,7 +76,8 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:99}
 .modal{background:var(--card);border:1px solid var(--line2);border-radius:10px;padding:18px 20px;max-width:440px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
 .modal .mmsg{font-size:13px;line-height:1.9;white-space:pre-wrap}
-.modal .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.modal .mrow{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;
+  border:0;border-radius:0;padding:0;margin-bottom:0;background:transparent}
 .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:6px;padding:10px 16px;font-size:12.5px;color:var(--text);z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 .mgroup{display:flex;align-items:center;gap:10px;margin:0 0 12px;flex-wrap:wrap}
 .mlabel{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);min-width:36px;letter-spacing:.05em}
@@ -112,13 +113,14 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
   <div class="tabs">
     <button class="tab active" data-tab="add">添加图片</button>
     <button class="tab" data-tab="manage">图片管理</button>
+    <button class="tab" data-tab="raw">raw 暂存区</button>
   </div>
 
   <div class="tabpage" id="tab-add">
     <h2 style="margin-top:0">添加图片</h2>
     <div id="drop">
-      <div class="big">把图片拖到这里，或点击选择</div>
-      <div class="mono" style="font-size:11px">支持多张 · PNG / JPG / WebP / BMP / TIFF · 单张建议 ≤ 20MB</div>
+      <div class="big">把图片拖到这里，点击选择，或直接粘贴（Ctrl+V）</div>
+      <div class="mono" style="font-size:11px">支持多张 · PNG / JPG / WebP / BMP / TIFF · 单张建议 ≤ 20MB · 截图可直接 Ctrl+V 粘贴</div>
     </div>
     <input id="file" type="file" multiple accept="image/*">
     <p class="note" id="uploadNote" style="margin-top:8px"></p>
@@ -159,9 +161,30 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
     <div id="manageList"><p class="note">读取中…</p></div>
   </div>
 
+  <div class="tabpage" id="tab-raw" style="display:none">
+    <h2 style="margin-top:0">raw 暂存区</h2>
+    <p class="note">
+      raw/ 是上传收件箱：拖进来的图先落在这里，点「发布」后才会切缩略图、进索引、生成站点。<br>
+      已发布图片的逐字节原图另存于 <b>images/full/</b>，所以<b>清空 raw/ 不会损坏图库</b>；
+      但<b>尚未发布</b>的图会随清空一起丢失，需要重新上传。
+    </p>
+    <div class="row" style="margin:14px 0 12px">
+      <button id="rawReload">刷新</button>
+      <button class="danger" id="rawClear">清空 raw</button>
+      <span class="note" id="rawCount"></span>
+    </div>
+    <div class="mgroup"><span class="mlabel">筛选</span><div class="chips" id="rawChips"></div></div>
+    <div id="rawList"><p class="note">读取中…</p></div>
+  </div>
+
   <h2>说明</h2>
   <p class="note">
     · 上传的图片会立即写入 <b>raw/</b>；点发布后才会压缩出缩略图、更新索引并生成站点。<br>
+    · 添加图片有三种方式：拖拽、点击选择、<b>Ctrl+V 粘贴</b>（截图或网页上「复制图片」都行）。
+      粘贴的图往往没有原始文件名，会按 MIME 自动命名为 <b>paste-时间戳.ext</b>；
+      在输入框里粘贴表格/文本时不会抢成图片。<br>
+    · <b>raw/ 是收件箱兼原图留存</b>：图发布后仍留在里面（在「raw 暂存区」里标记为「已发布副本」）；
+      逐字节原图另存于 <b>images/full/</b>，所以清空 raw/ 不会损坏图库，但未发布的图会丢。<br>
     · 图片 id 由内容算出（sha1 前 10 位），与文件名无关 —— 重复上传同一张图会被识别出来。<br>
     · 若上传后不发布，图片仍留在 raw/，下次生成会以「未命名」收录，可在 meta/titles.csv 里补。<br>
     · 删除图片会同时移除缩略图、原图副本、raw/ 原图与索引条目，并同步 GitHub。<br>
@@ -259,7 +282,9 @@ function showTab(name) {
   });
   document.getElementById("tab-add").style.display = name === "add" ? "" : "none";
   document.getElementById("tab-manage").style.display = name === "manage" ? "" : "none";
+  document.getElementById("tab-raw").style.display = name === "raw" ? "" : "none";
   if (name === "manage") loadItems();
+  if (name === "raw") loadRaw();
 }
 document.querySelectorAll(".tab").forEach(function (t) {
   t.addEventListener("click", function () { showTab(t.getAttribute("data-tab")); });
@@ -368,6 +393,71 @@ function handleFiles(fileList) {
   window.addEventListener("dragover", function (e) { e.preventDefault(); });
   window.addEventListener("drop", function (e) { e.preventDefault(); });
 })();
+
+/* ── 粘贴图片（Ctrl+V / ⌘V）──
+   截图、网页右键「复制图片」、资源管理器里复制的图片文件都能直接粘进来。
+   两个必须处理的坑：
+   1) 剪贴板里的图常常没有文件名（Chrome 给 "image.png"、"blob" 或空串），
+      而后端按扩展名校验（不在 SUPPORTED 里直接判「不支持的格式」）——
+      所以这里按 MIME 补一个规范名 paste-<时间戳>.<ext> 再交给上传。
+   2) 从 Excel 复制的单元格区域同时带 text/plain 和位图。此时若焦点在输入框里，
+      必须放行让文本正常粘贴，不能抢成图片。 */
+var MIME_EXT = {
+  "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp",
+  "image/gif": "gif", "image/bmp": "bmp", "image/x-ms-bmp": "bmp",
+  "image/tiff": "tiff", "image/x-tiff": "tiff"
+};
+var SUPPORTED_EXT = ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif"];
+
+function stamp() {
+  var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+  return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" +
+         p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+/* 把剪贴板 DataTransfer 里的图片取成 File[]，并保证每个都有受支持的扩展名。
+   **扩展名一律以 MIME 为准**：剪贴板给的文件名常是 "image.png" 这类套话，
+   甚至与实际编码不符（名 .png 而内容是 JPEG）；只有 MIME 不认识时才退回用名字里的扩展名。
+   没有可用名字（空串 / "blob" / 无扩展名）就生成 paste-<时间戳> 便于追溯。 */
+function clipboardImages(dt) {
+  var out = [];
+  var items = [].slice.call((dt && dt.items) || []);
+  var ts = stamp();
+  items.forEach(function (it) {
+    if (it.kind !== "file" || String(it.type).indexOf("image/") !== 0) return;
+    var f = it.getAsFile();
+    if (!f) return;
+    var mimeExt = MIME_EXT[String(it.type || "").toLowerCase()] || "";
+    var m = /^(.+)\.([A-Za-z0-9]+)$/.exec(String(f.name || "").trim());
+    var nameExt = (m && SUPPORTED_EXT.indexOf(m[2].toLowerCase()) > -1) ? m[2].toLowerCase() : "";
+    var ext = mimeExt || nameExt || "png";
+    var base = (m && nameExt) ? m[1]
+             : "paste-" + ts + (out.length ? "-" + (out.length + 1) : "");
+    var name = base + "." + ext;
+    if (name !== f.name) {
+      try {
+        f = new File([f], name, { type: f.type || it.type });
+      } catch (err) {                       // 极老浏览器：File 构造器不可用时退回改属性
+        try { Object.defineProperty(f, "name", { value: name }); } catch (err2) {}
+      }
+    }
+    out.push(f);
+  });
+  return out;
+}
+document.addEventListener("paste", function (e) {
+  var dt = e.clipboardData;
+  if (!dt) return;
+  var files = clipboardImages(dt);
+  if (!files.length) return;               // 纯文本/其它内容：原样放行，不动它
+  var el = document.activeElement;
+  var inField = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+  var hasText = [].slice.call(dt.types || []).indexOf("text/plain") > -1;
+  if (inField && hasText) return;          // 输入框里粘表格：优先当文本处理
+  e.preventDefault();
+  showTab("add");                          // 待发布表单在这页，切过去才看得到刚粘的图
+  handleFiles(files);
+  toast("已从剪贴板读取 " + files.length + " 张图片");
+});
 
 function addItem(rec) {
   pending.push(rec);
@@ -517,12 +607,7 @@ function publish() {
     push: doPush,
     sync: doSync
   }, function (res) {
-    if (res.ok) {
-      pending = [];
-      document.getElementById("list").innerHTML = "";
-      document.getElementById("emptyNote").style.display = "block";
-      document.getElementById("uploadNote").textContent = "";
-    }
+    if (res.ok) { dropPendingAll(); invalidateRaw(); }   // raw/ 里的图已入库，状态变了
     btn.disabled = false;
     btn.textContent = "发布（生成站点 + 提交）";
     loadStatus();
@@ -681,6 +766,7 @@ function manageRow(it) {
                               sync: document.getElementById("doSync").checked }, function () {
         loadItems();
         loadStatus();
+        invalidateRaw();          // 删图会连带移除 raw/ 里的原图，暂存区列表要跟着更新
       });
     });
   });
@@ -750,15 +836,202 @@ document.getElementById("btnSync").addEventListener("click", function () {
   });
 });
 
+/* ── raw 暂存区（查看 / 单个删除 / 清空）──
+   rawFiles 与「添加图片」页共用同一次 /api/raw 请求：
+   页面加载时拉一次，点 raw 标签直接用缓存渲染；改动后置 null 强制重拉。 */
+var rawFiles = null;
+var rawFilter = "*";
+
+function fmtSize(n) {
+  n = n || 0;
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(0) + " KB";
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+  return (n / 1073741824).toFixed(2) + " GB";
+}
+function rawCounts() {
+  var all = rawFiles || [];
+  return {
+    all: all,
+    pending: all.filter(function (f) { return !f.duplicate; }),
+    dup: all.filter(function (f) { return f.duplicate; }),
+    bytes: all.reduce(function (s, f) { return s + (f.bytes || 0); }, 0)
+  };
+}
+function loadRaw(force) {
+  if (rawFiles && !force) { renderRawChips(); renderRaw(); return Promise.resolve(); }
+  var box = document.getElementById("rawList");
+  box.innerHTML = "";
+  box.appendChild(el("p", "note", "读取中…（正在生成缩略图，文件多时要等几秒）"));
+  return api("/api/raw").then(function (r) {
+    rawFiles = r.files || [];
+    updateRawTabLabel();
+    renderRawChips();
+    renderRaw();
+  }).catch(function (e) {
+    box.innerHTML = "";
+    box.appendChild(el("p", "note", "读取失败：" + e));
+  });
+}
+function updateRawTabLabel() {
+  var t = document.querySelector('.tab[data-tab="raw"]');
+  if (!t) return;
+  var n = (rawFiles || []).length;
+  t.textContent = n ? "raw 暂存区 " + n : "raw 暂存区";
+}
+/* raw/ 变了（清空 / 单删 / 发布 / 删除图片）后让缓存失效；raw 页正开着就立即重拉 */
+function invalidateRaw() {
+  rawFiles = null;
+  var page = document.getElementById("tab-raw");
+  if (page && page.style.display !== "none") loadRaw(true);
+  else updateRawTabLabel();
+}
+function renderRawChips() {
+  var box = document.getElementById("rawChips");
+  if (!box) return;
+  var c = rawCounts();
+  box.innerHTML = "";
+  [["全部", "*", c.all.length],
+   ["待发布", "pending", c.pending.length],
+   ["已发布副本", "dup", c.dup.length]].forEach(function (x) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(rawFilter === x[1]));
+    b.innerHTML = x[0] + ' <span class="n">' + x[2] + "</span>";
+    b.addEventListener("click", function () {
+      rawFilter = (rawFilter === x[1] ? "*" : x[1]);
+      renderRawChips(); renderRaw();
+    });
+    box.appendChild(b);
+  });
+}
+function renderRaw() {
+  var box = document.getElementById("rawList");
+  var c = rawCounts();
+  var list = rawFilter === "pending" ? c.pending
+           : rawFilter === "dup" ? c.dup : c.all;
+  var cnt = document.getElementById("rawCount");
+  if (cnt) cnt.textContent = c.all.length
+    ? (c.all.length + " 个文件 · " + fmtSize(c.bytes)
+       + " · 待发布 " + c.pending.length + " · 已发布副本 " + c.dup.length)
+    : "raw/ 是空的";
+  box.innerHTML = "";
+  if (!list.length) {
+    box.appendChild(el("p", "note", c.all.length
+      ? "该筛选下没有文件"
+      : "raw/ 是空的。注意：图发布后仍会留在 raw/（作为收件箱留存），可随时在这里清空。"));
+    return;
+  }
+  list.forEach(function (f) { box.appendChild(rawRow(f)); });
+}
+function rawRow(f) {
+  var node = el("div", "mrow");
+  var img = document.createElement("img");
+  img.className = "mthumb";
+  img.src = f.preview || "";
+  img.alt = f.name;
+  img.loading = "lazy";
+  node.appendChild(img);
+
+  var info = el("div", "minfo");
+  info.appendChild(el("div", "t", f.name));
+  var line = el("div", "");
+  var b = el("span", "badge " + (f.duplicate ? "" : "ok"), f.duplicate ? "已发布副本" : "待发布");
+  if (f.duplicate) b.style.color = "var(--dim)";
+  line.appendChild(b);
+  info.appendChild(line);
+  info.appendChild(el("div", "", "id " + f.id + " · " + (f.width || "?") + "×" + (f.height || "?")
+    + " · " + fmtSize(f.bytes)));
+  info.appendChild(el("div", "", "修改时间：" + (f.mtime || "—")));
+  if (f.rel && f.rel !== f.name) info.appendChild(el("div", "", "路径：" + f.rel));
+  node.appendChild(info);
+
+  var act = el("div", "mact");
+  var del = el("button", "tiny danger", "删除");
+  del.addEventListener("click", function () {
+    askConfirm("删除 " + f.name + " ？\n只从 raw/ 里移除该文件，图库与已发布内容不受影响。", function () {
+      del.disabled = true;
+      del.textContent = "删除中…";
+      api("/api/raw/delete", { rel: f.rel || f.name }).then(function (r) {
+        if (!r || !r.ok) {
+          toast("删除失败：" + ((r && r.error) || "未知错误"));
+          del.disabled = false; del.textContent = "删除";
+          return;
+        }
+        dropPending(f.name);
+        rawFiles = (rawFiles || []).filter(function (x) { return x.rel !== f.rel; });
+        updateRawTabLabel(); renderRawChips(); renderRaw();
+      }).catch(function (e) {
+        toast("删除失败：" + e);
+        del.disabled = false; del.textContent = "删除";
+      });
+    });
+  });
+  act.appendChild(del);
+  node.appendChild(act);
+  return node;
+}
+/* raw 页删了文件后，「添加图片」页里对应的待发布表单必须一起失效 ——
+   否则表单还在、点发布却找不到源文件 */
+function dropPending(name) {
+  var hit = pending.filter(function (p) { return (p.savedAs || p.name) === name; });
+  hit.forEach(function (p) {
+    pending = pending.filter(function (x) { return x !== p; });
+    if (p.node) p.node.remove();
+  });
+  if (!pending.length) document.getElementById("emptyNote").style.display = "block";
+  return hit.length;
+}
+function dropPendingAll() {
+  pending = [];
+  document.getElementById("list").innerHTML = "";
+  document.getElementById("emptyNote").style.display = "block";
+  document.getElementById("uploadNote").textContent = "";
+}
+document.getElementById("rawReload").addEventListener("click", function () { loadRaw(true); });
+document.getElementById("rawClear").addEventListener("click", function () {
+  var c = rawCounts();
+  if (!c.all.length) { toast("raw/ 已经是空的"); return; }
+  var lines = ["确定清空 raw/ ？", "",
+    "共 " + c.all.length + " 个文件（" + fmtSize(c.bytes) + "）"];
+  if (c.pending.length) lines.push("· 尚未发布 " + c.pending.length + " 个 —— 删除后需要重新上传");
+  if (c.dup.length) lines.push("· 已发布图的副本 " + c.dup.length + " 个 —— 原图在 images/full/ 里，不受影响");
+  lines.push("", "此操作不可撤销。");
+  askConfirm(lines.join("\n"), function () {
+    var btn = document.getElementById("rawClear");
+    btn.disabled = true;
+    btn.textContent = "清空中…";
+    api("/api/raw/clear", {}).then(function (res) {
+      var msg = (res && res.removed)
+        ? ("已清空 raw/：" + res.removed + " 个文件，释放 " + fmtSize(res.freed))
+        : "raw/ 本来就是空的";
+      if (res && res.failed) msg += "；" + res.failed + " 个失败";
+      if (res && res.others) msg += "（保留了 " + res.others + " 个非图片文件）";
+      toast(msg);
+      btn.disabled = false; btn.textContent = "清空 raw";
+      dropPendingAll();                  // 待发布表单里的源文件已经没了，整体作废
+      rawFiles = null;
+      loadRaw(true);
+      loadStatus();
+    }).catch(function (e) {
+      toast("清空失败：" + e);
+      btn.disabled = false; btn.textContent = "清空 raw";
+    });
+  });
+});
+
 loadStatus();
-/* 刷新/重开页面后自动恢复：raw/ 里还没入库的图重新挂回「待发布」表单 */
+/* 刷新/重开页面后自动恢复：raw/ 里还没入库的图重新挂回「待发布」表单。
+   同一次请求的结果留给「raw 暂存区」页复用（含 duplicate 项，不重复请求）。 */
 api("/api/raw").then(function (r) {
-  var files = (r.files || []).filter(function (f) { return !f.duplicate; });
+  rawFiles = r.files || [];
+  var files = rawFiles.filter(function (f) { return !f.duplicate; });
   files.forEach(function (f) { addItem(f); });
   if (files.length) {
     document.getElementById("uploadNote").textContent =
       "检测到 raw/ 里有 " + files.length + " 张已上传未发布的图，已恢复到下方，填完信息点发布即可";
   }
+  updateRawTabLabel();
 });
 mWire();
 </script>

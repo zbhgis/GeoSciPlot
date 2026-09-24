@@ -10,7 +10,8 @@
     1. 拖拽上传图片 → 存入 raw/，按内容算出 id，并在界面上给出缩略图预览
     2. 逐张填写 期刊 / 论文发表 / 标签 / 说明
     3. 图片管理：增删查改（元数据修改、删除图片），改动自动同步 GitHub 与线上站点
-    4. 点「发布」→ 自动执行：写 meta/titles.csv → prepare.py → build_site.py
+    4. raw 暂存区：查看 raw/ 里全部文件（含已发布图的副本，可筛选/单个删除），一键清空 raw/
+    5. 点「发布」→ 自动执行：写 meta/titles.csv → prepare.py → build_site.py
        → git add / commit / push →（可选）同步到服务器
 
 为什么不需要登录：服务只监听 127.0.0.1，物理上只有本机能连；推送用你本机已配置的
@@ -267,18 +268,42 @@ def apply_to_refs(updates: dict[str, dict]) -> int:
 
 # ────────────────────────── 动作 ──────────────────────────
 
+def _prune_empty_dirs() -> None:
+    """删掉 raw/ 下的空目录（不动 raw/ 本身）。按深度倒序，才能一次清完嵌套的空目录。"""
+    if not RAW_DIR.exists():
+        return
+    dirs = sorted((p for p in RAW_DIR.rglob("*") if p.is_dir()),
+                  key=lambda p: len(p.parts), reverse=True)
+    for d in dirs:
+        try:
+            if not any(d.iterdir()):
+                d.rmdir()
+        except OSError:
+            pass
+
+
 def do_raw_list() -> dict:
-    """列出 raw/ 中尚未入库的图片（页面刷新后恢复「待发布」列表用）。"""
+    """列出 raw/ 收件箱里的全部图片（「查看 raw」页与页面刷新后恢复「待发布」列表共用）。
+
+    注意：这里**不过滤**已发布图的副本（duplicate=true 的也返回），
+    否则 raw/ 的真实占用就看不全了 —— 「添加图片」页自己会滤掉 duplicate 的。
+    """
     known = {i["id"] for i in load_refs().get("items", [])}
-    out = []
+    out: list[dict] = []
     if RAW_DIR.exists():
         for f in sorted(RAW_DIR.rglob("*")):
             if not f.is_file() or f.suffix.lower() not in SUPPORTED:
                 continue
+            try:
+                st = f.stat()
+            except OSError:
+                continue
             fid = content_id(f)
-            rec = {"name": f.name, "savedAs": f.name, "id": fid,
-                   "bytes": f.stat().st_size, "duplicate": fid in known,
-                   "preview": preview_b64(f)}
+            rec = {"name": f.name,
+                   "rel": str(f.relative_to(RAW_DIR)).replace("\\", "/"),
+                   "savedAs": f.name, "id": fid, "bytes": st.st_size,
+                   "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
+                   "duplicate": fid in known, "preview": preview_b64(f)}
             try:
                 with Image.open(f) as im:
                     rec["width"], rec["height"] = im.size
@@ -289,14 +314,69 @@ def do_raw_list() -> dict:
 
 
 def do_raw_delete(name: str) -> dict:
-    """删除 raw/ 里的源文件（用户在待发布表单点「移除」时调用，防止下次加载又恢复回来）。"""
-    target = RAW_DIR / safe_name(name or "")
-    if not str(target.resolve()).startswith(str(RAW_DIR.resolve())):
+    """删除 raw/ 里的单个源文件（「待发布」表单点「移除」、raw 列表点「删除」都走这里）。
+    传相对路径（rel）或文件名都行 —— raw/ 目前是平的，但保留子目录能力。"""
+    rel = (name or "").replace("\\", "/").strip().lstrip("/")
+    if not rel:
+        return {"ok": False, "error": "缺少文件名"}
+    target = (RAW_DIR / rel).resolve()
+    try:
+        target.relative_to(RAW_DIR.resolve())        # 防目录穿越（旧实现用 safe_name 截成 basename，
+    except ValueError:                               # 子目录里的文件反而删不掉）
         return {"ok": False, "error": "非法路径"}
-    if target.exists():
+    if not target.is_file():
+        return {"ok": False, "error": "文件不存在"}
+    try:
         target.unlink()
-        return {"ok": True}
-    return {"ok": False, "error": "文件不存在"}
+    except OSError as e:
+        return {"ok": False, "error": f"删除失败：{e}"}
+    _prune_empty_dirs()
+    return {"ok": True}
+
+
+def do_raw_clear() -> dict:
+    """清空 raw/ 收件箱。
+
+    只删「能识别的图片」（与列表口径一致），raw/ 里的其它文件一律保留并在结果里报出。
+    安全性：raw/ 只是收件箱 —— 已发布图片的**逐字节原图另存于 images/full/**
+    （见 .gitignore 注释），所以清空不会损坏图库；
+    但**尚未发布**的图会随清空一起丢失，前端确认框必须把这一点说清楚。
+    """
+    if not RAW_DIR.exists():
+        return {"ok": True, "removed": 0, "freed": 0, "pending": 0,
+                "duplicate": 0, "failed": 0, "others": 0,
+                "log": [{"step": "清空 raw", "ok": True, "out": "raw/ 不存在，无需清理"}]}
+
+    known = {i["id"] for i in load_refs().get("items", [])}
+    removed = freed = failed = pending = dup = 0
+    for f in sorted(RAW_DIR.rglob("*")):
+        if not f.is_file() or f.suffix.lower() not in SUPPORTED:
+            continue
+        try:
+            if content_id(f) in known:
+                dup += 1
+            else:
+                pending += 1
+            freed += f.stat().st_size
+            f.unlink()
+            removed += 1
+        except OSError:
+            failed += 1
+    others = sum(1 for p in RAW_DIR.rglob("*")
+                 if p.is_file() and p.suffix.lower() not in SUPPORTED)
+    _prune_empty_dirs()
+
+    msg = f"已删除 {removed} 个图片文件，释放 {freed / 1048576:.1f} MB"
+    if pending:
+        msg += f"（其中 {pending} 个尚未发布）"
+    if failed:
+        msg += f"；{failed} 个删除失败（可能被其它程序占用）"
+    if others:
+        msg += f"；raw/ 里还有 {others} 个非图片文件，未动"
+    return {"ok": failed == 0, "removed": removed, "freed": freed,
+            "pending": pending, "duplicate": dup, "failed": failed,
+            "others": others,
+            "log": [{"step": "清空 raw", "ok": failed == 0, "out": msg}]}
 
 
 def do_upload(files: list[dict]) -> dict:
@@ -635,7 +715,10 @@ class Handler(BaseHTTPRequestHandler):
             # 上传是纯本地快速操作，保持同步返回
             self._json(do_upload(body.get("files") or []))
         elif path == "/api/raw/delete":
-            self._json(do_raw_delete(body.get("name") or ""))
+            self._json(do_raw_delete(body.get("name") or body.get("rel") or ""))
+        elif path == "/api/raw/clear":
+            # 纯本地删文件，很快，保持同步返回（与 /api/raw/delete 一致）
+            self._json(do_raw_clear())
         elif path in ("/api/publish", "/api/update", "/api/delete",
                       "/api/sync-server", "/api/init", "/api/push"):
             # 长操作：立即返回任务号，后台线程执行，前端轮询 /api/job/<id>

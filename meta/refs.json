@@ -1,8 +1,24 @@
 {
-  "generated": "2026-09-13",
-  "count": 40,
+  "generated": "2026-09-24",
+  "count": 41,
   "thumbMax": 480,
   "items": [
+    {
+      "id": "c29fd21ed1",
+      "doi": "https://doi.org/10.1038/s41477-026-02407-4",
+      "tags": [
+        "北极",
+        "复杂组图"
+      ],
+      "width": 1280,
+      "height": 1040,
+      "ext": "png",
+      "thumb": "thumb/2026-09-24/c29fd21ed1.webp",
+      "full": "full/2026-09-24/c29fd21ed1.png",
+      "bytes": 747785,
+      "origName": "image.png",
+      "added": "2026-09-24"
+    },
     {
       "id": "fe4c1eff8b",
       "doi": "https://doi.org/10.1038/s41467-021-24264-9",
