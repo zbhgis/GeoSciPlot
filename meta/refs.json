@@ -1,24 +1,8 @@
 {
   "generated": "2026-09-24",
-  "count": 42,
+  "count": 41,
   "thumbMax": 480,
   "items": [
-    {
-      "id": "c3200f17a9",
-      "doi": "https://doi.org/10.1038/s41558-023-01667-8",
-      "tags": [
-        "北极",
-        "局部放大图"
-      ],
-      "width": 901,
-      "height": 1280,
-      "ext": "png",
-      "thumb": "thumb/2026-09-24/c3200f17a9.webp",
-      "full": "full/2026-09-24/c3200f17a9.png",
-      "bytes": 933702,
-      "origName": "image_1.png",
-      "added": "2026-09-24"
-    },
     {
       "id": "c29fd21ed1",
       "doi": "https://doi.org/10.1038/s41477-026-02407-4",
