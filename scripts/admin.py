@@ -7,7 +7,8 @@
     python scripts/admin.py --no-open       # 不自动打开浏览器
 
 功能：
-    1. 拖拽上传图片 → 存入 raw/，按内容算出 id，并在界面上给出缩略图预览
+    1. 拖拽 / 点击选择 / Ctrl+V 粘贴上传图片 → 存入 raw/，按内容算出 id，并给出缩略图预览
+       （粘贴支持混合内容：自动只提取其中的图片；text/html 里的远程 <img> 由本机服务代取）
     2. 逐张填写 期刊 / 论文发表 / 标签 / 说明
     3. 图片管理：增删查改（元数据修改、删除图片），改动自动同步 GitHub 与线上站点
     4. raw 暂存区：查看 raw/ 里全部文件（含已发布图的副本，可筛选/单个删除），一键清空 raw/
@@ -30,10 +31,13 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
+import urllib.request
 import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 
 from PIL import Image, ImageOps  # noqa: E402
 
@@ -49,6 +53,7 @@ UI_HTML = Path(__file__).resolve().parent / "admin_ui.html"
 PYTHON = sys.executable
 DEFAULT_REMOTE = "git@github.com:zbhgis/GeoSciPlot.git"
 MAX_BODY = 200 * 1024 * 1024          # 单次请求体上限
+MAX_FETCH = 30 * 1024 * 1024          # 单张远程图片的下载上限
 SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
 CSV_FIELDS = ["id", "tags", "doi"]
 MANUAL_TEXT = ("doi",)
@@ -134,6 +139,20 @@ def preview_b64(path: Path, box: int = 360) -> str:
         return ""
 
 
+def doi_key(s: str) -> str:
+    """DOI 归一化，用于查重的键。
+
+    必须归一化，否则查重会静默失效：库里历史数据存的是**完整 URL 形式**
+    （`https://doi.org/10.1038/xxx`，见 meta/titles.csv），而用户手输的多半是
+    **裸 DOI**（`10.1038/xxx`）。另外 DOI 本身大小写不敏感。
+    前端 `doiKey()` 用的是同一套规则，两边必须保持一致。
+    """
+    k = str(s or "").strip().lower()
+    k = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", k)
+    k = re.sub(r"^doi:\s*", "", k)
+    return k
+
+
 def repo_state() -> dict:
     refs = load_refs()
     items = refs.get("items", [])
@@ -148,6 +167,15 @@ def repo_state() -> dict:
         branch = out if code == 0 else "main"
         code, out = run(["git", "status", "--porcelain"])
         dirty = len([l for l in out.splitlines() if l.strip()]) if code == 0 else 0
+
+    # 归一化后的 DOI → 已入库图片 id 的倒排索引，供「添加图片」页做同 DOI 提示
+    dois: dict[str, list[str]] = {}
+    for i in items:
+        k = doi_key(i.get("doi"))
+        fid = i.get("id")
+        if k and fid:
+            dois.setdefault(k, []).append(fid)
+
     return {
         "isRepo": is_repo,
         "remote": remote,
@@ -155,6 +183,7 @@ def repo_state() -> dict:
         "dirty": dirty,
         "count": len(items),
         "tags": sorted({t for i in items for t in (i.get("tags") or [])}),
+        "dois": dois,
         "defaultRemote": DEFAULT_REMOTE,
     }
 
@@ -328,8 +357,8 @@ def do_raw_delete(name: str) -> dict:
         return {"ok": False, "error": "文件不存在"}
     try:
         target.unlink()
-    except OSError as e:
-        return {"ok": False, "error": f"删除失败：{e}"}
+    except Exception as e:                       # 沙箱/杀软可能抛非 OSError 的拦截异常
+        return {"ok": False, "error": f"删除被拒绝：{e!r}"}
     _prune_empty_dirs()
     return {"ok": True}
 
@@ -360,7 +389,7 @@ def do_raw_clear() -> dict:
             freed += f.stat().st_size
             f.unlink()
             removed += 1
-        except OSError:
+        except Exception:                        # 同上：拦截异常可能不是 OSError
             failed += 1
     others = sum(1 for p in RAW_DIR.rglob("*")
                  if p.is_file() and p.suffix.lower() not in SUPPORTED)
@@ -645,6 +674,42 @@ def do_delete_and_finish(fid: str, message: str, push: bool, sync: bool) -> dict
     return pipeline_after_content(log, message or f"delete: 图 {fid}", push, sync)
 
 
+def do_fetch_image(query: dict) -> tuple[int, bytes, str]:
+    """代取 <img> 的远程图片地址，供「粘贴提取图片」用。
+
+    为什么必须由服务端代取：管理页跑在 http://127.0.0.1:5199 上，
+    对任意外站图片做跨源 fetch 会被 CORS 拦住读不到响应体；
+    改用 <img> + 画布又会因「画布被污染」拒绝 toDataURL。
+    只有本机服务端发请求才绕得开 —— 而本服务只监听 127.0.0.1，无暴露面。
+    返回 (http 状态码, 响应体, Content-Type)。
+    """
+    url = str((query.get("url") or [""])[0]).strip()
+    if not re.match(r"^https?://", url, re.I):
+        return 400, "只支持 http/https 图片地址".encode("utf-8"), "text/plain; charset=utf-8"
+
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) GeoSciPlotAdmin/1.1",
+        "Accept": "image/*,*/*;q=0.8",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            data = r.read(MAX_FETCH + 1)
+    except HTTPError as e:
+        return 502, f"远端返回 HTTP {e.code}".encode("utf-8"), "text/plain; charset=utf-8"
+    except (URLError, TimeoutError, OSError) as e:
+        return 502, f"下载失败：{e}".encode("utf-8"), "text/plain; charset=utf-8"
+
+    if len(data) > MAX_FETCH:
+        return 413, "图片超过 30MB 上限".encode("utf-8"), "text/plain; charset=utf-8"
+    if not data:
+        return 502, "远端返回空内容".encode("utf-8"), "text/plain; charset=utf-8"
+    # 部分图床给 application/octet-stream，先放行，真正的校验交给上传时的 PIL 解析
+    if ctype and not (ctype.startswith("image/") or ctype == "application/octet-stream"):
+        return 415, f"返回的不是图片（Content-Type: {ctype}）".encode("utf-8"), "text/plain; charset=utf-8"
+    return 200, data, (ctype or "image/png")
+
+
 # ────────────────────────── HTTP ──────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
@@ -688,7 +753,22 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, b"not found", "text/plain; charset=utf-8")
 
+    def _safe_500(self, e: BaseException) -> None:
+        """任何未捕获异常都转成 500 + JSON，而不是让线程带着异常死掉、
+        客户端只看到「连接被无声关闭」。实测教训：文件删除可能被外部
+        （杀软 / 沙箱）抛出非 OSError 的拦截异常，一旦穿透就是这种症状。"""
+        try:
+            self._json({"ok": False, "error": "服务器内部错误：" + repr(e)}, 500)
+        except Exception:
+            pass
+
     def do_GET(self):
+        try:
+            self._handle_get()
+        except Exception as e:
+            self._safe_500(e)
+
+    def _handle_get(self):
         path = (self.path or "/").split("?")[0]
         if path in ("/", "/index.html"):
             if UI_HTML.exists():
@@ -703,12 +783,23 @@ class Handler(BaseHTTPRequestHandler):
             self._json(do_raw_list())
         elif path.startswith("/api/job/"):
             self._json(job_snapshot(path[len("/api/job/"):]))
+        elif path == "/api/fetch-image":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            code, body, ctype = do_fetch_image(q)
+            self._send(code, body, ctype)
         elif path.startswith("/images/"):
             self._serve_local_image(path[len("/images/"):])
         else:
             self._send(404, b"not found", "text/plain; charset=utf-8")
 
     def do_POST(self):
+        try:
+            self._handle_post()
+        except Exception as e:
+            self._safe_500(e)
+
+    def _handle_post(self):
+        path = (self.path or "/").split("?")[0]
         path = (self.path or "").split("?")[0]
         body = self._read_json()
         if path == "/api/upload":

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GeoSciPlot · 本地管理</title>
 <style>
-:root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22;--ok:#3fb950;--bad:#f85149;color-scheme:dark}
-@media (prefers-color-scheme:light){:root{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;--ok:#1a7f37;--bad:#cf222e;color-scheme:light}}
+:root{--bg:#0d1117;--text:#e6edf3;--dim:#8b949e;--faint:#6e7681;--line:#1c2129;--line2:#30363d;--accent:#58a6ff;--card:#161b22;--ok:#3fb950;--bad:#f85149;--warn:#d29922;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#fff;--text:#1f2328;--dim:#59636e;--faint:#818b98;--line:#e8ebef;--line2:#d0d7de;--accent:#0969da;--card:#f6f8fa;--ok:#1a7f37;--bad:#cf222e;--warn:#9a6700;color-scheme:light}}
 *{box-sizing:border-box}
 @keyframes blink{50%{opacity:.3}}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 ui-sans-serif,system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
@@ -58,6 +58,12 @@ details pre{margin:8px 0 0;padding:10px;border:1px solid var(--line);border-radi
 .note{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);line-height:1.8}
 #uploadNote{white-space:pre-line}
 .hint{padding:9px 12px;border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:4px;background:var(--card);font-size:12px;color:var(--dim);margin-top:10px}
+/* DOI 重复提示：贴在 DOI 输入框下方，不阻断操作（一篇文章多张图是常态） */
+.doihint{margin-top:6px;padding:6px 9px;border:1px solid var(--line);border-left:2px solid var(--warn);
+  border-radius:4px;background:var(--card);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:11px;line-height:1.7;color:var(--dim);word-break:break-all}
+.doihint b{font-weight:500;color:var(--text)}
+.doihint .did{color:var(--accent)}
 /* 图片管理列表 */
 .mrow{display:grid;grid-template-columns:130px 1fr auto;gap:14px;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--card);align-items:start}
 @media (max-width:700px){.mrow{grid-template-columns:1fr}}
@@ -180,12 +186,19 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
   <h2>说明</h2>
   <p class="note">
     · 上传的图片会立即写入 <b>raw/</b>；点发布后才会压缩出缩略图、更新索引并生成站点。<br>
-    · 添加图片有三种方式：拖拽、点击选择、<b>Ctrl+V 粘贴</b>（截图或网页上「复制图片」都行）。
-      粘贴的图往往没有原始文件名，会按 MIME 自动命名为 <b>paste-时间戳.ext</b>；
+    · 添加图片有三种方式：拖拽、点击选择、<b>Ctrl+V 粘贴</b>。
+      粘贴支持<b>混合内容</b>：自动只提取其中的图片，文本忽略；
+      截图 / 复制的图片文件 / 网页选区里的 <b>&lt;img&gt;</b>（含多张）都能进来，
+      远程图片由本机服务代取，单次上限 <b>30</b> 张。
+      扩展名以剪贴板 MIME 为准；浏览器合成的占位名（image.png / blob 等）会自动改成
+      <b>paste-时间戳.ext</b>。从磁盘拖进来的文件即使叫 image.png 也<b>保留原名</b>。
       在输入框里粘贴表格/文本时不会抢成图片。<br>
     · <b>raw/ 是收件箱兼原图留存</b>：图发布后仍留在里面（在「raw 暂存区」里标记为「已发布副本」）；
       逐字节原图另存于 <b>images/full/</b>，所以清空 raw/ 不会损坏图库，但未发布的图会丢。<br>
     · 图片 id 由内容算出（sha1 前 10 位），与文件名无关 —— 重复上传同一张图会被识别出来。<br>
+    · 填 DOI 时会实时查重：若该 DOI 已被<b>图库</b>或<b>本次待发布</b>里的图用过，
+      会在输入框下方列出同 DOI 的图片 id（DOI 大小写不敏感）。
+      <b>这只是提示、不阻断发布</b> —— 同一篇论文配多张图是正常情况。<br>
     · 若上传后不发布，图片仍留在 raw/，下次生成会以「未命名」收录，可在 meta/titles.csv 里补。<br>
     · 删除图片会同时移除缩略图、原图副本、raw/ 原图与索引条目，并同步 GitHub。<br>
     · 发布 = 写 meta/titles.csv → prepare.py → build_site.py → git add/commit/push →（可选）同步服务器。
@@ -197,6 +210,7 @@ var pending = [];
 var status = {};
 var editOpen = null;
 var allTags = [];          // 图库里已有的全部标签（供点选）
+var doiIndex = {};         // 小写 DOI → [已入库的图片 id]（来自 /api/status 的 dois）
 
 /* 标签选择器：点选已有标签 + 输入新标签回车添加。返回 {node, get()} */
 function tagPicker(current, onChange) {
@@ -305,6 +319,8 @@ function loadStatus() {
     document.getElementById("initBox").style.display = s.isRepo ? "none" : "block";
     document.getElementById("remote").value = s.defaultRemote || "";
     allTags = s.tags || [];
+    doiIndex = s.dois || {};
+    refreshAllDoiHints();          // 图库变了 → 已填的 DOI 提示要跟着重算
     return s;
   });
 }
@@ -328,15 +344,16 @@ function readB64(file) {
     r.readAsDataURL(file);
   });
 }
-function handleFiles(fileList) {
-  var files = [].slice.call(fileList || []);
-  if (!files.length) return;
+/* 统一上传入口：entries = [{name, b64(dataURL 去头)}]，逐张上传并挂到「待发布」表单。
+   拖拽/点选 与 粘贴提取 共用这一条流水线。 */
+function uploadEntries(entries) {
+  if (!entries.length) return;
   var note = document.getElementById("uploadNote");
   var i = 0, added = 0;
   var dupNames = [], failNames = [];
-  note.textContent = "上传中… 0/" + files.length;
+  note.textContent = "上传中… 0/" + entries.length;
   (function next() {
-    if (i >= files.length) {
+    if (i >= entries.length) {
       var lines = ["上传完成：新增 " + added + " 张"];
       if (dupNames.length) {
         var shown = dupNames.slice(0, 8).join("；");
@@ -349,19 +366,24 @@ function handleFiles(fileList) {
       note.textContent = lines.join("\n");
       return;
     }
-    var f = files[i++];
-    readB64(f).then(function (b64) {
-      return api("/api/upload", { files: [{ name: f.name, b64: b64 }] });
-    }).then(function (res) {
+    var e = entries[i++];
+    api("/api/upload", { files: [{ name: e.name, b64: e.b64 }] }).then(function (res) {
       var rec = (res.files || [])[0];
-      note.textContent = "上传中… " + i + "/" + files.length;
-      if (rec && rec.error) { failNames.push(f.name + "（" + rec.error + "）"); }
+      note.textContent = "上传中… " + i + "/" + entries.length;
+      if (rec && rec.error) { failNames.push(e.name + "（" + rec.error + "）"); }
       else if (rec) {
-        if (rec.duplicate) dupNames.push(f.name + " → 与图库中的图 " + rec.id + " 相同");
+        if (rec.duplicate) dupNames.push(e.name + " → 与图库中的图 " + rec.id + " 相同");
         else { added++; addItem(rec); }
-      } else { failNames.push(f.name); }
-    }).catch(function () { failNames.push(f.name); }).then(next);
+      } else { failNames.push(e.name); }
+    }).catch(function () { failNames.push(e.name); }).then(next);
   })();
+}
+function handleFiles(fileList) {
+  var files = [].slice.call(fileList || []);
+  if (!files.length) return;
+  Promise.all(files.map(function (f) {
+    return readB64(f).then(function (b64) { return { name: f.name, b64: b64 }; });
+  })).then(uploadEntries);
 }
 /* ── 拖拽区 / 文件选择的事件绑定 ── */
 (function () {
@@ -394,76 +416,231 @@ function handleFiles(fileList) {
   window.addEventListener("drop", function (e) { e.preventDefault(); });
 })();
 
-/* ── 粘贴图片（Ctrl+V / ⌘V）──
-   截图、网页右键「复制图片」、资源管理器里复制的图片文件都能直接粘进来。
-   两个必须处理的坑：
-   1) 剪贴板里的图常常没有文件名（Chrome 给 "image.png"、"blob" 或空串），
-      而后端按扩展名校验（不在 SUPPORTED 里直接判「不支持的格式」）——
-      所以这里按 MIME 补一个规范名 paste-<时间戳>.<ext> 再交给上传。
-   2) 从 Excel 复制的单元格区域同时带 text/plain 和位图。此时若焦点在输入框里，
-      必须放行让文本正常粘贴，不能抢成图片。 */
+/* ── 粘贴提取图片（Ctrl+V / ⌘V）──
+   三类剪贴板来源混在一起也**只提取其中的图片**：
+   ① file 项 —— 截图 / 网页右键「复制图片」/ 资源管理器复制的图片文件，最可靠；
+   ② text/html 里的 <img> —— 从网页或 PDF **选区复制**时，图片往往只有 URL 没有 file 项，
+      这正是「粘了一堆东西却一张图都没进来」的常见原因；
+   ③ data: URI —— 部分编辑器把图直接内嵌进 html。
+   远程 <img> 必须由本机服务端代取（/api/fetch-image）：页面对外站做跨源 fetch 会被
+   CORS 拦、画布方案又会因「污染画布」拒绝导出。
+
+   ⚠️ DataTransfer 的数据在 paste 事件处理函数返回后就可能读不到，
+   所以必须在事件里**同步**取完 file 项和 text/html 字符串，异步下载放在之后。
+
+   另外两个坑：
+   - 剪贴板里的图常常没有可用文件名（Chrome 给 "image.png"、"blob" 或空串），
+     且扩展名可能与实际编码不符 → 按 MIME 定扩展名，占位名换成 paste-<时间戳>。
+   - Excel 复制的单元格区域同时带 text/plain 和位图，焦点在输入框里时必须放行。 */
 var MIME_EXT = {
   "image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/webp": "webp",
   "image/gif": "gif", "image/bmp": "bmp", "image/x-ms-bmp": "bmp",
   "image/tiff": "tiff", "image/x-tiff": "tiff"
 };
 var SUPPORTED_EXT = ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif"];
+var MAX_PASTE_IMAGES = 30;    // 单次粘贴最多提取的张数，防止复制整页时失控
 
 function stamp() {
   var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
   return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" +
          p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
 }
-/* 把剪贴板 DataTransfer 里的图片取成 File[]，并保证每个都有受支持的扩展名。
-   **扩展名一律以 MIME 为准**：剪贴板给的文件名常是 "image.png" 这类套话，
-   甚至与实际编码不符（名 .png 而内容是 JPEG）；只有 MIME 不认识时才退回用名字里的扩展名。
-   没有可用名字（空串 / "blob" / 无扩展名）就生成 paste-<时间戳> 便于追溯。 */
-function clipboardImages(dt) {
-  var out = [];
-  var items = [].slice.call((dt && dt.items) || []);
-  var ts = stamp();
-  items.forEach(function (it) {
-    if (it.kind !== "file" || String(it.type).indexOf("image/") !== 0) return;
-    var f = it.getAsFile();
-    if (!f) return;
-    var mimeExt = MIME_EXT[String(it.type || "").toLowerCase()] || "";
-    var m = /^(.+)\.([A-Za-z0-9]+)$/.exec(String(f.name || "").trim());
-    var nameExt = (m && SUPPORTED_EXT.indexOf(m[2].toLowerCase()) > -1) ? m[2].toLowerCase() : "";
-    var ext = mimeExt || nameExt || "png";
-    var base = (m && nameExt) ? m[1]
-             : "paste-" + ts + (out.length ? "-" + (out.length + 1) : "");
-    var name = base + "." + ext;
-    if (name !== f.name) {
-      try {
-        f = new File([f], name, { type: f.type || it.type });
-      } catch (err) {                       // 极老浏览器：File 构造器不可用时退回改属性
-        try { Object.defineProperty(f, "name", { value: name }); } catch (err2) {}
-      }
-    }
-    out.push(f);
-  });
+/* 浏览器/系统给剪贴板图片合成的「通用占位名」—— 不含任何信息量，
+   照单收下只会让 raw/ 里堆满 image.png / image (1).png。
+   ⚠️ 只作用于**粘贴**路径；从磁盘拖进来的文件走 handleFiles()，不经过这里、
+   即使文件真叫 image.png 也保留原名。 */
+var PLACEHOLDER_BASE = [
+  "image", "untitled", "unsaved", "clipboard", "blob", "pasted", "pasted-image",
+  "pastedimage", "screenshot", "screen shot", "无标题", "未命名", "图片", "截图"
+];
+function isPlaceholderName(base) {
+  if (!base) return true;
+  var k = String(base).toLowerCase().replace(/\s*\(\d+\)$/, "").trim();  // image (1) → image
+  return PLACEHOLDER_BASE.indexOf(k) > -1;
+}
+
+/* 从 text/html 里抠 <img src>，保序、按 src 去重 */
+function htmlImageSources(html) {
+  var out = [], seen = {};
+  var re = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+  var m;
+  while ((m = re.exec(String(html || "")))) {
+    var src = (m[1] || m[2] || m[3] || "").replace(/&amp;/g, "&").trim();
+    if (!src || seen[src]) continue;
+    seen[src] = 1;
+    out.push(src);
+  }
   return out;
+}
+/* 定扩展名：优先 MIME，其次 URL 里的扩展名，最后 png */
+function extForBlob(type, url) {
+  var e = MIME_EXT[String(type || "").toLowerCase()];
+  if (e) return e;
+  var m = /\.([A-Za-z0-9]{2,5})(?:[?#]|$)/.exec(String(url || ""));
+  if (m && SUPPORTED_EXT.indexOf(m[1].toLowerCase()) > -1) return m[1].toLowerCase();
+  return "png";
+}
+/* 取一张图的字节：data: URI 直接解；http(s) 走本机服务代取；其它来源放弃 */
+async function fetchImageBlob(src) {
+  try {
+    if (/^data:image\//i.test(src)) {
+      var r = await fetch(src);
+      return r.ok ? await r.blob() : null;
+    }
+    if (/^https?:\/\//i.test(src)) {
+      var r2 = await fetch("/api/fetch-image?url=" + encodeURIComponent(src));
+      if (!r2.ok) return null;
+      return await r2.blob();
+    }
+  } catch (e) { /* 单张失败不拖累其它 */ }
+  return null;
+}
+/* 内容签名：SHA-1（页面跑在 127.0.0.1，属安全上下文，crypto.subtle 可用），
+   与 prepare.py 按 sha1 判重的语义一致 —— 按「字节内容」去重，
+   而不是按尺寸：同尺寸纯色 PNG 的字节大小完全相同，按尺寸会把不同的图误杀。 */
+async function blobSig(blob) {
+  try {
+    var buf = await blob.arrayBuffer();
+    if (window.crypto && crypto.subtle && crypto.subtle.digest) {
+      var h = await crypto.subtle.digest("SHA-1", buf);
+      var u = new Uint8Array(h), s = "";
+      for (var i = 0; i < u.length; i++) s += (u[i] < 16 ? "0" : "") + u[i].toString(16);
+      return s;
+    }
+    var u8 = new Uint8Array(buf), n = u8.length;
+    var head = Math.min(n, 65536), tail = Math.max(head, n - 65536), hv = 0x811c9dc5;
+    function mix(v) { hv ^= v; hv = (hv * 0x01000193) >>> 0; }
+    for (var j = 0; j < head; j++) mix(u8[j]);
+    for (var k = tail; k < n; k++) mix(u8[k]);
+    return "fnv" + n + "_" + hv.toString(16);
+  } catch (e) { return null; }
+}
+/* 汇总本次粘贴里所有可用的图 → File[]
+   顺序：先 file 项（最可靠），再 html 里的 <img>。
+   按 SHA-1 精确去重 —— 同一张图同时以 file 项和 <img> 出现时不会重复。 */
+async function collectPasteImages(fileItems, html) {
+  var out = [], seen = {}, made = 0;
+  var ts = stamp();
+  async function add(blob, url) {
+    if (!blob || !blob.size) return;
+    var sig = await blobSig(blob);
+    if (!sig) sig = blob.size + ":" + String(blob.type || "").toLowerCase();
+    if (seen[sig]) return;
+    seen[sig] = 1;
+    var ext = extForBlob(blob.type, url);
+    var name = "paste-" + ts + (made ? "-" + (made + 1) : "") + "." + ext;
+    made++;
+    out.push(new File([blob], name, { type: blob.type || "image/png" }));
+  }
+  for (var i = 0; i < fileItems.length; i++) await add(fileItems[i], "");
+  var srcs = htmlImageSources(html).slice(0, MAX_PASTE_IMAGES);
+  for (var j = 0; j < srcs.length; j++) await add(await fetchImageBlob(srcs[j]), srcs[j]);
+  return out;
+}
+/* 同步快判：这次粘贴里有没有可提取的图（决定要不要 preventDefault） */
+function pasteHasImages(dt) {
+  var items = [].slice.call((dt && dt.items) || []);
+  if (items.some(function (it) { return it.kind === "file" && String(it.type).indexOf("image/") === 0; })) return true;
+  var html = "";
+  try { html = (dt && dt.getData && dt.getData("text/html")) || ""; } catch (e) {}
+  return /<img\b/i.test(String(html));
 }
 document.addEventListener("paste", function (e) {
   var dt = e.clipboardData;
   if (!dt) return;
-  var files = clipboardImages(dt);
-  if (!files.length) return;               // 纯文本/其它内容：原样放行，不动它
   var el = document.activeElement;
   var inField = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
   var hasText = [].slice.call(dt.types || []).indexOf("text/plain") > -1;
   if (inField && hasText) return;          // 输入框里粘表格：优先当文本处理
+  if (!pasteHasImages(dt)) return;         // 没有图：原样放行，不动它
   e.preventDefault();
-  showTab("add");                          // 待发布表单在这页，切过去才看得到刚粘的图
-  handleFiles(files);
-  toast("已从剪贴板读取 " + files.length + " 张图片");
+  /* ↓↓↓ 在事件里同步取完所有能取的东西，之后的异步步骤不再碰 dt ↓↓↓ */
+  var fileItems = [];
+  [].slice.call(dt.items || []).forEach(function (it) {
+    if (it.kind !== "file" || String(it.type).indexOf("image/") !== 0) return;
+    var f = it.getAsFile();
+    if (f) fileItems.push(f);
+  });
+  var html = "";
+  try { html = dt.getData("text/html") || ""; } catch (err) {}
+  showTab("add");                          // 待发布表单在这页，切过去才看得到
+  var note = document.getElementById("uploadNote");
+  note.textContent = "正在从剪贴板提取图片…";
+  collectPasteImages(fileItems, html).then(function (files) {
+    if (!files.length) { toast("剪贴板里没找到可用的图片"); note.textContent = ""; return; }
+    handleFiles(files);
+    toast("已从剪贴板提取 " + files.length + " 张图片");
+  }).catch(function (err) {
+    note.textContent = "";
+    toast("读取剪贴板失败：" + err);
+  });
 });
+
+/* ── DOI 查重 ──
+   一篇论文常对应多张图，**同 DOI 是正常情况** ——
+   所以这里只做「提示 + 列出同 DOI 的图片 id」，**不阻断发布**。
+   两类来源分开列：图库里已有的（doiIndex）、本次待发布里的其它条目。
+
+   查重键必须归一化，否则会静默失效：库里存的是完整 URL 形式
+   （https://doi.org/10.1038/xxx），而用户手输的多半是裸 DOI（10.1038/xxx）；
+   DOI 本身还大小写不敏感。规则与后端 admin.py 的 doi_key() 保持一致。 */
+function doiKey(s) {
+  return String(s || "").trim().toLowerCase()
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "")
+    .replace(/^doi:\s*/, "");
+}
+
+function doiPeers(rec) {
+  var k = doiKey(rec.doi);
+  if (!k) return [];
+  return pending.filter(function (p) { return p !== rec && doiKey(p.doi) === k; });
+}
+function refreshDoiHint(rec) {
+  var box = rec && rec.doiHint;
+  if (!box) return;
+  var k = doiKey(rec.doi);
+  var lib = k ? (doiIndex[k] || []) : [];
+  var peers = k ? doiPeers(rec) : [];
+  // 签名比对：状态没变就不重建 DOM（每次按键都会重算全部条目，必须防抖）
+  var sig = lib.join(",") + "|" + peers.map(function (p) { return p.id; }).join(",");
+  if (box.getAttribute("data-sig") === sig) return;
+  box.setAttribute("data-sig", sig);
+  box.innerHTML = "";
+  if (!lib.length && !peers.length) { box.style.display = "none"; return; }
+  box.appendChild(el("div", "", "⚠ 该 DOI 已被使用："));
+  if (lib.length) {
+    var a = el("div", "");
+    a.appendChild(el("span", "", "图库中 " + lib.length + " 张 → "));
+    lib.forEach(function (id, i) {
+      if (i) a.appendChild(document.createTextNode("、"));
+      a.appendChild(el("span", "did", id));
+    });
+    box.appendChild(a);
+  }
+  if (peers.length) {
+    var b = el("div", "");
+    b.appendChild(el("span", "", "本次待发布 " + peers.length + " 张 → "));
+    peers.forEach(function (p, i) {
+      if (i) b.appendChild(document.createTextNode("、"));
+      b.appendChild(el("span", "did", p.id));
+    });
+    box.appendChild(b);
+  }
+  box.appendChild(el("div", "", "若填错可修改；同一篇论文有多张图属正常，可继续发布。"));
+  box.style.display = "";
+}
+/* 必须重算**全部**条目：给 A 填完再给 B 填同一个 DOI 时，
+   A 的提示也要跟着出现 —— 只重算当前条会漏掉这种情况。 */
+function refreshAllDoiHints() {
+  (pending || []).forEach(refreshDoiHint);
+}
 
 function addItem(rec) {
   pending.push(rec);
   var node = buildItemNode(rec);
   document.getElementById("list").appendChild(node);
   document.getElementById("emptyNote").style.display = "none";
+  refreshAllDoiHints();          // 新条目可能让别人多出同 DOI 提示
 }
 function buildItemNode(rec) {
   var node = el("div", "item");
@@ -492,6 +669,7 @@ function buildItemNode(rec) {
         pending = pending.filter(function (x) { return x !== rec; });
         node.remove();
         if (!pending.length) document.getElementById("emptyNote").style.display = "block";
+        refreshAllDoiHints();          // 少了一条，别人的同 DOI 提示要跟着收敛
       }).catch(function () { btnRm.disabled = false; });
     });
   });
@@ -513,12 +691,25 @@ function buildItemNode(rec) {
       if (opts.list) input.setAttribute("list", opts.list);
       if (opts.placeholder) input.placeholder = opts.placeholder;
     }
-    input.addEventListener("input", function () { rec[key] = input.value; });
+    input.addEventListener("input", function () {
+      rec[key] = input.value;
+      if (opts.onInput) opts.onInput(input.value);
+    });
     box.appendChild(input);
+    if (opts.hint) {                     // 输入框下方的提示条（目前只有 DOI 用）
+      var h = el("div", "doihint");
+      h.style.display = "none";
+      box.appendChild(h);
+      rec[key + "Hint"] = h;
+    }
     fields.appendChild(box);
     return input;
   }
-  field("DOI doi", "doi", { placeholder: "如：10.1038/s41586-024-07752-w" });
+  field("DOI doi", "doi", {
+    placeholder: "如：10.1038/s41586-024-07752-w",
+    hint: true,
+    onInput: function () { refreshAllDoiHints(); }   // 必须重算全部：同批互查靠它
+  });
 
   var tagBox = el("div", "full");
   tagBox.appendChild(el("label", "", "标签 tags（点选已有，或输入新标签后回车）"));
@@ -980,6 +1171,7 @@ function dropPending(name) {
     if (p.node) p.node.remove();
   });
   if (!pending.length) document.getElementById("emptyNote").style.display = "block";
+  refreshAllDoiHints();
   return hit.length;
 }
 function dropPendingAll() {
