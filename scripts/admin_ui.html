@@ -218,15 +218,21 @@ var pending = [];
 var status = {};
 var editOpen = null;
 var allTags = [];          // 图库里已有的全部标签（供点选）
+var sessionTags = [];      // 本次会话里新输入的标签——跨所有待发布表单共享为候选
+var tagPickers = [];       // 存活的选择器实例（新标签出现时联动刷新）
 var doiIndex = {};         // 小写 DOI → [已入库的图片 id]（来自 /api/status 的 dois）
 
 /* 标签选择器：点选已有标签 + 输入新标签回车添加。返回 {node, get()} */
 function tagPicker(current, onChange) {
   var sel = (current || []).slice();
   var known = [];
-  (allTags || []).concat(sel).forEach(function (t) {
-    if (t && known.indexOf(t) === -1) known.push(t);
-  });
+  function rebuildKnown() {              // 图库标签 + 本会话新标签 + 自己已选
+    known = [];
+    (allTags || []).concat(sessionTags || []).concat(sel).forEach(function (t) {
+      if (t && known.indexOf(t) === -1) known.push(t);
+    });
+  }
+  rebuildKnown();
   var chipsBox = el("div", "tagpick");
   var inp = el("input");
   inp.placeholder = "没有想要的？输入新标签后回车";
@@ -235,11 +241,14 @@ function tagPicker(current, onChange) {
     e.preventDefault();
     var v = inp.value.trim();
     if (!v) return;
-    if (known.indexOf(v) === -1) known.push(v);
+    var isNew = known.indexOf(v) === -1;
+    if (isNew) known.push(v);
     if (sel.indexOf(v) === -1) sel.push(v);
     inp.value = "";
+    if (isNew && sessionTags.indexOf(v) === -1) sessionTags.push(v);
     render();
     if (onChange) onChange(sel);
+    if (isNew) refreshTagPickers(self);  // 新标签同步为其它图片的候选
   });
   function render() {
     chipsBox.innerHTML = "";
@@ -261,7 +270,19 @@ function tagPicker(current, onChange) {
   var wrap = el("div", "");
   wrap.appendChild(chipsBox);
   wrap.appendChild(el("div", "tagnew", "")).appendChild(inp);
-  return { node: wrap, get: function () { return sel.slice(); } };
+  var self = { node: wrap, get: function () { return sel.slice(); },
+               refresh: function () { rebuildKnown(); render(); } };
+  tagPickers.push(self);
+  return self;
+}
+/* 让所有还挂在页面上的选择器重算候选（顺带回收已随表单移除的实例）。
+   ⚠️ 新标签只进**候选**，不自动勾选其它图片 —— 是否采用由用户点选决定。 */
+function refreshTagPickers(except) {
+  for (var i = tagPickers.length - 1; i >= 0; i--) {
+    var p = tagPickers[i];
+    if (!p.node || !p.node.isConnected) { tagPickers.splice(i, 1); continue; }
+    if (p !== except && p.refresh) p.refresh();
+  }
 }
 
 function el(tag, cls, txt) {
@@ -329,6 +350,7 @@ function loadStatus() {
     allTags = s.tags || [];
     doiIndex = s.dois || {};
     refreshAllDoiHints();          // 图库变了 → 已填的 DOI 提示要跟着重算
+    refreshTagPickers(null);       // 图库标签变了 → 打开中的选择器候选跟着重算
     return s;
   });
 }
