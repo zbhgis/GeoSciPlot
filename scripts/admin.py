@@ -355,10 +355,9 @@ def do_raw_delete(name: str) -> dict:
         return {"ok": False, "error": "非法路径"}
     if not target.is_file():
         return {"ok": False, "error": "文件不存在"}
-    try:
-        target.unlink()
-    except Exception as e:                       # 沙箱/杀软可能抛非 OSError 的拦截异常
-        return {"ok": False, "error": f"删除被拒绝：{e!r}"}
+    ok, err = unlink_retry(target)
+    if not ok:
+        return {"ok": False, "error": f"删除失败：{err}"}
     _prune_empty_dirs()
     return {"ok": True}
 
@@ -378,6 +377,7 @@ def do_raw_clear() -> dict:
 
     known = {i["id"] for i in load_refs().get("items", [])}
     removed = freed = failed = pending = dup = 0
+    res_errors: list[str] = []
     for f in sorted(RAW_DIR.rglob("*")):
         if not f.is_file() or f.suffix.lower() not in SUPPORTED:
             continue
@@ -387,10 +387,15 @@ def do_raw_clear() -> dict:
             else:
                 pending += 1
             freed += f.stat().st_size
-            f.unlink()
-            removed += 1
-        except Exception:                        # 同上：拦截异常可能不是 OSError
+        except Exception:
             failed += 1
+            continue
+        ok, err = unlink_retry(f)
+        if ok:
+            removed += 1
+        else:
+            failed += 1
+            res_errors.append(f"{f.name}: {err}")
     others = sum(1 for p in RAW_DIR.rglob("*")
                  if p.is_file() and p.suffix.lower() not in SUPPORTED)
     _prune_empty_dirs()
@@ -399,12 +404,12 @@ def do_raw_clear() -> dict:
     if pending:
         msg += f"（其中 {pending} 个尚未发布）"
     if failed:
-        msg += f"；{failed} 个删除失败（可能被其它程序占用）"
+        msg += f"；{failed} 个删除失败：{'；'.join(res_errors[:3])}"
     if others:
         msg += f"；raw/ 里还有 {others} 个非图片文件，未动"
     return {"ok": failed == 0, "removed": removed, "freed": freed,
             "pending": pending, "duplicate": dup, "failed": failed,
-            "others": others,
+            "others": others, "errors": res_errors,
             "log": [{"step": "清空 raw", "ok": failed == 0, "out": msg}]}
 
 
@@ -672,6 +677,29 @@ def do_delete_and_finish(fid: str, message: str, push: bool, sync: bool) -> dict
         return res
     log = res.get("log", [])
     return pipeline_after_content(log, message or f"delete: 图 {fid}", push, sync)
+
+
+def unlink_retry(path: Path, tries: int = 5, delay: float = 0.3) -> tuple[bool, str]:
+    """带短退避的删除。Windows 上刚写入的文件常被杀软/索引服务短暂占用，
+    立即 unlink 会偶发 PermissionError —— 粘贴后几秒内点「清空 raw」最容易踩中。
+    实测教训：不做重试时 2 张里稳挂 1 张（恰是最新写入的那张）。"""
+    for i in range(tries):
+        try:
+            path.unlink()
+            return True, ""
+        except FileNotFoundError:
+            return True, ""                      # 已经没了 = 目的达成
+        except OSError:
+            if i < tries - 1:
+                time.sleep(delay * (i + 1))      # 0.3 / 0.6 / 0.9 / 1.2s
+        except Exception as e:                   # 沙箱等非系统拦截：不重试
+            return False, repr(e)
+    last = ""
+    try:
+        last = f"{path.stat().st_size}B"
+    except OSError:
+        pass
+    return False, f"文件仍被占用（{last}）"
 
 
 def do_fetch_image(query: dict) -> tuple[int, bytes, str]:

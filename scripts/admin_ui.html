@@ -247,8 +247,7 @@ function tagPicker(current, onChange) {
     inp.value = "";
     if (isNew && sessionTags.indexOf(v) === -1) sessionTags.push(v);
     render();
-    if (onChange) onChange(sel);
-    if (isNew) refreshTagPickers(self);  // 新标签同步为其它图片的候选
+    if (onChange) onChange(sel);           // onChange 里会持久化并 syncSessionTags
   });
   function render() {
     chipsBox.innerHTML = "";
@@ -283,6 +282,53 @@ function refreshTagPickers(except) {
     if (!p.node || !p.node.isConnected) { tagPickers.splice(i, 1); continue; }
     if (p !== except && p.refresh) p.refresh();
   }
+}
+/* 会话标签池收敛：只保留「仍被至少一张待发布图引用」的标签。
+   否则清空 raw / 移除图片后，输入过但已经没人用的标签会一直挂在候选里。
+   ⚠️ 必须在 pending 的 tags 变动**之后**调用。 */
+function syncSessionTags() {
+  var used = {};
+  (pending || []).forEach(function (p) {
+    String(p.tags || "").split("|").forEach(function (t) {
+      t = t.trim();
+      if (t) used[t] = 1;
+    });
+  });
+  var before = sessionTags.join("|");
+  sessionTags = sessionTags.filter(function (t) { return used[t]; });
+  if (sessionTags.join("|") !== before) refreshTagPickers(null);
+}
+
+/* ── 待发布图的标签按内容 id 持久化（localStorage）──
+   raw/ 本身不存标签，不持久化的话：输入完一刷新全丢。
+   键 = 内容 id（sha1 前 10 位），与图库/判重同一套标识。
+   发布（进图库）、删除、清空 raw 时按 id 清理，避免残留「没有图归属」的标签。 */
+var RAW_TAGS_KEY = "gsp-raw-tags";
+function rawTagsAll() {
+  try { return JSON.parse(localStorage.getItem(RAW_TAGS_KEY) || "{}") || {}; }
+  catch (e) { return {}; }
+}
+function rawTagsWrite(obj) {
+  try { localStorage.setItem(RAW_TAGS_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+function rawTagsSet(id, tags) {
+  if (!id) return;
+  var o = rawTagsAll();
+  var v = String(tags || "").trim();
+  if (v) o[id] = v; else delete o[id];
+  rawTagsWrite(o);
+}
+function rawTagsDel(ids) {
+  if (!ids || !ids.length) return;
+  var o = rawTagsAll();
+  ids.forEach(function (id) { delete o[id]; });
+  rawTagsWrite(o);
+}
+/* 只保留 id 仍存在于 raw/ 或图库的记录（页面加载时调用一次） */
+function rawTagsPrune(validIds) {
+  var o = rawTagsAll(), keep = {};
+  Object.keys(o).forEach(function (id) { if (validIds[id]) keep[id] = o[id]; });
+  rawTagsWrite(keep);
 }
 
 function el(tag, cls, txt) {
@@ -814,6 +860,8 @@ function buildItemNode(rec) {
         node.remove();
         if (!pending.length) document.getElementById("emptyNote").style.display = "block";
         refreshAllDoiHints();          // 少了一条，别人的同 DOI 提示要跟着收敛
+        rawTagsDel([rec.id]);          // 随图持久化的标签一并清掉
+        syncSessionTags();
       }).catch(function () { btnRm.disabled = false; });
     });
   });
@@ -858,7 +906,14 @@ function buildItemNode(rec) {
 
   var tagBox = el("div", "full");
   tagBox.appendChild(el("label", "", "标签 tags（点选已有，或输入新标签后回车）"));
-  var tp = tagPicker([], function (sel) { rec.tags = sel.join("|"); });
+  var savedTags = String(rawTagsAll()[rec.id] || "").split("|").map(function (s) { return s.trim(); })
+                   .filter(Boolean);          // 刷新前输过的标签，按内容 id 恢复
+  var tp = tagPicker(savedTags, function (sel) {
+    rec.tags = sel.join("|");
+    rawTagsSet(rec.id, rec.tags);            // 随内容 id 持久化，刷新不丢
+    syncSessionTags();                       // 没人引用的标签从候选池收敛掉
+  });
+  if (savedTags.length) rec.tags = savedTags.join("|");
   tagBox.appendChild(tp.node);
   fields.appendChild(tagBox);
 
@@ -1103,11 +1158,12 @@ function manageRow(it) {
         loadItems();
         loadStatus();
         invalidateRaw();          // 删图会连带移除 raw/ 里的原图，暂存区列表要跟着更新
+        rawTagsDel([it.id]);      // 随图持久化的待发布标签一并清掉
       });
     });
+    act.appendChild(btnEdit);
+    act.appendChild(btnDel);
   });
-  act.appendChild(btnEdit);
-  act.appendChild(btnDel);
   node.appendChild(act);
   return node;
 }
@@ -1311,19 +1367,24 @@ function rawRow(f) {
    否则表单还在、点发布却找不到源文件 */
 function dropPending(name) {
   var hit = pending.filter(function (p) { return (p.savedAs || p.name) === name; });
+  rawTagsDel(hit.map(function (p) { return p.id; }));
   hit.forEach(function (p) {
     pending = pending.filter(function (x) { return x !== p; });
     if (p.node) p.node.remove();
   });
   if (!pending.length) document.getElementById("emptyNote").style.display = "block";
   refreshAllDoiHints();
+  syncSessionTags();
   return hit.length;
 }
 function dropPendingAll() {
+  var ids = pending.map(function (p) { return p.id; });
+  rawTagsDel(ids);                     // 待发布图没了，随图持久化的标签一并清掉
   pending = [];
   document.getElementById("list").innerHTML = "";
   document.getElementById("emptyNote").style.display = "block";
   document.getElementById("uploadNote").textContent = "";
+  syncSessionTags();
 }
 document.getElementById("rawReload").addEventListener("click", function () { loadRaw(true); });
 document.getElementById("rawClear").addEventListener("click", function () {
@@ -1362,6 +1423,9 @@ loadStatus();
    同一次请求的结果留给「raw 暂存区」页复用（含 duplicate 项，不重复请求）。 */
 api("/api/raw").then(function (r) {
   rawFiles = r.files || [];
+  var validIds = {};
+  rawFiles.forEach(function (f) { validIds[f.id] = 1; });
+  rawTagsPrune(validIds);                // 已不在 raw/ 的记录清掉，避免无限累积
   var files = rawFiles.filter(function (f) { return !f.duplicate; });
   files.forEach(function (f) { addItem(f); });
   if (files.length) {
