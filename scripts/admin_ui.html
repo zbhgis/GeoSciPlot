@@ -128,6 +128,10 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
       <div class="big">把图片拖到这里，点击选择，或直接粘贴（Ctrl+V）</div>
       <div class="mono" style="font-size:11px">支持多张 · PNG / JPG / WebP / BMP / TIFF · 单张建议 ≤ 20MB · 截图可直接 Ctrl+V 粘贴</div>
     </div>
+    <div class="row" style="margin:12px 0 0">
+      <button id="btnStdImport">标准导入（DOI 列表 + 按顺序的图）</button>
+      <span class="note">识别 1. 2. 3. 编号的 DOI，与图片按顺序一一配对，自动预填</span>
+    </div>
     <input id="file" type="file" multiple accept="image/*">
     <p class="note" id="uploadNote" style="margin-top:8px"></p>
 
@@ -193,6 +197,10 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
       扩展名以剪贴板 MIME 为准；浏览器合成的占位名（image.png / blob 等）会自动改成
       <b>paste-时间戳.ext</b>。从磁盘拖进来的文件即使叫 image.png 也<b>保留原名</b>。
       在输入框里粘贴表格/文本时不会抢成图片。<br>
+    · <b>标准导入</b>：剪贴板里是「编号 DOI 列表 + 按顺序的图」时
+      （如 <b>1. https://doi.org/…</b> 共 N 行，下面跟 N 张图），
+      点按钮或直接 Ctrl+V，都会把 DOI 与图<b>按顺序一一配对</b>并自动预填；
+      数量对不上会明确提示，不会静默丢弃。<br>
     · <b>raw/ 是收件箱兼原图留存</b>：图发布后仍留在里面（在「raw 暂存区」里标记为「已发布副本」）；
       逐字节原图另存于 <b>images/full/</b>，所以清空 raw/ 不会损坏图库，但未发布的图会丢。<br>
     · 图片 id 由内容算出（sha1 前 10 位），与文件名无关 —— 重复上传同一张图会被识别出来。<br>
@@ -344,9 +352,10 @@ function readB64(file) {
     r.readAsDataURL(file);
   });
 }
-/* 统一上传入口：entries = [{name, b64(dataURL 去头)}]，逐张上传并挂到「待发布」表单。
-   拖拽/点选 与 粘贴提取 共用这一条流水线。 */
-function uploadEntries(entries) {
+/* 统一上传入口：entries = [{name, b64(dataURL 去头), doi?}]，逐张上传并挂到「待发布」表单。
+   donePrefix 可选：完成后作为汇总文案的首行（标准导入用它报配对结果）。
+   拖拽/点选 与 粘贴提取/标准导入 共用这一条流水线。 */
+function uploadEntries(entries, donePrefix) {
   if (!entries.length) return;
   var note = document.getElementById("uploadNote");
   var i = 0, added = 0;
@@ -354,7 +363,7 @@ function uploadEntries(entries) {
   note.textContent = "上传中… 0/" + entries.length;
   (function next() {
     if (i >= entries.length) {
-      var lines = ["上传完成：新增 " + added + " 张"];
+      var lines = [(donePrefix ? donePrefix + "\n" : "") + "上传完成：新增 " + added + " 张"];
       if (dupNames.length) {
         var shown = dupNames.slice(0, 8).join("；");
         if (dupNames.length > 8) shown += "；…共 " + dupNames.length + " 张";
@@ -373,7 +382,10 @@ function uploadEntries(entries) {
       if (rec && rec.error) { failNames.push(e.name + "（" + rec.error + "）"); }
       else if (rec) {
         if (rec.duplicate) dupNames.push(e.name + " → 与图库中的图 " + rec.id + " 相同");
-        else { added++; addItem(rec); }
+        else {
+          added++; addItem(rec);
+          if (e.doi) prefillDoi(rec, e.doi);   // 标准导入：按顺序预填 DOI
+        }
       } else { failNames.push(e.name); }
     }).catch(function () { failNames.push(e.name); }).then(next);
   })();
@@ -563,11 +575,18 @@ document.addEventListener("paste", function (e) {
   });
   var html = "";
   try { html = dt.getData("text/html") || ""; } catch (err) {}
+  var ptext = "";                            // 标准导入：DOI 列表通常在纯文本里
+  try { ptext = dt.getData("text/plain") || ""; } catch (err) {}
   showTab("add");                          // 待发布表单在这页，切过去才看得到
   var note = document.getElementById("uploadNote");
   note.textContent = "正在从剪贴板提取图片…";
   collectPasteImages(fileItems, html).then(function (files) {
     if (!files.length) { toast("剪贴板里没找到可用的图片"); note.textContent = ""; return; }
+    var dois = parseDois(ptext);
+    if (dois.length) {                     // 文本里有 DOI → 按顺序与图配对
+      runStdImport(dois, files, "粘贴");
+      return;
+    }
     handleFiles(files);
     toast("已从剪贴板提取 " + files.length + " 张图片");
   }).catch(function (err) {
@@ -575,6 +594,109 @@ document.addEventListener("paste", function (e) {
     toast("读取剪贴板失败：" + err);
   });
 });
+
+/* ── 标准导入：剪贴板里「编号 DOI 列表 + 按顺序的图」→ 自动配对 ──
+   典型内容（文献管理/飞书文档里复制）：
+     1. https://doi.org/10.1038/xxx
+     2. https://doi.org/10.1126/yyy
+     …下面跟着对应的图
+   两条路殊途同归：点按钮用 navigator.clipboard.read() 直接读；
+   浏览器拒绝授权时按 Ctrl+V —— 粘贴路径也会解析文本里的 DOI 并按顺序配对。 */
+var STD_LABEL = "标准导入（DOI 列表 + 按顺序的图）";
+
+/* 从文本里按出现顺序抽 DOI，去重保序；保留原文写法（库里存的也是完整 URL 形式） */
+function parseDois(text) {
+  var out = [], seen = {};
+  var re = /((?:https?:\/\/)?(?:dx\.)?doi\.org\/[^\s"'<>]+|10\.\d{4,9}\/[^\s"'<>]+)/gi;
+  var m;
+  while ((m = re.exec(String(text || "")))) {
+    var d = m[1].replace(/[.,;]+$/, "").trim();
+    if (!d || seen[d.toLowerCase()]) continue;
+    seen[d.toLowerCase()] = 1;
+    out.push(d);
+  }
+  return out;
+}
+/* 标准导入预填：走既有 input 事件，DOI 查重提示会跟着刷新 */
+function prefillDoi(rec, doi) {
+  rec.doi = doi;
+  if (rec.doiInput) {
+    rec.doiInput.value = doi;
+    try { rec.doiInput.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {}
+  }
+}
+/* Blob[] → paste 文件（与粘贴路径同一套命名规则：无名 → paste-<时间戳>） */
+function blobsToPasteFiles(blobs) {
+  var ts = stamp(), made = 0, out = [];
+  (blobs || []).forEach(function (b) {
+    if (!b || !b.size) return;
+    var ext = extForBlob(b.type, "");
+    out.push(new File([b], "paste-" + ts + (made ? "-" + (made + 1) : "") + "." + ext,
+                      { type: b.type || "image/png" }));
+    made++;
+  });
+  return out;
+}
+/* 配对导入：图片[i] ↔ DOI[i]；数量对不上时明确告知，不静默丢弃 */
+function runStdImport(dois, files, source) {
+  if (!files.length) {
+    toast(dois.length ? ("识别到 " + dois.length + " 个 DOI 但没有图片——请把图一并复制")
+                      : "没有识别到 DOI 或图片");
+    return;
+  }
+  showTab("add");
+  var note = document.getElementById("uploadNote");
+  note.textContent = "标准导入：正在读取 " + files.length + " 张图…";
+  Promise.all(files.map(function (f, i) {
+    return readB64(f).then(function (b64) {
+      return { name: f.name, b64: b64, doi: i < dois.length ? dois[i] : "" };
+    });
+  })).then(function (entries) {
+    var paired = Math.min(dois.length, entries.length), extra = [];
+    if (dois.length > entries.length) extra.push((dois.length - entries.length) + " 个 DOI 没有对应图");
+    if (entries.length > dois.length) extra.push((entries.length - dois.length) + " 张图没有对应 DOI");
+    var msg = "标准导入：" + paired + " 组 DOI ↔ 图 已按顺序配对" + (extra.length ? "；" + extra.join("；") : "");
+    uploadEntries(entries, msg);          // 配对结果作为完成文案首行（否则会被覆盖）
+    toast(msg);
+  }).catch(function (e) {
+    note.textContent = "";
+    toast("标准导入失败：" + e);
+  });
+}
+async function readClipboardStd() {
+  if (!navigator.clipboard || !navigator.clipboard.read)
+    throw new Error("浏览器不支持剪贴板读取");
+  var items = await navigator.clipboard.read();
+  var text = "", blobs = [];
+  for (var i = 0; i < items.length; i++) {
+    var types = items[i].types || [];
+    for (var j = 0; j < types.length; j++) {
+      var t = types[j];
+      if (t === "text/plain") {
+        var tb = await items[i].getType(t);
+        text += (text ? "\n" : "") + await tb.text();
+      } else if (String(t).indexOf("image/") === 0) {
+        blobs.push(await items[i].getType(t));
+      }
+    }
+  }
+  return { text: text, blobs: blobs };
+}
+function stdImport() {
+  var btn = document.getElementById("btnStdImport");
+  btn.disabled = true; btn.textContent = "读取剪贴板…";
+  readClipboardStd().then(function (res) {
+    btn.disabled = false; btn.textContent = STD_LABEL;
+    runStdImport(parseDois(res.text), blobsToPasteFiles(res.blobs));
+  }).catch(function () {
+    btn.disabled = false; btn.textContent = STD_LABEL;
+    showTab("add");
+    document.getElementById("uploadNote").textContent =
+      "标准导入：浏览器未授权读剪贴板——直接按 Ctrl+V 粘贴即可，同样会自动配对";
+    toast("浏览器未授权读剪贴板，改用 Ctrl+V（一样会自动配对）");
+  });
+}
+document.getElementById("btnStdImport").addEventListener("click", stdImport);
 
 /* ── DOI 查重 ──
    一篇论文常对应多张图，**同 DOI 是正常情况** ——
@@ -696,6 +818,7 @@ function buildItemNode(rec) {
       if (opts.onInput) opts.onInput(input.value);
     });
     box.appendChild(input);
+    rec[key + "Input"] = input;          // 标准导入预填 DOI 时要用
     if (opts.hint) {                     // 输入框下方的提示条（目前只有 DOI 用）
       var h = el("div", "doihint");
       h.style.display = "none";
