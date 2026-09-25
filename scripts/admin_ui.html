@@ -247,8 +247,9 @@ function tagPicker(current, onChange) {
     inp.value = "";
     if (isNew && sessionTags.indexOf(v) === -1) sessionTags.push(v);
     render();
-    if (onChange) onChange(sel);           // onChange 里会持久化并 syncSessionTags
-  });
+    if (onChange) onChange(sel);           // 持久化 + syncSessionTags（收敛没人用的标签）
+    if (isNew) refreshTagPickers(self);    // ⚠️ 新标签必须在这里广播：syncSessionTags 的
+  });                                     // 变化检测覆盖不到「刚 push 进去的那个」（回归点）
   function render() {
     chipsBox.innerHTML = "";
     known.forEach(function (t) {
