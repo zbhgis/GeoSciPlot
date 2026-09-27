@@ -45,6 +45,7 @@ PAGE_SIZE = 30
 # 资源版本号（构建时间戳）：CSS/JS 引用统一带 ?v=，部署后老访客的浏览器
 # 不会再用缓存的旧脚本配新页面（本次搜索改版就踩过：旧 gallery.js 读不到新数据源）
 BUILD_VER = str(int(time.time()))
+SITE_URL = "https://geosciplot.zbhgis.com"
 
 DEFAULT_CFG = {
     "title": "GeoSciPlot",
@@ -104,18 +105,38 @@ CSS = (ASSETS_SRC / "style.css").read_text(encoding="utf-8")
 JS = (ASSETS_SRC / "gallery.js").read_text(encoding="utf-8")
 
 
-def page_shell(cfg: dict, title: str, body: str, depth: int = 0, gh_url: str = "") -> str:
+def page_shell(
+    cfg: dict,
+    title: str,
+    body: str,
+    depth: int = 0,
+    gh_url: str = "",
+    meta_desc: str = "",
+    head_extra: str = "",
+    og_type: str = "website",
+    og_image: str = "",
+    og_url: str = "",
+) -> str:
     up = "../" if depth else ""
     gh = gh_url or "https://github.com/{}/{}".format(
         cfg.get("owner") or "OWNER", cfg["repo"])
+    desc = meta_desc or f"{cfg['subtitle']} —— {cfg['lede']}"
+    og_url = og_url or (SITE_URL + ("/" if not depth else ""))
+    og_img = f'\n<meta property="og:image" content="{esc(og_image)}">' if og_image else ""
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>geosciplot</title>
-<meta name="description" content="{esc(cfg['subtitle'])} —— {esc(cfg['lede'])}">
-<link rel="stylesheet" href="{up}assets/style.css?v={BUILD_VER}">
+<title>{esc(title)} | geosciplot</title>
+<meta name="description" content="{esc(desc)}">
+<link rel="canonical" href="{og_url}">
+<meta property="og:site_name" content="geosciplot">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(desc)}">
+<meta property="og:type" content="{og_type}">
+<meta property="og:url" content="{og_url}">{og_img}
+{head_extra}<link rel="stylesheet" href="{up}assets/style.css?v={BUILD_VER}">
 <link rel="icon" type="image/png" href="{up}assets/favicon.png">
 <script>try{{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t)}}catch(e){{}}</script>
 </head>
@@ -222,10 +243,22 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 </div>
 
 <script>window.GALLERY_PAGE = {PAGE_SIZE};</script>"""
-    return page_shell(cfg, cfg["subtitle"], body)
+    website_ld = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "geosciplot",
+        "alternateName": "地学科研绘图参考图库",
+        "url": SITE_URL,
+        "description": cfg["lede"],
+        "inLanguage": "zh-CN",
+    }, ensure_ascii=False)
+    head = f'<script type="application/ld+json">{website_ld}</script>'
+    return page_shell(cfg, cfg["subtitle"], body,
+                      meta_desc=f"{cfg['lede']}（{len(items)} 张图，可搜索、可筛选、按上传日期浏览）",
+                      head_extra=head)
 
 
-def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
+def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     it = items[idx]
     prev_it = items[idx - 1] if idx > 0 else None
     next_it = items[idx + 1] if idx < len(items) - 1 else None
@@ -295,7 +328,33 @@ def build_detail(cfg: dict, items: list[dict], idx: int) -> str:
 {chr(10).join(pager)}"""
     gh_img = "https://github.com/{}/{}/blob/{}/images/{}".format(
         cfg.get("owner") or "OWNER", cfg["repo"], cfg.get("branch", "main"), it.get("full", ""))
-    return page_shell(cfg, f"图 {it['id']}", body, depth=1, gh_url=gh_img)
+    full_url = f"{abs_base}/{it.get('full', '')}"
+    thumb_url = f"{abs_base}/{it.get('thumb', '')}"
+    tags = [str(t) for t in it.get("tags", [])]
+    added = str(it.get("added") or "")
+    desc_parts = [t for t in [" · ".join(tags), added] if t]
+    detail_desc = (" · ".join(desc_parts) + f" · DOI: {it.get('doi')}" if it.get("doi") else " · ".join(desc_parts)) or cfg["lede"]
+    image_ld = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "ImageObject",
+        "name": f"图 {it['id']}",
+        "description": detail_desc,
+        "contentUrl": full_url,
+        "thumbnailUrl": thumb_url,
+        "uploadDate": added,
+        "url": f"{SITE_URL}/{it['id']}/",
+        "keywords": ", ".join(tags),
+        "inLanguage": "zh-CN",
+        "author": {"@type": "Organization", "name": cfg.get("title", "geosciplot"), "url": SITE_URL},
+    }, ensure_ascii=False)
+    og_meta = (f'<meta property="og:image" content="{esc(full_url)}">'
+               f'<meta property="og:image:width" content="{it.get("width", 0)}">'
+               f'<meta property="og:image:height" content="{it.get("height", 0)}">')
+    head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>')
+    return page_shell(cfg, f"图 {it['id']}", body, depth=1, gh_url=gh_img,
+                      meta_desc=detail_desc, head_extra=head,
+                      og_type="article", og_image=full_url,
+                      og_url=f"{SITE_URL}/{it['id']}/")
 
 
 def build_search_page(cfg: dict, items: list[dict]) -> str:
@@ -311,7 +370,52 @@ def build_search_page(cfg: dict, items: list[dict]) -> str:
 <input id="spage-q" class="spage-q" type="search" placeholder="输入关键词搜索 id / DOI / 标签…" autocomplete="off" autofocus>
 <div class="spage-count" id="spage-count"></div>
 <div class="spage-list" id="spage-list" data-up="../"></div>"""
-    return page_shell(cfg, "全站搜索", body, depth=1)
+    return page_shell(cfg, "全站搜索", body, depth=1,
+                      meta_desc="搜索图库全部图片：按 id / DOI / 标签关键词检索，支持筛选与排序")
+
+
+def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: int) -> None:
+    """生成 robots.txt / sitemap.xml / llms.txt —— 图库站的 SEO/GEO 三件套。"""
+    nl = chr(10)
+    ai_bots = ["GPTBot", "ChatGPT-User", "Claude-Web", "ClaudeBot", "Claude-SearchBot",
+               "CCBot", "PerplexityBot", "Google-Extended", "OAI-SearchBot",
+               "Meta-ExternalAgent", "Applebot-Extended", "Amazonbot", "DuckAssistBot",
+               "Bytespider"]
+    parts = ["User-Agent: *", "Allow: /", ""]
+    for b in ai_bots:
+        parts += ["User-Agent: " + b, "Allow: /", ""]
+    parts += ["Sitemap: " + SITE_URL + "/sitemap.xml", ""]
+    (SITE / "robots.txt").write_text(nl.join(parts), encoding="utf-8")
+
+    today = time.strftime("%Y-%m-%d")
+    urls = ["<url><loc>" + SITE_URL + "/</loc><lastmod>" + today + "</lastmod></url>",
+            "<url><loc>" + SITE_URL + "/search/</loc><lastmod>" + today + "</lastmod></url>"]
+    for it in items:
+        lm = str(it.get("added") or today)
+        urls.append("<url><loc>" + SITE_URL + "/" + it["id"] + "/</loc><lastmod>" + lm + "</lastmod></url>")
+    sm = nl.join(["<?xml version=" + chr(34) + "1.0" + chr(34) + " encoding=" + chr(34) + "UTF-8" + chr(34) + "?>",
+                  "<urlset xmlns=" + chr(34) + "http://www.sitemaps.org/schemas/sitemap/0.9" + chr(34) + ">"]
+                 + urls + ["</urlset>"])
+    (SITE / "sitemap.xml").write_text(sm, encoding="utf-8")
+
+    lines = ["# " + cfg.get("title", "geosciplot"), "",
+             cfg.get("subtitle", "") + "（" + SITE_URL + "）—— " + cfg.get("lede", ""),
+             "", "## 核心页面", "",
+             "- [图库首页](" + SITE_URL + "/)",
+             "- [全站搜索](" + SITE_URL + "/search/)",
+             "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
+    for it in items:
+        tags = " · ".join(str(t) for t in it.get("tags", []))
+        doi = str(it.get("doi") or "")
+        added = str(it.get("added") or "")
+        meta = " · ".join(x for x in [tags, doi, added] if x)
+        line = "- [图 " + it["id"] + "](" + SITE_URL + "/" + it["id"] + "/)"
+        lines.append(line + (" — " + meta if meta else ""))
+    lines += ["", "## 说明", "",
+              "- 图片本体由 jsDelivr / GitHub raw 分发，各详情页附原始论文 DOI 与上传日期",
+              "- 图片元数据的机器可读版见 sitemap.xml"]
+    (SITE / "llms.txt").write_text(nl.join(lines) + nl, encoding="utf-8")
+    print("· SEO/GEO 三件套已生成：robots.txt / sitemap.xml / llms.txt（" + str(len(items)) + " 张图）")
 
 
 def main() -> int:
@@ -411,7 +515,8 @@ def main() -> int:
     for i, it in enumerate(items):
         d = SITE / it["id"]
         d.mkdir(parents=True, exist_ok=True)
-        (d / "index.html").write_text(build_detail(cfg, items, i), encoding="utf-8")
+        (d / "index.html").write_text(build_detail(cfg, items, i, abs_base=sources[active]["base"]), encoding="utf-8")
+    build_seo_files(cfg, items, sources, active)
 
     pages = max(1, -(-len(items) // PAGE_SIZE))
     index_kb = len((SITE / "index.html").read_bytes()) / 1024
