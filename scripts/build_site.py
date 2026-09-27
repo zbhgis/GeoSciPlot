@@ -337,7 +337,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     image_ld = json.dumps({
         "@context": "https://schema.org",
         "@type": "ImageObject",
-        "name": f"图 {it['id']}",
+        "name": f"图 {it['id']}" + (f"（{tags[0]}）" if tags else ""),
         "description": detail_desc,
         "contentUrl": full_url,
         "thumbnailUrl": thumb_url,
@@ -351,7 +351,8 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
                f'<meta property="og:image:width" content="{it.get("width", 0)}">'
                f'<meta property="og:image:height" content="{it.get("height", 0)}">')
     head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>')
-    return page_shell(cfg, f"图 {it['id']}", body, depth=1, gh_url=gh_img,
+    title_text = f"图 {it['id']}" + (f"（{tags[0]}）" if tags else "")
+    return page_shell(cfg, title_text, body, depth=1, gh_url=gh_img,
                       meta_desc=detail_desc, head_extra=head,
                       og_type="article", og_image=full_url,
                       og_url=f"{SITE_URL}/{it['id']}/")
@@ -371,7 +372,8 @@ def build_search_page(cfg: dict, items: list[dict]) -> str:
 <div class="spage-count" id="spage-count"></div>
 <div class="spage-list" id="spage-list" data-up="../"></div>"""
     return page_shell(cfg, "全站搜索", body, depth=1,
-                      meta_desc="搜索图库全部图片：按 id / DOI / 标签关键词检索，支持筛选与排序")
+                      meta_desc="搜索图库全部图片：按 id / DOI / 标签关键词检索，支持筛选与排序",
+                      og_url=f"{SITE_URL}/search/")
 
 
 def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: int) -> None:
