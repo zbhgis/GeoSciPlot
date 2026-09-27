@@ -520,6 +520,24 @@ def main() -> int:
         (d / "index.html").write_text(build_detail(cfg, items, i, abs_base=sources[active]["base"]), encoding="utf-8")
     build_seo_files(cfg, items, sources, active)
 
+    # 404 页：noindex + 回首页/搜索入口（nginx 需 error_page 404 /404.html 配合）
+    nl404 = chr(10)
+    body404 = nl404.join([
+        '<div class="v3-col px-6 py-24" style="text-align:center">',
+        '  <p class="kicker">404</p>',
+        '  <h1 style="font-size:clamp(36px,6vw,56px);margin:16px 0 12px">页面不存在</h1>',
+        '  <p style="color:var(--dim)">你访问的地址可能已变更或从未存在。</p>',
+        '  <p style="margin-top:24px"><a class="tbtn-inline" href="/" style="color:var(--accent)">返回图库首页</a> ｜ <a class="tbtn-inline" href="/search/" style="color:var(--accent)">全站搜索</a></p>',
+        '</div>',
+    ])
+    (SITE / "404.html").write_text(page_shell(
+        cfg,
+        "页面不存在",
+        body404,
+        meta_desc="页面不存在",
+        head_extra='<meta name="robots" content="noindex, nofollow">',
+    ), encoding="utf-8")
+
     pages = max(1, -(-len(items) // PAGE_SIZE))
     index_kb = len((SITE / "index.html").read_bytes()) / 1024
     days = len({it.get("added") for it in items})
