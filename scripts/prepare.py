@@ -34,6 +34,20 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from colors import extract_colors  # noqa: E402  主色提取（存入 refs.json 的 colors 字段）
+
+
+def safe_colors(path: Path) -> list:
+    """颜色提取失败的图（CMYK/半损坏等 Pillow 处理不了的）绝不阻塞入库，
+    colors 只是增强数据，缺了详情页不显示配色行而已。"""
+    try:
+        return extract_colors(path)
+    except Exception as e:
+        print(f"  ! 主色提取失败（跳过颜色）：{path.name} — {e}")
+        return []
+
+
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "raw"
 IMG_DIR = ROOT / "images"
@@ -240,13 +254,17 @@ def main() -> int:
             full_bytes = full_path.stat().st_size
             n_skip += 1
             flag = "跳过"
+            # 已入库的图沿用旧颜色；历史条目缺失时补算一次（下次继续跳过）
+            colors = old.get("colors") or (safe_colors(full_path) if full_path.is_file() else [])
         else:
             if args.dry_run:
                 with Image.open(src) as im:
                     w, h = im.size
                 full_bytes = src.stat().st_size
+                colors = []
             else:
                 w, h, ext, full_bytes = make_assets(src, fid, day)
+                colors = safe_colors(src)
             n_new += 1
             flag = "处理"
 
@@ -266,6 +284,8 @@ def main() -> int:
             "origName": src.name,
             "added": day,
         }
+        if colors:
+            item["colors"] = colors
         items.append(item)
 
         tsize = thumb_path.stat().st_size if thumb_path.exists() else 0

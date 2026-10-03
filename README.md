@@ -97,6 +97,8 @@ meta/titles.csv       人工编辑表
 scripts/admin.py      本地管理界面
 scripts/prepare.py    图片规范化 + 索引
 scripts/build_site.py 静态站生成
+scripts/compile_lightbox.mjs  图片灯箱 TS→JS 编译（node，零 npm 依赖）
+lib/image-lightbox.ts 图片灯箱源码（自 mystation 拷入；改后跑编译脚本再构建）
 gallery.config.json   站点配置（图片源顺序、统计接口、服务器地址）
 site/                 构建产物（已 gitignore）
 site_trash/           过期详情页的暂存区（已 gitignore，可随时手动清空）

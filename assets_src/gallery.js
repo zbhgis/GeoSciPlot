@@ -61,6 +61,24 @@
     root.setAttribute("data-theme", t);
     try { localStorage.setItem("gsp-theme", t); } catch (e) {}
   });
+
+  /* ── 字号调节：FAB 的 A 按钮在 标准/放大 两档间切换，localStorage 记忆，
+     head 内联脚本在渲染前恢复，切档无闪烁 ── */
+  var fsBtn = document.getElementById("fsBtn");
+  if (fsBtn) {
+    var fsOn = false;
+    try { fsOn = localStorage.getItem("gsp-fs") === "lg"; } catch (e) {}
+    var syncFs = function () {
+      if (fsOn) document.documentElement.setAttribute("data-fs", "lg");
+      else document.documentElement.removeAttribute("data-fs");
+      fsBtn.title = fsOn ? "字号：放大（点击还原）" : "字号：标准（点击放大）";
+      fsBtn.setAttribute("aria-label", fsBtn.title);
+      fsBtn.classList.toggle("on", fsOn);   // 放大档按钮点亮
+      try { localStorage.setItem("gsp-fs", fsOn ? "lg" : ""); } catch (e) {}
+    };
+    fsBtn.addEventListener("click", function () { fsOn = !fsOn; syncFs(); });
+    syncFs();
+  }
   var topBtn = document.getElementById("topBtn");
   if (topBtn) {
     topBtn.addEventListener("click", function () { window.scrollTo({ top: 0, behavior: "smooth" }); });
@@ -142,6 +160,18 @@
     });
   }
 
+  /* 剪贴板兜底：非安全上下文（如 http:// 局域网访问）没有 navigator.clipboard */
+  function legacyCopy(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
   var grid = document.getElementById("grid");
   if (!grid) {
     document.querySelectorAll("img[data-rel]").forEach(bind);
@@ -152,12 +182,36 @@
       var backUrl = sessionStorage.getItem("gsp-back");
       if (backLink && backUrl) backLink.setAttribute("href", backUrl);
     } catch (e) {}
+    /* 详情页「配色」色块：点击复制色号，百分比位闪一下「已复制」作反馈
+       （dd 本身就是 .swatches 容器，不能用后代选择器） */
+    var swList = document.querySelector("dl.meta dd.swatches");
+    if (swList) swList.addEventListener("click", function (e) {
+      var chip = e.target.closest ? e.target.closest(".swchip") : null;
+      if (!chip) return;
+      e.preventDefault();
+      var hx = chip.getAttribute("data-hex");
+      if (!hx) return;
+      var done = function () {
+        var pctEl = chip.querySelector("span");
+        if (!pctEl) return;
+        if (chip._t) clearTimeout(chip._t);
+        pctEl.textContent = "已复制";
+        chip.classList.add("copied");
+        chip._t = setTimeout(function () {
+          pctEl.textContent = pctEl.getAttribute("data-pct") || "";
+          chip.classList.remove("copied");
+        }, 1100);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(hx).then(done, function () { legacyCopy(hx, done); });
+      } else legacyCopy(hx, done);
+    });
     return;
   }
   grid.querySelectorAll("img[data-rel]").forEach(bind);   // 首屏静态卡片也要绑降级
 
   /* ── 分页 + 筛选 + 排序 ── */
-  var state = { q: "", tag: "*", from: "", to: "", sort: "added", page: 1, per: PAGE };
+  var state = { q: "", tag: "*", from: "", to: "", sort: "added", color: "", tol: 60, minpct: 0, page: 1, per: PAGE };
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
     if ([20, 30, 50].indexOf(savedPer) > -1) state.per = savedPer;   // 仅接受合法档位，旧值自动回默认 30
@@ -211,11 +265,49 @@
     });
   }
 
+  /* ── 颜色筛选：state.color=#RRGGBB，容差 = RGB 欧氏距离阈值。
+     colorDist = 图内主色与筛选色的最小距离（无色数据 → Infinity，必不匹配）；
+     data 由构建期写入 it.cs = [[hex无#, 占比], ...] ── */
+  function setCrgb() {
+    state._crgb = state.color
+      ? [parseInt(state.color.slice(1, 3), 16), parseInt(state.color.slice(3, 5), 16), parseInt(state.color.slice(5, 7), 16)]
+      : null;
+  }
+  function colorDist(it) {
+    var cr = state._crgb;
+    if (!state.color || !cr || !it.cs || !it.cs.length) return Infinity;
+    var best = Infinity;
+    for (var i = 0; i < it.cs.length; i++) {
+      var h = it.cs[i][0];
+      var dr = parseInt(h.slice(0, 2), 16) - cr[0];
+      var dg = parseInt(h.slice(2, 4), 16) - cr[1];
+      var db = parseInt(h.slice(4, 6), 16) - cr[2];
+      var d = dr * dr + dg * dg + db * db;
+      if (d < best) best = d;
+    }
+    return Math.sqrt(best);
+  }
+
+  function colorPass(it) {   // 是否存在「容差内 且 占比≥阈值」的主色（占比筛掉 0.x% 的噪点色）
+    var cr = state._crgb;
+    if (!cr || !it.cs || !it.cs.length) return false;
+    var t2 = state.tol * state.tol;
+    for (var i = 0; i < it.cs.length; i++) {
+      var h = it.cs[i][0];
+      var dr = parseInt(h.slice(0, 2), 16) - cr[0];
+      var dg = parseInt(h.slice(2, 4), 16) - cr[1];
+      var db = parseInt(h.slice(4, 6), 16) - cr[2];
+      if (dr * dr + dg * dg + db * db <= t2 && it.cs[i][1] >= state.minpct) return true;
+    }
+    return false;
+  }
+
   function pass(it) {
     if (state.tag !== "*" && (it.tg || []).indexOf(state.tag) === -1) return false;
     if (state.from && (it.ad || "") < state.from) return false;
     if (state.to && (it.ad || "") > state.to) return false;
     if (state.q && (it.se || "").indexOf(state.q) === -1) return false;
+    if (state.color && !colorPass(it)) return false;
     return true;
   }
   function cmp(a, b) {
@@ -223,6 +315,16 @@
       if (a._rk === undefined) a._rk = Math.random();
       if (b._rk === undefined) b._rk = Math.random();
       return a._rk - b._rk;
+    }
+    /* 相近排序：按与筛选色的最小距离升序；未选色/距离相同 → 上传日期新到旧 */
+    if (state.sort === "color") {
+      if (state.color) {
+        var da = colorDist(a), db = colorDist(b);
+        if (da !== db) return da - db;
+      }
+      var fa = (a.ad || ""), fb = (b.ad || "");
+      if (fa !== fb) return fa < fb ? 1 : -1;
+      return (a.id || "").localeCompare(b.id || "");
     }
     var dir = state.sort === "added_asc" ? 1 : -1;
     var aa = (a.ad || ""), ab = (b.ad || "");
@@ -263,6 +365,11 @@
       if (state.from) parts.push("from=" + encodeURIComponent(state.from));
       if (state.to) parts.push("to=" + encodeURIComponent(state.to));
       if (state.sort !== "added") parts.push("sort=" + encodeURIComponent(state.sort));
+      if (state.color) {
+        parts.push("color=" + encodeURIComponent(state.color.slice(1)));
+        parts.push("tol=" + state.tol);
+        parts.push("pct=" + state.minpct);
+      }
       if (state.page > 1) parts.push("page=" + state.page);
       history.replaceState(null, "", location.pathname + (parts.length ? "?" + parts.join("&") : ""));
       /* 顺带记录图库当前地址，详情页「返回全部」据此跳回 */
@@ -283,7 +390,7 @@
     if (next) next.disabled = state.page >= pages;
     paintNums(state.page, pages);
     if (count) {
-      var filtered = state.q || state.tag !== "*" || state.from || state.to;
+      var filtered = state.q || state.tag !== "*" || state.from || state.to || state.color;
       count.textContent = filtered ? "匹配 " + list.length + " / " + ITEMS.length + " 张"
                                    : "共 " + ITEMS.length + " 张";
     }
@@ -325,7 +432,7 @@
   if (qBtn) qBtn.addEventListener("click", runSearch);
   var sortseg = document.getElementById("sortseg");
   if (sortseg) {
-    if (["added", "added_asc", "random"].indexOf(state.sort) === -1) state.sort = "added";
+    if (["added", "added_asc", "color", "random"].indexOf(state.sort) === -1) state.sort = "added";
     var sortBtns = sortseg.querySelectorAll("button");
     sortBtns.forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.getAttribute("data-sort") === state.sort));
@@ -345,7 +452,8 @@
 
   var reset = document.getElementById("reset");
   if (reset) reset.addEventListener("click", function () {
-    state = { q: "", tag: "*", from: "", to: "", sort: state.sort, page: 1, per: state.per };
+    state = { q: "", tag: "*", from: "", to: "", sort: state.sort, color: "", tol: 60, minpct: 0, page: 1, per: state.per };
+    setCrgb(); syncColorUI();
     var fF = document.getElementById("f-from"), fT = document.getElementById("f-to");
     if (fF) fF.value = "";
     if (fT) fT.value = "";
@@ -369,6 +477,67 @@
     });
   }
 
+  /* ── 颜色筛选 UI：取色器 / hex 输入 / 容差滑块（函数声明提升，reset 等处可先调用） ── */
+  var fColor = document.getElementById("f-color");
+  var fColorHex = document.getElementById("f-colorhex");
+  var fColorClear = document.getElementById("f-colorclear");
+  var fTol = document.getElementById("f-tol");
+  var fTolVal = document.getElementById("f-tolval");
+  var fMinPct = document.getElementById("f-minpct");
+  var fMinPctVal = document.getElementById("f-minpctval");
+  function syncColorUI() {
+    if (!fColor) return;
+    fColor.value = state.color || "#ffffff";
+    fColorHex.value = state.color ? state.color.slice(1) : "";
+    /* 任何非「手打非法hex」路径走到这里都说明值合法，残留的标红要清掉 */
+    fColorHex.classList.remove("bad");
+    fColorClear.hidden = !state.color;
+    fTol.value = String(state.tol);
+    fTolVal.textContent = String(state.tol);
+    fMinPct.value = String(state.minpct);
+    fMinPctVal.textContent = state.minpct + "%";
+  }
+  if (fColor) {
+    fColor.addEventListener("input", function () {
+      state.color = fColor.value.toUpperCase();
+      setCrgb(); syncColorUI(); resetPage();
+    });
+    fColorHex.addEventListener("input", function () {
+      var raw = fColorHex.value.trim().replace(/^#/, "");
+      if (/^[0-9a-fA-F]{6}$/.test(raw)) {
+        fColorHex.classList.remove("bad");
+        state.color = "#" + raw.toUpperCase();
+        setCrgb(); syncColorUI(); resetPage();
+      } else if (!raw) {
+        fColorHex.classList.remove("bad");
+        state.color = ""; setCrgb(); syncColorUI(); resetPage();
+      } else {
+        fColorHex.classList.add("bad");   // 非法 hex 只标红不打断输入
+      }
+    });
+    fColorHex.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        fColorHex.value = ""; fColorHex.classList.remove("bad");
+        state.color = ""; setCrgb(); syncColorUI(); resetPage();
+      }
+    });
+    fColorClear.addEventListener("click", function () {
+      fColorHex.classList.remove("bad");
+      state.color = ""; setCrgb(); syncColorUI(); resetPage();
+    });
+    fTol.addEventListener("input", function () {
+      state.tol = parseInt(fTol.value, 10) || 0;
+      fTolVal.textContent = String(state.tol);
+      if (state.color) resetPage();   // 没选色时容差不参与筛选
+    });
+    fMinPct.addEventListener("input", function () {
+      state.minpct = parseFloat(fMinPct.value) || 0;
+      fMinPctVal.textContent = state.minpct + "%";
+      if (state.color) resetPage();
+    });
+    syncColorUI();
+  }
+
   /* ── 筛选区折叠（状态记在 localStorage） ── */
   var filterBtn = document.getElementById("filterBtn");
   var filterBox = document.getElementById("filters");
@@ -377,6 +546,8 @@
     if (state.tag !== "*") parts.push("标签 " + state.tag);
     if (state.from || state.to) parts.push("上传 " + (state.from || "…") + " ~ " + (state.to || "…"));
     if (state.q) parts.push("搜索 " + state.q);
+    if (state.color) parts.push("颜色 " + state.color + " ±" + state.tol
+      + (state.minpct > 0 ? " · 占比≥" + state.minpct + "%" : ""));
     return parts;
   }
   function syncFilterBtn() {
@@ -402,11 +573,11 @@
   }
 
   /* 支持带参数的链接（标签跳转 / 分享筛选结果 / 返回恢复）：
-     /?tag=海冰&q=xxx&from=…&to=…&sort=added_asc&page=3 */
+     /?tag=海冰&q=xxx&from=…&to=…&sort=added_asc&color=1F4E79&tol=60&page=3 */
   var applied = false;
   try {
     var params = new URLSearchParams(location.search);
-    ["q", "tag", "from", "to", "sort", "page"].forEach(function (k) {
+    ["q", "tag", "from", "to", "sort", "color", "tol", "pct", "page"].forEach(function (k) {
       var v = params.get(k);
       if (!v) return;
       if (k === "page") {
@@ -415,12 +586,27 @@
         return;
       }
       if (k === "sort") {
-        if (["added", "added_asc", "random"].indexOf(v) === -1) return;
+        if (["added", "added_asc", "color", "random"].indexOf(v) === -1) return;
         state.sort = v;
         applied = true;
         if (sortseg) sortseg.querySelectorAll("button").forEach(function (x) {
           x.setAttribute("aria-pressed", String(x.getAttribute("data-sort") === v));
         });
+        return;
+      }
+      if (k === "color") {
+        var hc = String(v).replace(/^#/, "");
+        if (/^[0-9a-fA-F]{6}$/.test(hc)) { state.color = "#" + hc.toUpperCase(); setCrgb(); applied = true; }
+        return;
+      }
+      if (k === "tol") {
+        var tv = parseInt(v, 10);
+        if (tv >= 0 && tv <= 150) { state.tol = tv; if (state.color) applied = true; }
+        return;
+      }
+      if (k === "pct") {
+        var pv = parseFloat(v);
+        if (pv >= 0 && pv <= 100) { state.minpct = pv; if (state.color) applied = true; }
         return;
       }
       applied = true;
@@ -441,6 +627,7 @@
       }
     });
   } catch (e) {}
+  syncColorUI();   // URL 带 color/tol 进来时，把取色器/hex 输入/滑块回填成实际状态
 
   /* 首屏卡片是构建时静态输出的（对爬虫友好）。只有当"每页数量/排序"被用户改过、
      或链接带了筛选参数时，才用 JS 重新渲染，保证 DOM 与状态一致。
