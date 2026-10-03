@@ -132,10 +132,12 @@ def nav_html(cfg: dict, up: str = "") -> str:
     ico_globe = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
                  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/>'
                  '<path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>')
-    ico_img = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
-               'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-               '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/>'
-               '<path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>')
+    # MacroBiodiv 的图标与链接同主站 zbhgis.com「更多」下拉（lucide globe + 子域名直达）
+    ico_mb = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+              'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+              '<circle cx="12" cy="12" r="10"/>'
+              '<path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>'
+              '<path d="M2 12h20"/></svg>')
     ico_menu = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
                 'stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>')
     brand = esc(cfg.get("title") or "GeoSciPlot")
@@ -148,8 +150,8 @@ def nav_html(cfg: dict, up: str = "") -> str:
 <li><a class="mnav-link" href="#" title="建设中（预留）">{ico_stat}全站统计</a></li>
 <li class="mnav-more"><button type="button" class="mnav-link mnav-more-trigger" aria-haspopup="true" title="更多站点">更多{ico_caret}</button>
 <ul class="mnav-dd">
-<li><a href="#">{ico_globe}zbhgis</a></li>
-<li><a href="#">{ico_img}GeoSciPlot</a></li>
+<li><a href="https://www.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_globe}zbhgis</a></li>
+<li><a href="https://macrobiodiv.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_mb}MacroBiodiv</a></li>
 </ul></li>
 </ul>
 <details class="mnav-m">
@@ -158,8 +160,8 @@ def nav_html(cfg: dict, up: str = "") -> str:
 <li><a href="{up}color-lab/">{ICO_PALETTE}色彩实验</a></li>
 <li><a href="#" title="建设中（预留）">{ico_stat}全站统计</a></li>
 <li class="mnav-dd-sep"></li>
-<li><a href="#">{ico_globe}zbhgis</a></li>
-<li><a href="#">{ico_img}GeoSciPlot</a></li>
+<li><a href="https://www.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_globe}zbhgis</a></li>
+<li><a href="https://macrobiodiv.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_mb}MacroBiodiv</a></li>
 </ul>
 </details>
 </nav>
