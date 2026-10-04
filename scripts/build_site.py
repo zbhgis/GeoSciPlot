@@ -610,6 +610,12 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
               "- 图片本体由 jsDelivr / GitHub raw 分发，各详情页附原始论文 DOI 与上传日期",
               "- 图片元数据的机器可读版见 sitemap.xml"]
     (SITE / "llms.txt").write_text(nl.join(lines) + nl, encoding="utf-8")
+    # IndexNow key 文件：与主站 zbhgis.com 共用同一把 key（IndexNow 允许同一
+    # 所有者在多个站点托管同一 key 文件）。ping-search.sh 推送前探测本地址可达。
+    key_file = ROOT / "deploy" / "indexnow.key"
+    if key_file.exists():
+        key = key_file.read_text(encoding="utf-8").strip()
+        (SITE / (key + ".txt")).write_text(key, encoding="utf-8")
     print("· SEO/GEO 三件套已生成：robots.txt / sitemap.xml / llms.txt（" + str(len(items)) + " 张图）")
 
 
