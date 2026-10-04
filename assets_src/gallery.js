@@ -211,7 +211,9 @@
   grid.querySelectorAll("img[data-rel]").forEach(bind);   // 首屏静态卡片也要绑降级
 
   /* ── 分页 + 筛选 + 排序 ── */
-  var state = { q: "", tag: "*", from: "", to: "", sort: "added", color: "", tol: 60, minpct: 0, page: 1, per: PAGE };
+  var state = { q: "", tags: null, from: "", to: "", sort: "added", color: "", tol: 60, minpct: 0, page: 1, per: PAGE };
+  /* tags=null = 标签全选（不筛选）；数组 = 仅这些标签（OR 命中）。
+     DOM（chips 的 aria-pressed）是唯一真源，state.tags 由它派生。 */
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
     if ([20, 30, 50].indexOf(savedPer) > -1) state.per = savedPer;   // 仅接受合法档位，旧值自动回默认 30
@@ -303,7 +305,11 @@
   }
 
   function pass(it) {
-    if (state.tag !== "*" && (it.tg || []).indexOf(state.tag) === -1) return false;
+    if (state.tags) {
+      var tg = it.tg || [], hit = false;
+      for (var ti = 0; ti < tg.length; ti++) if (state.tags.indexOf(tg[ti]) > -1) { hit = true; break; }
+      if (!hit) return false;   // OR 语义：至少命中一个选中标签；无标签的图在筛选时隐藏
+    }
     if (state.from && (it.ad || "") < state.from) return false;
     if (state.to && (it.ad || "") > state.to) return false;
     if (state.q && (it.se || "").indexOf(state.q) === -1) return false;
@@ -361,7 +367,7 @@
       var parts = [];
       var qv = ((q && q.value) ? q.value : state.q).trim();
       if (qv) parts.push("q=" + encodeURIComponent(qv));
-      if (state.tag !== "*") parts.push("tag=" + encodeURIComponent(state.tag));
+      if (state.tags) parts.push("tag=" + encodeURIComponent(state.tags.join("|")));
       if (state.from) parts.push("from=" + encodeURIComponent(state.from));
       if (state.to) parts.push("to=" + encodeURIComponent(state.to));
       if (state.sort !== "added") parts.push("sort=" + encodeURIComponent(state.sort));
@@ -400,20 +406,33 @@
   }
   function resetPage() { state.page = 1; render(); }
 
-  function bindChips(sel) {
-    var box = document.querySelector(sel);
-    if (!box) return;
-    box.querySelectorAll("button").forEach(function (b) {
-      b.addEventListener("click", function () {
-        state[box.getAttribute("data-key")] = b.getAttribute("data-v");
-        box.querySelectorAll("button").forEach(function (x) {
-          x.setAttribute("aria-pressed", String(x === b));
-        });
-        resetPage();
-      });
+  /* ── 标签多选：chips 的 aria-pressed 是真源。默认全选（构建期即 pressed=true），
+     点击剔除、全选/反选；全选态下 URL 不带 tag 参数 ── */
+  var tagBox = document.querySelector('.chips[data-key="tag"]');
+  function tagChips() { return tagBox ? tagBox.querySelectorAll("button.chip[data-v]") : []; }
+  function readTags() {
+    if (!tagBox) return;
+    var sel = [], c = tagChips();
+    c.forEach(function (b) { if (b.getAttribute("aria-pressed") === "true") sel.push(b.getAttribute("data-v")); });
+    state.tags = sel.length === c.length ? null : sel;
+  }
+  function writeTags() {
+    tagChips().forEach(function (b) {
+      b.setAttribute("aria-pressed", String(!state.tags || state.tags.indexOf(b.getAttribute("data-v")) > -1));
     });
   }
-  ["[data-key=tag]"].forEach(bindChips);
+  if (tagBox) tagBox.addEventListener("click", function (e) {
+    var act = e.target.closest ? e.target.closest(".chip-act") : null;
+    if (act) {
+      var all = act.getAttribute("data-act") === "all";
+      tagChips().forEach(function (b) { b.setAttribute("aria-pressed", String(all ? true : b.getAttribute("aria-pressed") !== "true")); });
+    } else {
+      var chip = e.target.closest ? e.target.closest("button.chip[data-v]") : null;
+      if (!chip) return;
+      chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true"));
+    }
+    readTags(); resetPage();
+  });
 
   if (q) {
     q.addEventListener("input", function () { state.q = q.value.trim().toLowerCase(); resetPage(); });
@@ -452,17 +471,12 @@
 
   var reset = document.getElementById("reset");
   if (reset) reset.addEventListener("click", function () {
-    state = { q: "", tag: "*", from: "", to: "", sort: state.sort, color: "", tol: 60, minpct: 0, page: 1, per: state.per };
-    setCrgb(); syncColorUI();
+    state = { q: "", tags: null, from: "", to: "", sort: state.sort, color: "", tol: 60, minpct: 0, page: 1, per: state.per };
+    setCrgb(); syncColorUI(); writeTags();
     var fF = document.getElementById("f-from"), fT = document.getElementById("f-to");
     if (fF) fF.value = "";
     if (fT) fT.value = "";
     if (q) q.value = "";
-    document.querySelectorAll(".chips").forEach(function (box) {
-      box.querySelectorAll("button").forEach(function (x, i) {
-        x.setAttribute("aria-pressed", String(i === 0));
-      });
-    });
     render();
   });
 
@@ -543,7 +557,12 @@
   var filterBox = document.getElementById("filters");
   function activeFilters() {
     var parts = [];
-    if (state.tag !== "*") parts.push("标签 " + state.tag);
+    if (state.tags) {
+      var allT = [], ex = [];
+      tagChips().forEach(function (b) { allT.push(b.getAttribute("data-v")); });
+      allT.forEach(function (t) { if (state.tags.indexOf(t) < 0) ex.push(t); });
+      parts.push("标签 " + (ex.length > 0 && ex.length <= 3 ? "排除 " + ex.join("、") : "仅 " + state.tags.join("、")));
+    }
     if (state.from || state.to) parts.push("上传 " + (state.from || "…") + " ~ " + (state.to || "…"));
     if (state.q) parts.push("搜索 " + state.q);
     if (state.color) parts.push("颜色 " + state.color + " ±" + state.tol
@@ -607,6 +626,17 @@
       if (k === "pct") {
         var pv = parseFloat(v);
         if (pv >= 0 && pv <= 100) { state.minpct = pv; if (state.color) applied = true; }
+        return;
+      }
+      if (k === "tag") {   // 多选：tag=A|B|C（兼容旧的单值链接）
+        var names = String(v).split("|"), selT = [], c0 = tagChips();
+        c0.forEach(function (b) {
+          var on = names.indexOf(b.getAttribute("data-v")) > -1;
+          b.setAttribute("aria-pressed", String(on));
+          if (on) selT.push(b.getAttribute("data-v"));
+        });
+        state.tags = selT.length === c0.length ? null : selT;
+        if (state.tags) applied = true;
         return;
       }
       applied = true;

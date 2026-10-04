@@ -229,10 +229,13 @@ def flat(values, default: str = "—") -> Counter:
     return Counter([str(v) if v else default for v in values])
 
 
-def chips(values: Counter, key: str, all_label: str) -> str:
-    items = [f'<button data-v="*" aria-pressed="true">{esc(all_label)}</button>']
+def chips(values: Counter, key: str) -> str:
+    """多选标签 chips：默认全选（aria-pressed=true），点击剔除，行尾提供 全选/反选。"""
+    items = []
     for name, n in sorted(values.items(), key=lambda kv: (-kv[1], str(kv[0]))):
-        items.append(f'<button data-v="{esc(name)}" aria-pressed="false">{esc(name)} <span style="opacity:.55">{n}</span></button>')
+        items.append(f'<button type="button" class="chip" data-v="{esc(name)}" aria-pressed="true">{esc(name)}<i class="n">{n}</i></button>')
+    items.append('<button type="button" class="chip chip-act" data-act="all">全选</button>')
+    items.append('<button type="button" class="chip chip-act" data-act="invert">反选</button>')
     return f'<div class="chips" data-key="{key}">\n  ' + "\n  ".join(items) + "\n</div>"
 
 
@@ -243,8 +246,10 @@ def filter_row(label: str, inner: str) -> str:
 def card_html(item: dict) -> str:
     tags = item.get("tags") or []
     cap = " · ".join(tags) if tags else "—"
+    # alt 用语义标签（图片搜索/读屏的主入口），哈希 id 只做无标签时的兜底
+    alt = " · ".join(str(t) for t in tags) if tags else f"图 {item['id']}"
     return f"""  <a class="card" href="{esc(item['id'])}/" data-id="{esc(item['id'])}" title="{esc(' · '.join(tags))}">
-    <img data-rel="{esc(item.get('thumb'))}" alt="图 {esc(item['id'])}" loading="lazy">
+    <img data-rel="{esc(item.get('thumb'))}" alt="{esc(alt)}" loading="lazy">
     <span class="cap"><span class="tags">{esc(cap)}</span></span>
   </a>"""
 
@@ -298,7 +303,7 @@ def build_index(cfg: dict, items: list[dict]) -> str:
   + ' <span class="flabel" style="min-width:auto">占比≥</span>'
   + '<input type="range" id="f-minpct" class="tolrange" min="0" max="100" value="0" aria-label="命中主色的最小占比">'
   + '<span id="f-minpctval">0%</span>')}
-{filter_row("标签", chips(tag_counter, "tag", "全部"))}
+{filter_row("标签", chips(tag_counter, "tag"))}
 {filter_row("上传", '<input type="date" id="f-from" class="dateinp">\n'
   + ' <span class="flabel" style="min-width:auto">至</span>\n'
   + '<input type="date" id="f-to" class="dateinp">\n'
@@ -409,10 +414,14 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     back_ico = ('<svg class="ico ico-l" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
                 'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
                 '<path d="M10 3 5 8l5 5"/></svg>')
+    # 语义串：title/alt/ImageObject name 共用。哈希 id 对搜索引擎和 AI 无语义，
+    # 标签（主题 · 图表类型）才是图片搜索与语义检索的入口；无标签时退回 id。
+    sem = " · ".join(str(t) for t in tags)
+    main_alt = sem if sem else f"图 {it['id']}"
     body = f"""<a class="back" id="backLink" href="../">{back_ico}返回全部</a>
 <h2 class="id-title">图 {esc(it['id'])}</h2>
 <figure class="shot">
-  <img data-rel="{esc(it.get('full'))}" alt="图 {esc(it['id'])}" width="{w}" height="{h}">
+  <img data-rel="{esc(it.get('full'))}" alt="{esc(main_alt)}" width="{w}" height="{h}">
 </figure>
 <p class="cl-go-row"><a class="cl-go" href="../color-lab/?id={esc(it['id'])}">{ICO_PALETTE}转到色彩实验 · 取色 / 调色</a></p>
 <dl class="meta">
@@ -434,7 +443,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     image_ld = json.dumps({
         "@context": "https://schema.org",
         "@type": "ImageObject",
-        "name": f"图 {it['id']}" + (f"（{tags[0]}）" if tags else ""),
+        "name": (f"{sem}（图 {it['id']}）" if sem else f"图 {it['id']}"),
         "description": detail_desc,
         "contentUrl": full_url,
         "thumbnailUrl": thumb_url,
@@ -448,7 +457,10 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
                f'<meta property="og:image:width" content="{it.get("width", 0)}">'
                f'<meta property="og:image:height" content="{it.get("height", 0)}">')
     head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>')
-    title_text = f"图 {it['id']}" + (f"（{tags[0]}）" if tags else "")
+    # 详情页 title 语义优先：标签（主题 · 类型）打头，哈希 id 只在无标签时兜底——
+    # "图 c29fd21ed1（北极）" 对图片/语义搜索毫无信息量
+    title_text = (f"{sem} · 地学科研绘图参考" if sem
+                  else f"图 {it['id']} · 地学科研绘图参考")
     return page_shell(cfg, title_text, body, depth=1, gh_url=gh_img,
                       meta_desc=detail_desc, head_extra=head,
                       og_type="article", og_image=full_url,
