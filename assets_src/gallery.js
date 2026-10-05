@@ -16,7 +16,10 @@
         var ph = document.createElement("div");
         ph.className = "ph";
         ph.textContent = "图片加载失败（图片托管于 GitHub，需具备 GitHub 访问能力）";
-        img.parentNode.replaceChild(ph, img);
+        /* 连 c-covbox 一起换掉：占位块就位的同时把「加载中」层撤掉 */
+        var box = img.closest ? img.closest(".c-covbox") : null;
+        if (box) box.parentNode.replaceChild(ph, box);
+        else img.parentNode.replaceChild(ph, img);
       }
     });
     img.src = CFG.sources[i] + "/" + rel;
@@ -53,14 +56,24 @@
   }
 
   var themeBtn = document.getElementById("themeBtn");
-  if (themeBtn) themeBtn.addEventListener("click", function () {
-    var root = document.documentElement;
-    // 默认暗色（不跟随系统偏好）；仅当访客手动切过才用其选择
-    var light = root.getAttribute("data-theme") === "light";
-    var t = light ? "dark" : "light";
-    root.setAttribute("data-theme", t);
-    try { localStorage.setItem("gsp-theme", t); } catch (e) {}
-  });
+  if (themeBtn) {
+    // 按钮文案同主站：指向点击后将切换到的主题（默认暗色 → 切换为浅色模式）
+    var syncTheme = function () {
+      var dark = document.documentElement.getAttribute("data-theme") !== "light";
+      themeBtn.title = dark ? "切换为浅色模式" : "切换为深色模式";
+      themeBtn.setAttribute("aria-label", themeBtn.title);
+    };
+    syncTheme();
+    themeBtn.addEventListener("click", function () {
+      var root = document.documentElement;
+      // 默认暗色（不跟随系统偏好）；仅当访客手动切过才用其选择
+      var light = root.getAttribute("data-theme") === "light";
+      var t = light ? "dark" : "light";
+      root.setAttribute("data-theme", t);
+      try { localStorage.setItem("gsp-theme", t); } catch (e) {}
+      syncTheme();
+    });
+  }
 
   /* ── 字号调节：FAB 的 A 按钮在 标准/放大 两档间切换，localStorage 记忆，
      head 内联脚本在渲染前恢复，切档无闪烁 ── */
@@ -343,11 +356,16 @@
     a.className = "card";
     a.href = it.id + "/";
     a.setAttribute("data-id", it.id);
+    /* c-covbox 垫「加载中」占位层；w/h 预留同比例空间防抖动（与静态首屏一致） */
+    var box = document.createElement("span");
+    box.className = "c-covbox";
     var img = document.createElement("img");
     img.setAttribute("data-rel", it.rel);
+    if (it.w && it.h) { img.width = it.w; img.height = it.h; }
     img.alt = "图 " + it.id;
     img.loading = "lazy";
-    a.appendChild(img);
+    box.appendChild(img);
+    a.appendChild(box);
     var cap = document.createElement("span");
     cap.className = "cap";
     var tagsEl = document.createElement("span");

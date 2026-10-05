@@ -81,9 +81,11 @@ header.site{padding:72px 0 0}
   .tbtn svg{width:15px;height:15px}
   body{padding-bottom:calc(14px + 36px + 16px + env(safe-area-inset-bottom))}
 }
+/* 主题按钮图标同主站：显示「点击后切换到的目标主题」——
+   暗色（含未手动切换过的默认态）显太阳，浅色显月亮 */
 .tbtn .ic-sun{display:inline}.tbtn .ic-moon{display:none}
-:root[data-theme=light] .tbtn .ic-sun{display:inline}:root[data-theme=light] .tbtn .ic-moon{display:none}
-:root[data-theme=dark] .tbtn .ic-sun{display:none}:root[data-theme=dark] .tbtn .ic-moon{display:inline}
+:root[data-theme=dark] .tbtn .ic-sun{display:inline}:root[data-theme=dark] .tbtn .ic-moon{display:none}
+:root[data-theme=light] .tbtn .ic-sun{display:none}:root[data-theme=light] .tbtn .ic-moon{display:inline}
 /* 字号按钮：文字 A；非标准档点亮提示当前处于放大状态 */
 .tbtn-fs{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:16px;font-weight:600;letter-spacing:0}
 .tbtn-fs.on{color:var(--accent);border-color:var(--accent)}
@@ -145,6 +147,14 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .card{break-inside:avoid;display:block;margin:0 0 18px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--card);transition:border-color .16s}
 .card:hover{border-color:var(--accent)}
 .card img{display:block;width:100%;height:auto;background:var(--line)}
+/* 封面加载占位：img 的 width/height 属性预留同比例空间（零抖动），::before 垫
+   「加载中」层，图片画出后自然盖住（z-index 1）；加载失败由 bind() 连盒子一起
+   换成 .ph 占位。详情页 figure.shot / 搜索行 .sres-media 同语言 */
+.c-covbox{display:block;position:relative;min-height:96px;background:var(--line)}
+.c-covbox img{position:relative;z-index:1}
+.c-covbox::before{content:"加载中";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);letter-spacing:.14em;color:var(--faint);animation:covpulse 1.2s ease-in-out infinite alternate}
+@keyframes covpulse{to{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.c-covbox::before{animation:none}}
 .card .cap{display:block;padding:7px 9px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);line-height:1.5;color:var(--faint)}
 .card .cap .tags{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph{display:flex;align-items:center;justify-content:center;min-height:120px;padding:18px;font-family:ui-monospace,monospace;font-size:var(--fs-xs);color:var(--faint);text-align:center}
@@ -166,8 +176,9 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .pgbar .info{margin-left:8px;padding-left:14px;border-left:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--faint);white-space:nowrap}
 .empty{padding:52px 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--faint);display:none;text-align:center}
 footer.site{margin-top:56px;padding:24px 0 64px;border-top:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint);display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between}
-figure.shot{margin:0;display:flex;justify-content:center;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
-figure.shot img{max-width:100%;max-height:86vh;object-fit:contain;background:var(--line)}
+figure.shot{margin:0;display:flex;justify-content:center;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;position:relative;min-height:220px}
+figure.shot::before{content:"加载中";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);letter-spacing:.14em;color:var(--faint);animation:covpulse 1.2s ease-in-out infinite alternate}
+figure.shot img{position:relative;z-index:1;max-width:100%;max-height:86vh;object-fit:contain;background:var(--line)}
 dl.meta{display:grid;grid-template-columns:104px 1fr;gap:11px 18px;margin:36px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-md);line-height:1.7}
 dl.meta dt{font-size:var(--fs-sm);color:var(--faint);padding-top:4px;letter-spacing:.06em}
 dl.meta dd{margin:0;color:var(--text);word-break:break-all}
@@ -223,8 +234,9 @@ h2.id-title{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fon
 .spage-list{margin-top:6px}
 .sres{display:flex;align-items:center;gap:14px;padding:11px 6px;border-top:1px solid var(--line)}
 .sres:hover{background:var(--card)}
-.sres-media{flex:none;width:96px;height:68px;border:1px solid var(--line2);border-radius:6px;overflow:hidden;background:var(--line)}
-.sres-media img{display:block;width:100%;height:100%;object-fit:cover}
+.sres-media{flex:none;position:relative;width:96px;height:68px;border:1px solid var(--line2);border-radius:6px;overflow:hidden;background:var(--line)}
+.sres-media::before{content:"加载中";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:.1em;color:var(--faint)}
+.sres-media img{display:block;position:relative;z-index:1;width:100%;height:100%;object-fit:cover}
 .sres-noimg{display:flex;align-items:center;justify-content:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint);border-style:dashed}
 .sres-body{min-width:0;flex:1}
 .sres-id{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-md);color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
