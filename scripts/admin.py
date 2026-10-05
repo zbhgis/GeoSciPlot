@@ -533,6 +533,10 @@ def do_sync_server() -> dict:
     srv = cfg.get("server") or {}
     host = srv.get("host")
     webroot = srv.get("webroot", "/var/www/geosciplot")
+    # IndexNow 推送的目标站点 URL：配置优先，缺省用正式域名；
+    # 此前引用了从未赋值的 SITE_URL 全局名，同步最后一步必 NameError（站点本体
+    # 已换台成功、任务却被标失败）—— 这里就地解析并容错跳过
+    site_url = (cfg.get("site_url") or "").rstrip("/") or "https://geosciplot.zbhgis.com"
     if not host:
         return {"ok": False,
                 "log": [{"step": "同步服务器", "ok": False,
@@ -562,7 +566,7 @@ def do_sync_server() -> dict:
         return {"ok": False, "log": [{"step": "同步服务器", "ok": False, "out": "切换 staging 失败\n" + out}]}
     # 部署后搜索引擎推送：服务器端 ping-search.sh 按 sitemap 增量对比推 IndexNow
     # （脚本与主站共用同一份，按传入 URL 分账状态；失败只记日志不影响发布）
-    ping, ping_out = run(ssh_base + [f"bash /opt/mystation/deploy/ping-search.sh {SITE_URL}"], timeout=120)
+    ping, ping_out = run(ssh_base + [f"bash /opt/mystation/deploy/ping-search.sh {site_url}"], timeout=120)
     ping_log = {"step": "搜索引擎推送（IndexNow）", "ok": ping == 0, "out": ping_out.strip() or "完成"}
     return {"ok": True, "log": [{"step": "同步服务器", "ok": True, "out": f"site/ → {host}:{webroot}"},
                                 ping_log]}
