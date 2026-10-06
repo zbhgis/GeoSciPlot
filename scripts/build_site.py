@@ -122,9 +122,10 @@ ICO_PALETTE = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="cu
                '<circle cx="6.5" cy="12.5" r=".5" fill="currentColor" stroke="none"/></svg>')
 
 
-def nav_html(cfg: dict, up: str = "") -> str:
+def nav_html(cfg: dict, up: str = "", active: str = "") -> str:
     """顶部菜单栏：整体移植自 MacroBiodiv 站点的 .mnav（样式同源）。
-    「色彩实验」已实装（/color-lab/）；其余按钮的跳转链接暂未实现，一律以 # 占位。"""
+    「色彩实验」（/color-lab/）与「全站统计」（/statistics/）已实装；
+    active 传页面对应的菜单键（如 "stats"）时该项 accent 常亮并带 aria-current。"""
     ico_stat = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
                 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 20V10M12 20V4M6 20v-4"/></svg>')
     ico_caret = ('<svg class="mnav-more-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
@@ -142,12 +143,15 @@ def nav_html(cfg: dict, up: str = "") -> str:
                 'stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>')
     brand = esc(cfg.get("title") or "GeoSciPlot")
     brand_href = up if up else "./"   # 首页 = 当前页（./），子页 = 上一级（../），都回到图库首页
+    # 当前页菜单项：accent 常亮 + aria-current（对齐 MacroBiodiv /statistics/ 的做法）
+    st_attr = ('data-active="true" aria-current="page"' if active == "stats"
+               else 'data-active="false"')
     return f"""<header class="mnav">
 <nav class="mnav-in">
 <a class="mnav-brand" href="{brand_href}" title="返回图库首页" aria-label="返回图库首页"><img src="{up}assets/favicon.png?v={BUILD_VER}" alt="" width="26" height="26">{brand}</a>
 <ul class="mnav-links">
 <li><a class="mnav-link" data-active="false" href="{up}color-lab/">{ICO_PALETTE}色彩实验</a></li>
-<li><a class="mnav-link" href="#" title="建设中（预留）">{ico_stat}全站统计</a></li>
+<li><a class="mnav-link" {st_attr} href="{up}statistics/">{ico_stat}全站统计</a></li>
 <li class="mnav-more"><button type="button" class="mnav-link mnav-more-trigger" aria-haspopup="true" title="更多站点">更多{ico_caret}</button>
 <ul class="mnav-dd">
 <li><a href="https://www.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_globe}zbhgis</a></li>
@@ -158,7 +162,7 @@ def nav_html(cfg: dict, up: str = "") -> str:
 <summary class="mnav-icon" title="菜单" aria-label="打开菜单">{ico_menu}</summary>
 <ul class="mnav-dd">
 <li><a href="{up}color-lab/">{ICO_PALETTE}色彩实验</a></li>
-<li><a href="#" title="建设中（预留）">{ico_stat}全站统计</a></li>
+<li><a href="{up}statistics/">{ico_stat}全站统计</a></li>
 <li class="mnav-dd-sep"></li>
 <li><a href="https://www.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_globe}zbhgis</a></li>
 <li><a href="https://macrobiodiv.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_mb}MacroBiodiv</a></li>
@@ -179,6 +183,8 @@ def page_shell(
     og_type: str = "website",
     og_image: str = "",
     og_url: str = "",
+    extra_assets: list[str] | None = None,
+    active_nav: str = "",
 ) -> str:
     up = "../" if depth else ""
     gh = gh_url or "https://github.com/{}/{}".format(
@@ -204,7 +210,7 @@ def page_shell(
 <script>try{{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t);var f=localStorage.getItem("gsp-fs");if(f)document.documentElement.setAttribute("data-fs",f)}}catch(e){{}}</script>
 </head>
 <body>
-{nav_html(cfg, up)}
+{nav_html(cfg, up, active_nav)}
 <div class="wrap">
 <div class="fab"><a class="tbtn" href="{up}search/" title="全站搜索" aria-label="全站搜索"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14"/></svg></a><a class="tbtn" href="/" title="返回 Home（图库首页）" aria-label="返回 Home"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8 8 3l5.5 5M4 7v6h8V7"/></svg></a><a class="tbtn" href="{gh}" rel="noopener" target="_blank" title="在 GitHub 查看（详情页直达当前图片）"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a><button type="button" class="tbtn tbtn-fs" id="fsBtn" title="字号：标准" aria-label="字号：标准">A</button><button type="button" class="tbtn" id="themeBtn" title="切换为浅色模式" aria-label="切换为浅色模式"><svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="3.6"/><path stroke-linecap="round" d="M12 2.8v2.2m0 14v2.2M21.2 12H19M5 12H2.8m14.5 6.2-1.6-1.6M8.3 8.3 6.7 6.7m10.8 0-1.6 1.6M8.3 15.7l-1.6 1.6"/></svg><svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg></button><button type="button" class="tbtn" id="topBtn" title="回到顶部" aria-label="回到顶部"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-9M4.5 8 8 4.5 11.5 8"/></svg></button></div>
 {body}
@@ -216,7 +222,7 @@ def page_shell(
 <!-- 图片灯箱（编译自 lib/image-lightbox.ts）：挂到 body 统一接管，
      链接内的图（首页卡片/搜索行/菜单品牌）默认不劫持、维持跳转，
      只有详情页 .shot 大图等无链接图片参与；h1 的 logo 装饰图排除 -->
-<script src="{up}assets/image-lightbox.js?v={BUILD_VER}"></script>
+{"".join(f'<script src="{up}assets/{a}?v={BUILD_VER}"></script>' for a in (extra_assets or []))}<script src="{up}assets/image-lightbox.js?v={BUILD_VER}"></script>
 <script src="{up}assets/gallery-data.js?v={BUILD_VER}"></script>
 <script src="{up}assets/gallery.js?v={BUILD_VER}"></script>
 <script>try{{if(window.ImageLightbox)window.ImageLightbox.attachImageLightbox(document.body,{{exclude:".logo"}})}}catch(e){{}}</script>
@@ -571,6 +577,110 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
                       head_extra=head)
 
 
+def build_stats_data(cfg: dict, items: list[dict]) -> None:
+    """全站统计数据 → site/assets/stats-data.js（仅 /stats/ 页注入）。
+    只带统计所需的最小字段：id / 标签 / 上传日期 / 画幅 / 主色表；画幅分类在
+    构建期按原图宽高算好（横图/竖图/方图），省去 JS 重复判断也保证口径唯一。
+    另带 GSP_STATS_API（统计服务地址）：空串 = 同源反代，stats.js 不得当「未配置」。"""
+    def ar(it: dict) -> str:
+        w, h = it.get("width") or 0, it.get("height") or 0
+        if not w or not h:
+            return "未知"
+        if w > h * 1.05:
+            return "横图"
+        if h > w * 1.05:
+            return "竖图"
+        return "方图"
+
+    data = [{
+        "id": it["id"],
+        "tg": [str(t) for t in (it.get("tags") or [])],
+        "ad": str(it.get("added") or ""),
+        "ar": ar(it),
+        # cs = 各图前 20 主色的 hex 列表（无 #，按占比降序）：主色构成卡取第一
+        # 未屏蔽主色归族，高频颜色卡按「前 20 中出现该族即计一张」统计；
+        # 校验同 gallery-data 的 cs —— 脏 hex 进 JS 会让 parseInt 产出 NaN（静默失效）
+        "cs": [h for c in (it.get("colors") or [])
+               for h in [str(c.get("hex", "")).lstrip("#")]
+               if re.match(r"^[0-9A-Fa-f]{6}$", h)],
+    } for it in items]
+    # "<" 转义防标签文本里出现 </script> 提前截断内嵌 script
+    (SITE / "assets" / "stats-data.js").write_text(
+        "window.GSP_STATS_API = " + json.dumps(cfg.get("api", ""), ensure_ascii=False) + ";\n"
+        + "window.GSP_STATS = "
+        + json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+        + ";\n", encoding="utf-8")
+
+
+def build_stats_page(cfg: dict, items: list[dict]) -> str:
+    """全站统计页（访客向数据面板）：hero 总览 + 热看图片 + 筛选（标签/画幅/
+    上传日期区间）联动重算 —— 上传动态面积图 · 画幅构成环形图 · 上传节奏条形图 ·
+    标签词云。数据来自 stats-data.js（仅本页注入）；
+    热看榜与 hero 浏览数来自统计服务，为全量口径不随筛选重算。"""
+    body = f"""<header class="site">
+  <p class="kicker">GEOSCIPILOT · STATS</p>
+  <h1 class="spage-title">全站统计</h1>
+  <p class="lede">这座图库的一瞥——收录了多少图、画幅与标签怎么分布、上传节奏如何、大家都在看哪些图。
+  热看榜按访客浏览量实时计入。</p>
+</header>
+
+<section class="st-hero" aria-label="收录总览">
+  <div class="st-tile st-tc1"><b id="stv-items">0</b><span>收录图片 · 张</span></div>
+  <div class="st-tile st-tc2"><b id="stv-tags">0</b><span>标签 · 个</span></div>
+  <div class="st-tile st-tc3"><b id="stv-months">0</b><span>收录月份 · 个</span></div>
+  <div class="st-tile st-tc4"><b id="stv-views">…</b><span>图片被浏览 · 次</span></div>
+</section>
+
+<section class="st-card st-hot"><h3>热看图片<em>Top 5 · 按访客浏览量 · 全量口径</em></h3>
+<div class="st-ranks" id="st-rank"><p class="st-none">加载中…</p></div></section>
+
+<div class="st-filter">
+  <span class="st-fgroup"><span class="flabel">标签</span>
+    <select id="st-tag" aria-label="按标签筛选"><option value="*">全部</option></select></span>
+  <span class="st-fgroup"><span class="flabel">画幅</span>
+    <select id="st-ar" aria-label="按画幅筛选"><option value="*">全部</option></select></span>
+  <span class="st-fgroup"><span class="flabel">上传</span>
+    <input type="date" id="st-from" class="dateinp" aria-label="上传日期 起"
+           title="按上传日期筛选（仅精确到月的日期按整月重叠匹配）">
+    <span class="st-dash" aria-hidden="true">–</span>
+    <input type="date" id="st-to" class="dateinp" aria-label="上传日期 止"></span>
+  <button id="st-reset" class="reset" type="button">重置</button>
+  <span class="st-count" id="st-count"></span>
+</div>
+<p class="st-empty" id="st-empty" hidden>当前筛选条件下没有图片</p>
+<div class="st-grid" id="st-grid">
+  <section class="st-card st-wide"><h3>上传动态<em>按上传日期 · 累计</em></h3>
+    <div class="st-growth" id="st-growth"></div></section>
+  <section class="st-card"><h3>主色构成<em>每图取第一未屏蔽主色 · 按色族归类</em></h3>
+    <div class="st-bl">
+      <span class="st-bl-label">屏蔽色</span>
+      <button type="button" class="st-bl-q" data-fam="白" title="屏蔽整个白色系（含各种深浅不一的近白背景）"><i style="background:#fff"></i>白</button>
+      <button type="button" class="st-bl-q" data-fam="黑" title="屏蔽整个黑色系"><i style="background:#000"></i>黑</button>
+      <button type="button" class="st-bl-q" data-fam="灰" title="屏蔽整个灰色系"><i style="background:#808080"></i>灰</button>
+      <label class="st-bl-add" title="拾取一个颜色，相近色（RGB 距离 &lt; 40）一并屏蔽"><input type="color" id="st-bl-pick" value="#ffffff" aria-label="拾取要屏蔽的颜色">拾色屏蔽</label>
+      <span class="st-bl-chips" id="st-bl-chips"></span>
+    </div>
+    <div class="st-donut" id="st-donut"></div>
+    <p class="st-bl-note" id="st-bl-note" hidden></p></section>
+  <section class="st-card"><h3>高频颜色<em>图的前 20 主色中出现该族即计 · 按色族</em></h3>
+    <div class="st-bl">
+      <span class="st-bl-label">屏蔽色</span>
+      <button type="button" class="st-bl-q" data-fam="白" title="屏蔽整个白色系（与主色构成卡同步）"><i style="background:#fff"></i>白</button>
+      <button type="button" class="st-bl-q" data-fam="黑" title="屏蔽整个黑色系（与主色构成卡同步）"><i style="background:#000"></i>黑</button>
+      <button type="button" class="st-bl-q" data-fam="灰" title="屏蔽整个灰色系（与主色构成卡同步）"><i style="background:#808080"></i>灰</button>
+      <span class="st-bl-chips"></span>
+    </div>
+    <div class="st-bars" id="st-bars"></div></section>
+  <section class="st-card st-wide"><h3>标签词云<em>字号随收录张数</em></h3>
+    <div class="st-cloud" id="st-cloud"></div></section>
+</div>
+<p class="st-cta">想找某张图？<a href="../search/">去全站搜索</a>，或回<a href="../">图库首页</a>按标签浏览，去<a href="../color-lab/">色彩实验</a>取色调色。</p>"""
+    return page_shell(cfg, "全站统计", body, depth=1,
+                      extra_assets=["stats-data.js", "stats.js"], active_nav="stats",
+                      meta_desc="图库全站统计：收录量、画幅构成、上传节奏、标签词云与热门图片浏览榜",
+                      og_url=f"{SITE_URL}/statistics/")
+
+
 def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: int) -> None:
     """生成 robots.txt / sitemap.xml / llms.txt —— 图库站的 SEO/GEO 三件套。"""
     nl = chr(10)
@@ -587,7 +697,8 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
     today = time.strftime("%Y-%m-%d")
     urls = ["<url><loc>" + SITE_URL + "/</loc><lastmod>" + today + "</lastmod></url>",
             "<url><loc>" + SITE_URL + "/search/</loc><lastmod>" + today + "</lastmod></url>",
-            "<url><loc>" + SITE_URL + "/color-lab/</loc><lastmod>" + today + "</lastmod></url>"]
+            "<url><loc>" + SITE_URL + "/color-lab/</loc><lastmod>" + today + "</lastmod></url>",
+            "<url><loc>" + SITE_URL + "/statistics/</loc><lastmod>" + today + "</lastmod></url>"]
     for it in items:
         lm = str(it.get("added") or today)
         urls.append("<url><loc>" + SITE_URL + "/" + it["id"] + "/</loc><lastmod>" + lm + "</lastmod></url>")
@@ -602,6 +713,7 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
              "- [图库首页](" + SITE_URL + "/)",
              "- [全站搜索](" + SITE_URL + "/search/)",
              "- [色彩实验](" + SITE_URL + "/color-lab/)（框选取色 + 颜色替换调色工具）",
+             "- [全站统计](" + SITE_URL + "/statistics/)（收录量、主色构成、高频颜色、标签词云、热看榜）",
              "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
     for it in items:
         tags = " · ".join(str(t) for t in it.get("tags", []))
@@ -650,7 +762,7 @@ def main() -> int:
     if SITE.exists():
         trash = ROOT / "site_trash"
         for d in SITE.iterdir():
-            if d.is_dir() and d.name not in ("assets", "images", "search", "color-lab") and (d / "index.html").exists():
+            if d.is_dir() and d.name not in ("assets", "images", "search", "color-lab", "statistics") and (d / "index.html").exists():
                 trash.mkdir(parents=True, exist_ok=True)
                 dest = trash / (d.name + "-" + str(int(time.time())))
                 print(f"· 过期详情页 {d.name} → site_trash/（不删除）")
@@ -660,7 +772,7 @@ def main() -> int:
                     pass
 
     (SITE / "assets").mkdir(parents=True, exist_ok=True)
-    GENERATED = {"style.css", "gallery.js", "gallery-data.js"}  # 由下方 write_text 生成，不做裸拷贝
+    GENERATED = {"style.css", "gallery.js", "gallery-data.js", "stats-data.js"}  # 由下方 write_text 生成，不做裸拷贝
     for f in (ROOT / "assets_src").glob("*"):
         if f.is_file() and f.name not in GENERATED:
             shutil.copyfile(f, SITE / "assets" / f.name)
@@ -730,6 +842,10 @@ def main() -> int:
     colorlab_dir = SITE / "color-lab"
     colorlab_dir.mkdir(parents=True, exist_ok=True)
     (colorlab_dir / "index.html").write_text(build_colorlab_page(cfg, items), encoding="utf-8")
+    stats_dir = SITE / "statistics"
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    (stats_dir / "index.html").write_text(build_stats_page(cfg, items), encoding="utf-8")
+    build_stats_data(cfg, items)
     for i, it in enumerate(items):
         d = SITE / it["id"]
         d.mkdir(parents=True, exist_ok=True)
