@@ -2,6 +2,24 @@
   var CFG = window.GALLERY, ITEMS = window.GALLERY_DATA || [], PAGE = window.GALLERY_PAGE || 48;
   if (!CFG) return;
 
+  /* ── 随机会话种子：随机键 = hash(id + 种子)，种子存 sessionStorage ——
+     同一会话内从详情页返回 / 刷新 / 翻页 / 筛选都不重排，点「随机」换新种子重洗。
+     此前懒分配 Math.random()，每次页面加载全新键，返回后顺序全变 ── */
+  function hash01(s) {
+    var h = 2166136261;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ((h >>> 0) % 100000) / 100000;
+  }
+  function rseed() {
+    try { return sessionStorage.getItem("gsp-rseed") || ""; } catch (e) { return ""; }
+  }
+  function newSeed() {
+    var s = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    try { sessionStorage.setItem("gsp-rseed", s); } catch (e) {}
+    return s;
+  }
+  var RSEED = rseed() || newSeed();
+
   /* ── 三源降级：当前源失败就自动换下一个源 ── */
   function bind(img) {
     var rel = img.getAttribute("data-rel");
@@ -331,8 +349,8 @@
   }
   function cmp(a, b) {
     if (state.sort === "random") {
-      if (a._rk === undefined) a._rk = Math.random();
-      if (b._rk === undefined) b._rk = Math.random();
+      if (a._rk === undefined) a._rk = hash01((a.id || "") + ":" + RSEED);
+      if (b._rk === undefined) b._rk = hash01((b.id || "") + ":" + RSEED);
       return a._rk - b._rk;
     }
     /* 相近排序：按与筛选色的最小距离升序；未选色/距离相同 → 上传日期新到旧 */
@@ -475,6 +493,11 @@
       b.setAttribute("aria-pressed", String(b.getAttribute("data-sort") === state.sort));
       b.addEventListener("click", function () {
         state.sort = b.getAttribute("data-sort");
+        if (state.sort === "random") {
+          /* 每次选「随机」换新种子重洗；清掉已分配的旧键让 cmp 用新种子重算 */
+          RSEED = newSeed();
+          ITEMS.forEach(function (it) { delete it._rk; });
+        }
         try { localStorage.setItem("gsp-sort2", state.sort); } catch (e) {}
         sortBtns.forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
         resetPage();
