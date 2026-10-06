@@ -132,12 +132,12 @@ def nav_html(cfg: dict, up: str = "") -> str:
     ico_globe = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
                  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/>'
                  '<path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>')
-    # MacroBiodiv 的图标与链接同主站 zbhgis.com「更多」下拉（lucide globe + 子域名直达）
+    # MacroBiodiv 入口：lucide leaf（生命/多样性意象，与其新芽 logo 同语）——
+    # 链接同主站 zbhgis.com「更多」下拉；此前用 globe，与 zbhgis 入口的地球并排易混淆
     ico_mb = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
               'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-              '<circle cx="12" cy="12" r="10"/>'
-              '<path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>'
-              '<path d="M2 12h20"/></svg>')
+              '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>'
+              '<path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>')
     ico_menu = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
                 'stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>')
     brand = esc(cfg.get("title") or "GeoSciPlot")
