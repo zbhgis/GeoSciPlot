@@ -125,9 +125,12 @@ ICO_PALETTE = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="cu
 def nav_html(cfg: dict, up: str = "", active: str = "") -> str:
     """顶部菜单栏：整体移植自 MacroBiodiv 站点的 .mnav（样式同源）。
     「色彩实验」（/color-lab/）与「全站统计」（/statistics/）已实装；
-    active 传页面对应的菜单键（如 "stats"）时该项 accent 常亮并带 aria-current。"""
+    active 传页面对应的菜单键（如 "stats" / "about"）时该项 accent 常亮并带 aria-current。"""
     ico_stat = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
                 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 20V10M12 20V4M6 20v-4"/></svg>')
+    ico_about = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+                 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/>'
+                 '<path d="M12 16v-4"/><path d="M12 8h.01"/></svg>')
     ico_caret = ('<svg class="mnav-more-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
                  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>')
     ico_globe = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
@@ -146,12 +149,15 @@ def nav_html(cfg: dict, up: str = "", active: str = "") -> str:
     # 当前页菜单项：accent 常亮 + aria-current（对齐 MacroBiodiv /statistics/ 的做法）
     st_attr = ('data-active="true" aria-current="page"' if active == "stats"
                else 'data-active="false"')
+    ab_attr = ('data-active="true" aria-current="page"' if active == "about"
+               else 'data-active="false"')
     return f"""<header class="mnav">
 <nav class="mnav-in">
 <a class="mnav-brand" href="{brand_href}" title="返回图库首页" aria-label="返回图库首页"><img src="{up}assets/favicon.png?v={BUILD_VER}" alt="" width="26" height="26">{brand}</a>
 <ul class="mnav-links">
 <li><a class="mnav-link" data-active="false" href="{up}color-lab/">{ICO_PALETTE}色彩实验</a></li>
 <li><a class="mnav-link" {st_attr} href="{up}statistics/">{ico_stat}全站统计</a></li>
+<li><a class="mnav-link" {ab_attr} href="{up}about/">{ico_about}关于本站</a></li>
 <li class="mnav-more"><button type="button" class="mnav-link mnav-more-trigger" aria-haspopup="true" title="更多站点">更多{ico_caret}</button>
 <ul class="mnav-dd">
 <li><a href="https://www.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_globe}zbhgis</a></li>
@@ -163,6 +169,7 @@ def nav_html(cfg: dict, up: str = "", active: str = "") -> str:
 <ul class="mnav-dd">
 <li><a href="{up}color-lab/">{ICO_PALETTE}色彩实验</a></li>
 <li><a href="{up}statistics/">{ico_stat}全站统计</a></li>
+<li><a href="{up}about/">{ico_about}关于本站</a></li>
 <li class="mnav-dd-sep"></li>
 <li><a href="https://www.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_globe}zbhgis</a></li>
 <li><a href="https://macrobiodiv.zbhgis.com" target="_blank" rel="noopener noreferrer">{ico_mb}MacroBiodiv</a></li>
@@ -686,6 +693,31 @@ def build_stats_page(cfg: dict, items: list[dict]) -> str:
                       og_url=f"{SITE_URL}/statistics/")
 
 
+def build_about(cfg: dict) -> str:
+    """关于本站页（/about/）：内容源 content/about.md（render_md 渲染，与 MacroBiodiv
+    同款迷你渲染器），窄栏 prose 版式（.about-body，样式在 style.css）；
+    缺文件 / 缺渲染器时只出标题不报错。"""
+    src = ROOT / "content" / "about.md"
+    doc = ""
+    if src.exists():
+        try:
+            from render_md import parse_md
+            _, doc, _, _ = parse_md(src.read_text(encoding="utf-8"))
+        except ImportError:
+            print("· 关于本站：缺 scripts/render_md.py，正文跳过")
+    # 正文首个 `# ` 标题与页面大标题重复：剥离（MacroBiodiv build_weekly 同款处理）
+    doc = re.sub(r'<h2 id="doc-1" class="md-h1">.*?</h2>\n*', "", doc, count=1)
+    body = f"""<header class="site">
+  <p class="kicker">GEOSCIPILOT · ABOUT</p>
+  <h1 class="spage-title">关于本站</h1>
+</header>
+<div class="about-wrap">
+<article class="about-body">{doc}</article>
+</div>"""
+    return page_shell(cfg, "关于本站", body, depth=1,
+                      og_url=SITE_URL + "/about/", active_nav="about")
+
+
 def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: int) -> None:
     """生成 robots.txt / sitemap.xml / llms.txt —— 图库站的 SEO/GEO 三件套。"""
     nl = chr(10)
@@ -703,7 +735,8 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
     urls = ["<url><loc>" + SITE_URL + "/</loc><lastmod>" + today + "</lastmod></url>",
             "<url><loc>" + SITE_URL + "/search/</loc><lastmod>" + today + "</lastmod></url>",
             "<url><loc>" + SITE_URL + "/color-lab/</loc><lastmod>" + today + "</lastmod></url>",
-            "<url><loc>" + SITE_URL + "/statistics/</loc><lastmod>" + today + "</lastmod></url>"]
+            "<url><loc>" + SITE_URL + "/statistics/</loc><lastmod>" + today + "</lastmod></url>",
+            "<url><loc>" + SITE_URL + "/about/</loc><lastmod>" + today + "</lastmod></url>"]
     for it in items:
         lm = str(it.get("added") or today)
         urls.append("<url><loc>" + SITE_URL + "/" + it["id"] + "/</loc><lastmod>" + lm + "</lastmod></url>")
@@ -719,6 +752,7 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
              "- [全站搜索](" + SITE_URL + "/search/)",
              "- [色彩实验](" + SITE_URL + "/color-lab/)（框选取色 + 颜色替换调色工具）",
              "- [全站统计](" + SITE_URL + "/statistics/)（收录量、主色构成、高频颜色、标签词云、热看榜）",
+             "- [关于本站](" + SITE_URL + "/about/)（站点定位、数据来源与说明）",
              "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
     for it in items:
         tags = " · ".join(str(t) for t in it.get("tags", []))
@@ -767,7 +801,7 @@ def main() -> int:
     if SITE.exists():
         trash = ROOT / "site_trash"
         for d in SITE.iterdir():
-            if d.is_dir() and d.name not in ("assets", "images", "search", "color-lab", "statistics") and (d / "index.html").exists():
+            if d.is_dir() and d.name not in ("assets", "images", "search", "color-lab", "statistics", "about") and (d / "index.html").exists():
                 trash.mkdir(parents=True, exist_ok=True)
                 dest = trash / (d.name + "-" + str(int(time.time())))
                 print(f"· 过期详情页 {d.name} → site_trash/（不删除）")
@@ -851,6 +885,9 @@ def main() -> int:
     stats_dir.mkdir(parents=True, exist_ok=True)
     (stats_dir / "index.html").write_text(build_stats_page(cfg, items), encoding="utf-8")
     build_stats_data(cfg, items)
+    about_dir = SITE / "about"
+    about_dir.mkdir(parents=True, exist_ok=True)
+    (about_dir / "index.html").write_text(build_about(cfg), encoding="utf-8")
     for i, it in enumerate(items):
         d = SITE / it["id"]
         d.mkdir(parents=True, exist_ok=True)
