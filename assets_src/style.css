@@ -470,17 +470,21 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
   .st-row{grid-template-columns:minmax(64px,110px) 1fr 30px;gap:8px}
 }
 
-/* ── 关于本站页（/about/）：窄栏 prose（render_md 产出的 md-h1/md-h2 结构） ── */
-.about-wrap{max-width:720px;margin:0 auto;padding:8px 20px 30px}
-.about-body{font-size:var(--fs-md);line-height:1.85;color:var(--dim)}
-.about-body h2.md-h1{margin:26px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:var(--fs-h2);font-weight:700;color:var(--text)}
-.about-body h3.md-h2{margin:22px 0 10px;font-size:var(--fs-h2);font-weight:600;color:var(--text)}
-.about-body p{margin:10px 0}
-.about-body a{color:var(--accent);border-bottom:1px solid var(--line2)}
-.about-body a:hover{color:var(--accent);border-color:var(--accent)}
-.about-body ul,.about-body ol{margin:10px 0;padding-left:22px}
-.about-body li{margin:4px 0}
-.about-body strong{color:var(--text)}
-.about-body img{max-width:100%;border-radius:6px}
-.about-body blockquote{margin:12px 0;padding:8px 14px;border-left:3px solid var(--line2);color:var(--faint)}
+/* ── 关于本站页（/about/）：窄栏 prose —— 排版逐条镜像 MacroBiodiv .wk-content
+   （fs-base 正文 1.75 行高、md-h1/md-h2 标题规格、strong 淡蓝、链接 accent 无下划线） ── */
+.about-wrap{max-width:760px;margin:0 auto;padding:34px 20px 20px}
+.about-body{font-size:var(--fs-base);color:var(--dim)}
+.about-body h2.md-h1{margin:40px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line2);font-size:var(--fs-h2);font-weight:700;line-height:1.35;color:var(--text)}
+.about-body h3.md-h2{margin:32px 0 12px;font-size:var(--fs-h2);font-weight:600;line-height:1.4;color:var(--text)}
+.about-body h4{margin:20px 0 8px;font-size:var(--fs-base);font-weight:600;color:var(--text)}
+.about-body p{margin:0 0 16px;line-height:1.75}
+.about-body strong{color:#85a4ff}
+.about-body em{font-style:italic}
+.about-body a{color:var(--accent);overflow-wrap:anywhere}
+.about-body a:hover{text-decoration:underline}
+.about-body ul,.about-body ol{margin:0 0 16px;padding-left:24px}
+.about-body li{margin:0 0 6px}
+.about-body img{max-width:100%;border:1px solid var(--line2);border-radius:8px}
+.about-body blockquote{margin:0 0 16px;padding-left:16px;border-left:4px solid var(--line2);font-style:italic;color:var(--faint)}
+.about-body hr{border:none;border-top:1px solid var(--line2);margin:32px 0}
 .about-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);background:var(--card);padding:1px 6px;border-radius:4px}
