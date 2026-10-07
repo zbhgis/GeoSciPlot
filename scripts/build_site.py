@@ -639,8 +639,6 @@ def build_stats_page(cfg: dict, items: list[dict]) -> str:
     body = f"""<header class="site">
   <p class="kicker">GEOSCIPILOT · STATS</p>
   <h1 class="spage-title">全站统计</h1>
-  <p class="lede">这座图库的一瞥——收录了多少图、颜色与标签怎么分布、大家都在看哪些图。
-  热看榜按访客浏览量实时计入。</p>
 </header>
 
 <section class="st-hero" aria-label="收录总览">
