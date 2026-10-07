@@ -16,6 +16,7 @@
   if (!CFG || !$("cl-canvas")) return;
 
   var canvas = $("cl-canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
+  var stageEl = $("cl-stage");
   var work = document.createElement("canvas"), wctx = work.getContext("2d", { willReadFrequently: true });
   var overlay = $("cl-overlay"), selbox = $("cl-selbox"), placeholder = $("cl-placeholder");
   var statusEl = $("cl-status"), selinfo = $("cl-selinfo");
@@ -26,7 +27,7 @@
   var scopeSel = $("cl-scope"), highlightCb = $("cl-highlight");
   var paletteCount = $("cl-count"), paletteCountVal = $("cl-countval");
   var replaceBtn = $("cl-replace"), undoBtn = $("cl-undo"), downloadBtn = $("cl-download");
-  var clearselBtn = $("cl-clearsel"), selModeBtn = $("cl-selmode");
+  var clearselBtn = $("cl-clearsel"), selModeBtn = $("cl-selmode"), hlColorEl = $("cl-hlcolor");
   var zoomEl = $("cl-zoom"), zoomView = $("cl-zoom-view"), zoomCanvas = $("cl-zoom-canvas");
   var zctx = zoomCanvas.getContext("2d");
 
@@ -41,6 +42,11 @@
   var selMode = false;     // 框选模式：开=拖拽选区，关（默认）=单击画布打开放大镜
   var zoomOpen = false, zoomScale = 1;
   var urlColor = "";       // ?color=%23AABBCC（详情页配色色块跳入）：载入后预选为目标色
+  var hlColor = "#FF4081"; // 高亮遮罩颜色（可指定），localStorage 记忆；脏值回落默认品红
+  try {
+    var savedHl = localStorage.getItem("gsp-cl-hl");
+    if (savedHl && hexToRgb(savedHl)) hlColor = savedHl.toUpperCase();
+  } catch (e) {}
 
   function setStatus(msg, isErr) {
     statusEl.textContent = msg || "";
@@ -536,6 +542,7 @@
     try { img = wctx.getImageData(r.x, r.y, r.w, r.h); } catch (e) { return; }
     var d = img.data;
     var t = [target.r, target.g, target.b], t2 = (+tol.value) * (+tol.value);
+    var hc = hexToRgb(hlColor) || [255, 64, 129];   // 高亮遮罩色（可指定），脏值回落品红
     var mask = document.createElement("canvas");
     mask.width = r.w; mask.height = r.h;
     var mc = mask.getContext("2d");
@@ -545,7 +552,7 @@
       if (d[i + 3] === 0) continue;
       var dr = d[i] - t[0], dg = d[i + 1] - t[1], db = d[i + 2] - t[2];
       if (dr * dr + dg * dg + db * db <= t2) {
-        m[i] = 255; m[i + 1] = 64; m[i + 2] = 129; m[i + 3] = 140;
+        m[i] = hc[0]; m[i + 1] = hc[1]; m[i + 2] = hc[2]; m[i + 3] = 140;
       }
     }
     mc.putImageData(md, 0, 0);
@@ -558,6 +565,14 @@
   }
   tol.addEventListener("input", function () { tolval.textContent = tol.value; requestRedraw(); });
   highlightCb.addEventListener("change", requestRedraw);
+  /* 高亮色拾取：实时重绘 + localStorage 记忆 */
+  hlColorEl.value = hlColor;
+  hlColorEl.addEventListener("input", function () {
+    if (!hexToRgb(hlColorEl.value)) return;
+    hlColor = hlColorEl.value.toUpperCase();
+    try { localStorage.setItem("gsp-cl-hl", hlColor); } catch (e) {}
+    requestRedraw();
+  });
   scopeSel.addEventListener("change", requestRedraw);
   paletteCount.addEventListener("input", function () {
     paletteCountVal.textContent = paletteCount.value;
@@ -572,16 +587,39 @@
     clearselBtn.disabled = !origImg || !sel;
   }
 
-  /* ── 初始化：id 候选列表（datalist）+ 随机 + ?id= 直达 ── */
+  /* ── 初始化：显示大小记忆 + 载入/随机 + ?id= 直达 ── */
   (function init() {
-    var dl = $("cl-ids");
-    ITEMS.forEach(function (it) {
-      var o = document.createElement("option");
-      o.value = it.id;
-      var lb = (it.tg || []).join(" · ");
-      if (lb) o.label = lb;
-      dl.appendChild(o);
-    });
+    /* 舞台显示大小：拖舞台右下角手柄调整宽度（canvas 随容器宽缩放，选框坐标不受影响），
+       40%–100%，localStorage 记忆；id 靠手输/随机，不做下拉候选 —— 图会越来越多 */
+    var clW = parseInt((function () {
+      try { return localStorage.getItem("gsp-cl-size") || ""; } catch (e) { return ""; }
+    })(), 10);
+    if (isNaN(clW)) clW = 100;
+    clW = Math.max(40, Math.min(100, clW));
+    var applySize = function () { stageEl.style.width = clW + "%"; };
+    var grip = $("cl-grip");
+    if (grip) {
+      grip.addEventListener("pointerdown", function (e) {
+        e.preventDefault();
+        grip.setPointerCapture(e.pointerId);
+        var colW = stageEl.parentElement.clientWidth || 1;
+        var move = function (ev) {
+          var pct = Math.round((ev.clientX - stageEl.getBoundingClientRect().left) / colW * 100);
+          pct = Math.max(40, Math.min(100, pct));
+          if (pct !== clW) { clW = pct; applySize(); }
+        };
+        var up = function () {
+          grip.removeEventListener("pointermove", move);
+          grip.removeEventListener("pointerup", up);
+          grip.removeEventListener("pointercancel", up);
+          try { localStorage.setItem("gsp-cl-size", String(clW)); } catch (err) {}
+        };
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", up);
+        grip.addEventListener("pointercancel", up);
+      });
+    }
+    applySize();
     $("cl-load").addEventListener("click", function () { loadById(idInput.value); });
     idInput.addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); loadById(idInput.value); }

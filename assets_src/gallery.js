@@ -388,7 +388,20 @@
     cap.className = "cap";
     var tagsEl = document.createElement("span");
     tagsEl.className = "tags";
-    tagsEl.textContent = it.sub || "—";
+    /* 标签徽章（与静态首屏 card_html 同构）：每标签一枚 accent 描边胶囊 */
+    var tg = it.tg || [];
+    if (tg.length) {
+      for (var bi = 0; bi < tg.length; bi++) {
+        var bd = document.createElement("i");
+        bd.textContent = tg[bi];
+        tagsEl.appendChild(bd);
+      }
+    } else {
+      var nb = document.createElement("i");
+      nb.className = "none";
+      nb.textContent = "—";
+      tagsEl.appendChild(nb);
+    }
     cap.appendChild(tagsEl);
     a.appendChild(cap);
     a.title = it.sub || "";

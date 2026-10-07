@@ -258,14 +258,16 @@ def card_html(item: dict) -> str:
     # .c-covbox::before 的「加载中」层在图片画出前可见（CSS 同款占位语言）
     w, h = int(item.get("width") or 0), int(item.get("height") or 0)
     dims = f' width="{w}" height="{h}"' if w and h else ""
+    # 标签做成 accent 描边徽章（同 MacroBiodiv .c-j 语言）：flex-wrap 换行，
+    # 多标签不再被单行截断；无标签回落一条弱化的 —
+    badges = "".join(f"<i>{esc(str(t))}</i>" for t in tags) or '<i class="none">—</i>'
     return f"""  <a class="card" href="{esc(item['id'])}/" data-id="{esc(item['id'])}" title="{esc(' · '.join(tags))}">
     <span class="c-covbox"><img data-rel="{esc(item.get('thumb'))}"{dims} alt="{esc(alt)}" loading="lazy"></span>
-    <span class="cap"><span class="tags">{esc(cap)}</span></span>
+    <span class="cap"><span class="tags">{badges}</span></span>
   </a>"""
 
 
 def build_index(cfg: dict, items: list[dict]) -> str:
-    addeds = flat([it.get("added") for it in items])
     tag_counter: Counter = Counter()
     for it in items:
         for t in it.get("tags", []):
@@ -287,7 +289,6 @@ def build_index(cfg: dict, items: list[dict]) -> str:
   <h1><img class="logo" src="assets/logo.png" alt="GeoSciPlot logo">{esc(cfg['title'])}</h1>
   <a class="gh-note" href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener" target="_blank" title="在 GitHub 查看图片源文件">{ghsvg}<span>图片存储于 <b>GitHub</b>，访问需具备 GitHub 访问能力（点此查看仓库）</span></a>
   <p class="lede">{esc(cfg['lede'])}</p>
-  <div class="meta-row"><span id="count">共 {len(items)} 张</span> · {len(tag_counter)} 个标签 · {len(addeds)} 个上传日期 · 点击查看原图</div>
 </header>
 
 <div class="toolbar">
@@ -305,7 +306,7 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 {filter_row("颜色",
   '<span class="colorbox">'
   + '<input type="color" id="f-color" value="#ffffff" aria-label="选取筛选颜色" title="选取筛选颜色">'
-  + '<input id="f-colorhex" class="hexinp" placeholder="hex 如 1F4E79" maxlength="7" spellcheck="false" autocomplete="off">'
+  + '<input id="f-colorhex" class="hexinp" placeholder="如 1F4E79" maxlength="7" spellcheck="false" autocomplete="off">'
   + '<button id="f-colorclear" class="reset" type="button" title="清除颜色筛选" hidden>×</button>'
   + '</span> <span class="flabel" style="min-width:auto">容差</span>'
   + '<input type="range" id="f-tol" class="tolrange" min="0" max="150" value="60" aria-label="颜色容差（RGB 距离）">'
@@ -509,14 +510,14 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
 <div class="clayout">
   <section class="cl-stage-col">
     <div class="cl-toolbar">
-      <span class="searchbox"><input id="cl-id" class="search" type="search" list="cl-ids" placeholder="输入图片 id（如 c29fd21ed1）…" autocomplete="off"><button id="cl-load" type="button">载入</button></span>
+      <span class="searchbox"><input id="cl-id" class="search" type="search" placeholder="输入图片 id（如 c29fd21ed1）…" autocomplete="off"><button id="cl-load" type="button">载入</button></span>
       <button id="cl-random" class="cl-btn" type="button">随机来一张</button>
-      <datalist id="cl-ids"></datalist>
     </div>
     <div class="cl-stage" id="cl-stage">
       <canvas id="cl-canvas" width="0" height="0"></canvas>
       <div class="cl-overlay" id="cl-overlay"><div class="cl-selbox" id="cl-selbox"></div></div>
       <p class="cl-placeholder" id="cl-placeholder">先在上方输入图片 id 载入原图</p>
+      <i class="cl-grip" id="cl-grip" title="拖动调整显示大小（40%–100%）" aria-hidden="true"></i>
       <div class="cl-loading" id="cl-loading" hidden><span class="cl-spin"></span>载入中…</div>
     </div>
     <div class="cl-stagebar">
@@ -524,6 +525,7 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
       <span id="cl-selinfo"></span>
       <button id="cl-clearsel" class="cl-btn" type="button" disabled>清除框选</button>
       <label class="cl-check"><input type="checkbox" id="cl-highlight"> 高亮将被替换的像素</label>
+      <label class="cl-check" title="高亮遮罩的颜色，可自选"><input type="color" id="cl-hlcolor" value="#FF4081"> 高亮色</label>
     </div>
     <p class="cl-status" id="cl-status"></p>
   </section>
@@ -614,20 +616,30 @@ def build_stats_data(cfg: dict, items: list[dict]) -> None:
 
 def build_stats_page(cfg: dict, items: list[dict]) -> str:
     """全站统计页（访客向数据面板）：hero 总览 + 热看图片 + 筛选（标签/画幅/
-    上传日期区间）联动重算 —— 上传动态面积图 · 画幅构成环形图 · 上传节奏条形图 ·
+    上传日期区间）联动重算 —— 上传动态面积图 · 主色构成环形图 · 高频颜色条形图 ·
     标签词云。数据来自 stats-data.js（仅本页注入）；
     热看榜与 hero 浏览数来自统计服务，为全量口径不随筛选重算。"""
+    # 屏蔽色工具行：全部色族罗列（点按切换、点亮即屏蔽），两张颜色卡共用同一份
+    # 状态（stats.js 的 BL.fams，localStorage 记忆）；色族集合与 colorFamily 一致
+    st_fams = [("白", "#FFFFFF"), ("黑", "#000000"), ("灰", "#808080"),
+               ("红", "#e5534b"), ("橙", "#f0883e"), ("黄", "#d29922"),
+               ("绿", "#3fb950"), ("青", "#39c5cf"), ("蓝", "#58a6ff"),
+               ("紫", "#a371f7"), ("粉", "#db61a2")]
+    st_bl_buttons = "".join(
+        f'<button type="button" class="st-bl-q" data-fam="{n}" title="屏蔽{n}色族">'
+        f'<i style="background:{c}"></i>{n}</button>'
+        for n, c in st_fams)
     body = f"""<header class="site">
   <p class="kicker">GEOSCIPILOT · STATS</p>
   <h1 class="spage-title">全站统计</h1>
-  <p class="lede">这座图库的一瞥——收录了多少图、画幅与标签怎么分布、上传节奏如何、大家都在看哪些图。
+  <p class="lede">这座图库的一瞥——收录了多少图、颜色与标签怎么分布、大家都在看哪些图。
   热看榜按访客浏览量实时计入。</p>
 </header>
 
 <section class="st-hero" aria-label="收录总览">
   <div class="st-tile st-tc1"><b id="stv-items">0</b><span>收录图片 · 张</span></div>
   <div class="st-tile st-tc2"><b id="stv-tags">0</b><span>标签 · 个</span></div>
-  <div class="st-tile st-tc3"><b id="stv-months">0</b><span>收录月份 · 个</span></div>
+  <div class="st-tile st-tc3"><b id="stv-latest">—</b><span>最近更新 · 日期</span></div>
   <div class="st-tile st-tc4"><b id="stv-views">…</b><span>图片被浏览 · 次</span></div>
 </section>
 
@@ -654,21 +666,14 @@ def build_stats_page(cfg: dict, items: list[dict]) -> str:
   <section class="st-card"><h3>主色构成<em>每图取第一未屏蔽主色 · 按色族归类</em></h3>
     <div class="st-bl">
       <span class="st-bl-label">屏蔽色</span>
-      <button type="button" class="st-bl-q" data-fam="白" title="屏蔽整个白色系（含各种深浅不一的近白背景）"><i style="background:#fff"></i>白</button>
-      <button type="button" class="st-bl-q" data-fam="黑" title="屏蔽整个黑色系"><i style="background:#000"></i>黑</button>
-      <button type="button" class="st-bl-q" data-fam="灰" title="屏蔽整个灰色系"><i style="background:#808080"></i>灰</button>
-      <label class="st-bl-add" title="拾取一个颜色，相近色（RGB 距离 &lt; 40）一并屏蔽"><input type="color" id="st-bl-pick" value="#ffffff" aria-label="拾取要屏蔽的颜色">拾色屏蔽</label>
-      <span class="st-bl-chips" id="st-bl-chips"></span>
+      {st_bl_buttons}
     </div>
     <div class="st-donut" id="st-donut"></div>
     <p class="st-bl-note" id="st-bl-note" hidden></p></section>
   <section class="st-card"><h3>高频颜色<em>图的前 20 主色中出现该族即计 · 按色族</em></h3>
     <div class="st-bl">
       <span class="st-bl-label">屏蔽色</span>
-      <button type="button" class="st-bl-q" data-fam="白" title="屏蔽整个白色系（与主色构成卡同步）"><i style="background:#fff"></i>白</button>
-      <button type="button" class="st-bl-q" data-fam="黑" title="屏蔽整个黑色系（与主色构成卡同步）"><i style="background:#000"></i>黑</button>
-      <button type="button" class="st-bl-q" data-fam="灰" title="屏蔽整个灰色系（与主色构成卡同步）"><i style="background:#808080"></i>灰</button>
-      <span class="st-bl-chips"></span>
+      {st_bl_buttons}
     </div>
     <div class="st-bars" id="st-bars"></div></section>
   <section class="st-card st-wide"><h3>标签词云<em>字号随收录张数</em></h3>

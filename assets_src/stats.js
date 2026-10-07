@@ -28,7 +28,7 @@
     ["#f0883e", "#bc4c00"], ["#db61a2", "#a2306e"], ["#39c5cf", "#0a7c84"]];
   const isLight = () => document.documentElement.getAttribute("data-theme") === "light";
   const col = (i) => PAL[i % PAL.length][isLight() ? 1 : 0];
-  /* 色族 chip 的代表色（族成员均值在重算后才知道，chip 用固定代表色即可） */
+  /* 色族集合与代表色（与页面屏蔽按钮一一对应；localStorage 恢复时校验族名） */
   const FAM_SWATCH = { "白": "#FFFFFF", "黑": "#000000", "灰": "#808080", "红": "#e5534b",
     "橙": "#f0883e", "黄": "#d29922", "绿": "#3fb950", "青": "#39c5cf",
     "蓝": "#58a6ff", "紫": "#a371f7", "粉": "#db61a2" };
@@ -94,27 +94,19 @@
   const hex2rgb = (h) => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
   const rgb2hex = (r, g, b) => "#" + [r, g, b]
     .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
-  /* 屏蔽色两类：快捷色族（白/黑/灰整族屏蔽，对付深浅不一的纯色背景）与
-     拾取的具体色（RGB 平方距离 < 1600 即欧氏距离 < 40 的相近色，同色彩实验口径）。
-     localStorage 记忆，重载后仍在 */
-  const BL = { tol2: 1600, fams: [], list: [] };
+  /* 屏蔽色：全部色族罗列、按需整族屏蔽（白/黑/灰/红/橙/黄/绿/青/蓝/紫/粉）。
+     命中屏蔽族的色不参与两张颜色卡统计；localStorage 记忆（存族名数组，
+     兼容旧版 {fams,hexes} 形状——hex 屏蔽已随拾色器移除，读取时丢弃） */
+  const BL = { fams: [] };
   try {
-    const saved = JSON.parse(localStorage.getItem("gsp-st-bl") || "{}");
-    (saved.fams || []).forEach((f) => { if (typeof f === "string") BL.fams.push(f); });
-    (saved.hexes || []).forEach((h) => {
-      if (/^#[0-9A-Fa-f]{6}$/.test(h)) BL.list.push({ hex: h, rgb: hex2rgb(h.slice(1)) });
-    });
+    const saved = JSON.parse(localStorage.getItem("gsp-st-bl") || "[]");
+    const arr = Array.isArray(saved) ? saved : (saved.fams || []);
+    arr.forEach((f) => { if (typeof f === "string" && FAM_SWATCH[f]) BL.fams.push(f); });
   } catch (e) {}
   const blSave = () => {
-    try {
-      localStorage.setItem("gsp-st-bl",
-        JSON.stringify({ fams: BL.fams, hexes: BL.list.map((b) => b.hex) }));
-    } catch (e) {}
+    try { localStorage.setItem("gsp-st-bl", JSON.stringify(BL.fams)); } catch (e) {}
   };
-  const isBlocked = (rgb) => BL.fams.indexOf(colorFamily(rgb)) > -1 || BL.list.some((b) =>
-    (b.rgb[0] - rgb[0]) * (b.rgb[0] - rgb[0])
-    + (b.rgb[1] - rgb[1]) * (b.rgb[1] - rgb[1])
-    + (b.rgb[2] - rgb[2]) * (b.rgb[2] - rgb[2]) < BL.tol2);
+  const isBlocked = (rgb) => BL.fams.indexOf(colorFamily(rgb)) > -1;
 
   function colorFamily(rgb) {
     const [r, g, b] = rgb.map((v) => v / 255);
@@ -166,20 +158,13 @@
     }
     renderDonut(el("st-donut"), rows, nTypes);
 
-    /* 屏蔽色 chips（两张卡各一份，内容同步）与快捷族按钮的点亮态 */
-    const chipsHtml = BL.fams.map((f) =>
-        `<span class="st-bl-chip"><i style="background:${FAM_SWATCH[f] || "#888"}"></i>${esc(f)}族`
-        + `<button type="button" data-fam="${esc(f)}" aria-label="取消屏蔽${esc(f)}色族">×</button></span>`).join("")
-      + BL.list.map((b, i) =>
-          `<span class="st-bl-chip"><i style="background:${b.hex}"></i>${b.hex}`
-          + `<button type="button" data-i="${i}" aria-label="移除屏蔽色 ${b.hex}">×</button></span>`).join("");
-    document.querySelectorAll(".st-bl-chips").forEach((box) => { box.innerHTML = chipsHtml; });
+    /* 族按钮点亮态（两张卡各一份，同步）；屏蔽状态直接由按钮可见 */
     document.querySelectorAll(".st-bl-q").forEach((b) =>
       b.classList.toggle("on", BL.fams.indexOf(b.dataset.fam) > -1));
     const note = el("st-bl-note");
     const dropped = allBlocked + noColor;
-    if (BL.list.length && (allBlocked || noColor)) {
-      note.textContent = "已屏蔽 " + allBlocked + " 张（主色全部命中屏蔽色）"
+    if (BL.fams.length && allBlocked) {
+      note.textContent = "已屏蔽 " + allBlocked + " 张（主色全部命中屏蔽色族）"
         + (noColor ? "，另 " + noColor + " 张无主色数据" : "");
       note.hidden = false;
     } else if (dropped) {
@@ -188,23 +173,11 @@
     } else note.hidden = true;
   }
 
-  function blAdd(hex) {
-    const h = hex.toUpperCase();
-    if (BL.list.some((b) => b.hex === h)) return;
-    BL.list.push({ hex: h, rgb: hex2rgb(h.slice(1)) });
-    blSave();
-    render();                                // 屏蔽后整卡重算（含 chips 与提示）
-  }
-  function blRemove(i) {
-    BL.list.splice(i, 1);
-    blSave();
-    render();
-  }
   function blFamToggle(fam) {
     const i = BL.fams.indexOf(fam);
     if (i > -1) BL.fams.splice(i, 1); else BL.fams.push(fam);
     blSave();
-    render();
+    render();                                // 屏蔽后两张颜色卡整卡重算
   }
 
   /* ── 高频颜色：按色族统计「图的前 20 主色里出现过该族」的图数
@@ -478,7 +451,9 @@
   /* ── hero 总览（全量口径）── */
   countUp(el("stv-items"), DATA.length);
   countUp(el("stv-tags"), new Set(DATA.flatMap((d) => d.tg || []).filter(Boolean)).size);
-  countUp(el("stv-months"), new Set(DATA.map((d) => (d.ad || "").slice(0, 7)).filter(Boolean)).size);
+  /* 最近更新日期 = 最大的上传日期；YYYY-MM-DD 可直接字符串比较 */
+  el("stv-latest").textContent
+    = DATA.reduce((m, d) => (d.ad && d.ad > m ? d.ad : m), "") || "—";
 
   /* ── 热看图片 Top 5 + hero「图片被浏览」：一次 fetch 同时喂两处；
      全量口径不随筛选重算；只统计图片详情页，
@@ -536,18 +511,9 @@
     rzT = setTimeout(render, 180);
   });
 
-  /* ── 屏蔽色事件：快捷色族再点一次 = 取消屏蔽；拾色器确认后添加；
-     chips 上 × 移除（色族 / 具体色各按其键） ── */
+  /* ── 屏蔽色事件：色族按钮点按切换（点亮 = 屏蔽中），两张卡同步 ── */
   document.querySelectorAll(".st-bl-q").forEach((b) =>
     b.addEventListener("click", () => blFamToggle(b.dataset.fam)));
-  el("st-bl-pick").addEventListener("change", (e) => blAdd(e.target.value));
-  document.querySelectorAll(".st-bl-chips").forEach((box) =>
-    box.addEventListener("click", (e) => {
-      const btn = e.target.closest("button");
-      if (!btn) return;
-      if (btn.dataset.fam) blFamToggle(btn.dataset.fam);
-      else if (btn.dataset.i !== undefined) blRemove(+btn.dataset.i);
-    }));
 
   /* ── 筛选事件 ── */
   el("st-tag").addEventListener("change", (e) => { state.tag = e.target.value; render(); });
