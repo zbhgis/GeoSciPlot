@@ -6,6 +6,9 @@
    流程：载入原图 → 框选区域（不框选=整张图）→ 统计占比前 N 的主色（数量滑块 4–20，
         色块+色号）→ 背景色可「屏蔽」进黑名单（含相近色），占比按剩余像素重新归一
         → 点选目标色 + 容差 + 新颜色 → 区域内替换 → 可叠加 / 撤销 / 还原 / 下载 PNG。
+   色觉模拟（Protanopia / Deuteranopia / Tritanopia / Achromatopsia + 强度）默认只作用于
+   显示层（画布、放大镜、主色块），像素不动；「固化模拟效果」才把模拟结果写回 work
+   （进撤销栈），此后下载即为模拟图。
    画布交互分两种模式（「开始/结束框选」按钮切换）：框选模式下拖拽选区；
    非框选模式（默认）单击画布打开放大镜（滚轮缩放/拖拽平移，显示当前编辑状态）。
    全部计算在浏览器本地完成。 */
@@ -28,8 +31,12 @@
   var paletteCount = $("cl-count"), paletteCountVal = $("cl-countval");
   var replaceBtn = $("cl-replace"), undoBtn = $("cl-undo"), downloadBtn = $("cl-download");
   var clearselBtn = $("cl-clearsel"), selModeBtn = $("cl-selmode"), hlColorEl = $("cl-hlcolor");
+  var cbTypeEl = $("cl-cbtype"), cbStrEl = $("cl-cbstrength"),
+      cbStrVal = $("cl-cbstrengthval"), cbApplyBtn = $("cl-cbapply");
   var zoomEl = $("cl-zoom"), zoomView = $("cl-zoom-view"), zoomCanvas = $("cl-zoom-canvas");
   var zctx = zoomCanvas.getContext("2d");
+  /* 色觉模拟预览缓存：与 work 同尺寸，只用于显示，不回写 */
+  var sim = document.createElement("canvas"), sctx = sim.getContext("2d", { willReadFrequently: true });
 
   var origImg = null, curId = "";
   var natW = 0, natH = 0;
@@ -48,6 +55,21 @@
     if (savedHl && hexToRgb(savedHl)) hlColor = savedHl.toUpperCase();
   } catch (e) {}
 
+  /* ── 色觉模拟：Brettel/Viénot 二色视觉矩阵，直接在 sRGB 数值上做线性变换
+     （业界通行近似，不转线性空间）；强度与正常视觉线性插值，用来表达
+     红色弱 / 绿色弱这类部分缺陷（而非只在「正常」和「完全二色」之间跳）。 ── */
+  var CB_MATS = {
+    prot:    [0.567, 0.433, 0.0, 0.555, 0.445, 0.0, 0.0, 0.248, 0.752],
+    deut:    [0.625, 0.375, 0.0, 0.700, 0.300, 0.0, 0.0, 0.300, 0.700],
+    trit:    [0.950, 0.050, 0.0, 0.000, 0.433, 0.567, 0.0, 0.475, 0.525],
+    achroma: [0.299, 0.587, 0.114, 0.299, 0.587, 0.114, 0.299, 0.587, 0.114]
+  };
+  var CB_NAMES = { prot: "Protanopia（红色盲）", deut: "Deuteranopia（绿色盲）",
+    trit: "Tritanopia（蓝色盲）", achroma: "Achromatopsia（全色盲）" };
+  var cbType = "", cbStr = 100, cbTimer = null;
+  var workVer = 0;        // work 像素版本号：每次写回 ++，模拟缓存据此失效
+  var simVer = -1, simType = "", simStr = -1, simOk = false;
+
   function setStatus(msg, isErr) {
     statusEl.textContent = msg || "";
     statusEl.style.color = isErr ? "#f85149" : "";
@@ -61,6 +83,50 @@
     var n = parseInt(m[1], 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
+
+  /* 当前设置下的 3×3 矩阵（与正常视觉按强度插值）；未选类型 = null */
+  function cbMatrix() {
+    var m = CB_MATS[cbType];
+    if (!m) return null;
+    var s = cbStr / 100, o = 1 - s;
+    return [o + s * m[0], s * m[1], s * m[2],
+            s * m[3], o + s * m[4], s * m[5],
+            s * m[6], s * m[7], o + s * m[8]];
+  }
+  function transformPixels(d, m) {
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      var r = d[i], g = d[i + 1], b = d[i + 2];
+      d[i] = m[0] * r + m[1] * g + m[2] * b;       // Uint8ClampedArray 自动取整截断
+      d[i + 1] = m[3] * r + m[4] * g + m[5] * b;
+      d[i + 2] = m[6] * r + m[7] * g + m[8] * b;
+    }
+  }
+  function simHexOf(c, m) {
+    return hex2(Math.round(m[0] * c[0] + m[1] * c[1] + m[2] * c[2]),
+      Math.round(m[3] * c[0] + m[4] * c[1] + m[5] * c[2]),
+      Math.round(m[6] * c[0] + m[7] * c[1] + m[8] * c[2]));
+  }
+  /* 预览缓存：work 变了 / 类型或强度变了才重算（全分辨率，放大镜 1:1 才不糊）。
+     算不出来（跨域源读不了像素）就退回显示原图 */
+  function ensureSim() {
+    if (!origImg || !cbMatrix()) {
+      simOk = false;
+      sim.width = sim.height = 0;   // 关掉模拟即释放这块全尺寸位图
+      return;
+    }
+    if (simOk && simVer === workVer && simType === cbType && simStr === cbStr) return;
+    sim.width = natW; sim.height = natH;
+    sctx.drawImage(work, 0, 0);
+    simOk = false;
+    try {
+      var img = sctx.getImageData(0, 0, natW, natH);
+      transformPixels(img.data, cbMatrix());
+      sctx.putImageData(img, 0, 0);
+    } catch (e) { return; }
+    simVer = workVer; simType = cbType; simStr = cbStr; simOk = true;
+  }
+  function displaySrc() { return simOk ? sim : work; }
 
   /* ── 载入：分层竞速。candidateTiers 返回 [原图×各源, 缩略图×各源]，
      层内并行请求、最先通过可读性测试（1×1 getImageData，CORS）者胜出；
@@ -145,6 +211,7 @@
     work.width = natW; work.height = natH;
     canvas.width = natW; canvas.height = natH;
     wctx.drawImage(img, 0, 0);
+    workVer++;
     sel = null; target = null; undoStack = [];
     targetChip.style.background = "transparent";
     targetHex.textContent = "未选择";
@@ -250,11 +317,12 @@
   var ZOOM_MIN = 0.05, ZOOM_MAX = 8;
   function zoomClamp(s) { return Math.min(Math.max(s, ZOOM_MIN), ZOOM_MAX); }
   function zoomRender() {
+    ensureSim();
     var w = Math.max(1, Math.round(natW * zoomScale));
     var h = Math.max(1, Math.round(natH * zoomScale));
     zoomCanvas.width = w; zoomCanvas.height = h;
     zctx.imageSmoothingEnabled = zoomScale < 1;   // 放大看细节时保留原始像素感
-    zctx.drawImage(work, 0, 0, w, h);
+    zctx.drawImage(displaySrc(), 0, 0, w, h);
     if (sel) {
       var accent = "#58a6ff";
       try {
@@ -383,14 +451,17 @@
       paletteEl.innerHTML = '<p class="cl-note">黑名单屏蔽了该区域全部颜色，可移除部分或清空黑名单</p>';
       return;
     }
-    var html = "";
+    var html = "", cbM = cbMatrix();
     out.forEach(function (o) {
       var hx = hex2(o.rgb[0], o.rgb[1], o.rgb[2]);
       var pct = o.w / denom * 100;
+      /* 模拟开启时并排多一块「模拟后」色块：判断这几个主色在该色觉下还分不分得开 */
+      var simChip = cbM ? '<span class="cl-chip cl-chip-sim" style="background:'
+        + simHexOf(o.rgb, cbM) + '" title="色觉模拟后"></span>' : "";
       html += '<button type="button" class="cl-swatch" data-hex="' + hx + '"'
         + (target && target.hex === hx ? ' data-on="true"' : '')
         + ' title="点击设为要替换的目标色">'
-        + '<span class="cl-chip" style="background:' + hx + '"></span>'
+        + '<span class="cl-chip" style="background:' + hx + '"></span>' + simChip
         + '<span class="cl-meta"><span class="cl-hex mono">' + hx + '</span>'
         + '<span class="cl-sub">rgb(' + o.rgb.join(",") + ') · ' + (pct >= 10 ? pct.toFixed(1) : pct.toFixed(2)) + '%</span></span>'
         + '<span class="cl-copy" title="复制色号">复制</span>'
@@ -475,6 +546,12 @@
     if (scopeSel.value === "all" || !sel) return { x: 0, y: 0, w: natW, h: natH };
     return sel;
   }
+  function pushUndo(x, y, snap) {
+    undoStack.push({ x: x, y: y, data: snap });
+    /* 快照按区域像素×4B 吃内存：大图（>4MP）限 3 步，常规图 8 步 */
+    var maxUndo = natW * natH > 4000000 ? 3 : 8;
+    if (undoStack.length > maxUndo) undoStack.shift();
+  }
   replaceBtn.addEventListener("click", function () {
     if (!origImg || !target) return;
     var r = scopeRect();
@@ -495,11 +572,9 @@
       }
     }
     if (!n) { setStatus("容差 " + tol.value + " 内没有命中「" + target.hex + "」的像素，可调大容差"); return; }
-    undoStack.push({ x: r.x, y: r.y, data: snap });
-    /* 快照按区域像素×4B 吃内存：大图（>4MP）限 3 步，常规图 8 步 */
-    var maxUndo = natW * natH > 4000000 ? 3 : 8;
-    if (undoStack.length > maxUndo) undoStack.shift();
+    pushUndo(r.x, r.y, snap);
     wctx.putImageData(img, r.x, r.y);
+    workVer++;
     redraw(); computePalette(); syncControls();
     setStatus("已替换 " + n.toLocaleString() + " 个像素 → " + hex2(nc[0], nc[1], nc[2]));
   });
@@ -507,15 +582,36 @@
     var u = undoStack.pop();
     if (!u) return;
     wctx.putImageData(u.data, u.x, u.y);
+    workVer++;
     redraw(); computePalette(); syncControls();
     setStatus("已撤销一步");
   });
   $("cl-resetimg").addEventListener("click", function () {
     if (!origImg) return;
     wctx.drawImage(origImg, 0, 0);
+    workVer++;
     undoStack = [];
     redraw(); computePalette(); syncControls();
     setStatus("已还原为原图");
+  });
+  /* 固化模拟：整幅写回 work（进撤销栈），写回后关掉预览——像素已是模拟图，
+     再叠一层预览就变成模拟两次 */
+  cbApplyBtn.addEventListener("click", function () {
+    var m = cbMatrix();
+    if (!origImg || !m) return;
+    var name = CB_NAMES[cbType];
+    var snap, img;
+    try {
+      snap = wctx.getImageData(0, 0, natW, natH);
+      img = wctx.getImageData(0, 0, natW, natH);
+    } catch (e) { setStatus("读取像素失败", true); return; }
+    transformPixels(img.data, m);
+    wctx.putImageData(img, 0, 0);
+    workVer++;
+    pushUndo(0, 0, snap);
+    cbType = ""; cbTypeEl.value = "";
+    redraw(); computePalette(); syncControls();
+    setStatus("已按 " + name + " 把模拟结果写回图像（强度 " + cbStr + "%），下载 PNG 即为模拟图，可撤销");
   });
   downloadBtn.addEventListener("click", function () {
     if (!origImg) return;
@@ -530,10 +626,11 @@
     }, "image/png");
   });
 
-  /* ── 画布渲染：当前状态 + 可选的「将被替换像素」品红高亮遮罩 ── */
+  /* ── 画布渲染：当前状态（模拟开启时画模拟缓存）+ 可选的「将被替换像素」高亮遮罩 ── */
   function redraw() {
     if (!origImg) return;
-    ctx.drawImage(work, 0, 0);
+    ensureSim();
+    ctx.drawImage(displaySrc(), 0, 0, natW, natH);
     if (highlightCb.checked && target) drawHighlight();
   }
   function drawHighlight() {
@@ -578,6 +675,19 @@
     paletteCountVal.textContent = paletteCount.value;
     computePalette();
   });
+  cbTypeEl.addEventListener("change", function () {
+    cbType = cbTypeEl.value;
+    redraw(); computePalette(); syncControls();
+    setStatus(cbType ? "色觉模拟：" + CB_NAMES[cbType] + " · 强度 " + cbStr + "% · 只改显示，像素未动"
+                      : "色觉模拟已关闭");
+  });
+  cbStrEl.addEventListener("input", function () {
+    cbStr = parseInt(cbStrEl.value, 10) || 100;
+    cbStrVal.textContent = cbStr + "%";
+    /* 全图逐像素矩阵乘法不便宜：拖动时不重算，停手 150ms 再刷新预览与主色块 */
+    clearTimeout(cbTimer);
+    cbTimer = setTimeout(function () { redraw(); computePalette(); }, 150);
+  });
 
   function syncControls() {
     overlay.style.pointerEvents = origImg ? "auto" : "none";
@@ -585,6 +695,7 @@
     undoBtn.disabled = !origImg || !undoStack.length;
     downloadBtn.disabled = !origImg;
     clearselBtn.disabled = !origImg || !sel;
+    cbApplyBtn.disabled = !origImg || !cbMatrix();
   }
 
   /* ── 初始化：显示大小记忆 + 载入/随机 + ?id= 直达 ── */

@@ -9,7 +9,7 @@
     site/index.html              画廊首页（缩略图网格 + 分页 + 搜索 + 多维筛选 + 排序）
     site/{id}/index.html         每图详情页（原图 + 元信息 + 上下张）
     site/search/index.html       全站搜索独立页（缩略图结果行，任意终端可用）
-    site/color-lab/index.html    色彩实验独立页（框选取色 + 颜色替换调色工具）
+    site/color-lab/index.html    色彩实验独立页（框选取色 + 颜色替换调色 + 色觉模拟工具）
     site/assets/style.css        样式（源：assets_src/style.css，此处仅读取复制）
     site/assets/gallery.js       三源降级加载 + 分页/筛选/排序 + 统计打点
                                  （源：assets_src/gallery.js；构建期在其头部注入 window.GALLERY 配置）
@@ -507,11 +507,13 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
     """色彩实验独立页（/color-lab/）：纯浏览器端的取色 / 调色工具。
     指定图片 id 载入原图 → 框选区域（不选=整张图）统计占比最高的前几个颜色
     （色块 + HEX/RGB 色号）→ 把区域内指定颜色替换成新颜色，可撤销、可下载 PNG。
+    另可叠加色觉模拟（Protanopia / Deuteranopia / Tritanopia / Achromatopsia + 强度）
+    检查配色对色觉障碍读者是否可辨。
     交互逻辑在 assets_src/color-lab.js（构建期原样拷贝进 site/assets/）。"""
     body = f"""<header class="site">
   <p class="kicker">GEOSCIPILOT · COLOR LAB</p>
   <h1 class="spage-title">色彩实验</h1>
-  <p class="lede">框选（或不框选=整张图）统计图中占比最高的几个颜色并提供色号，再把指定颜色替换成新颜色，方便调色试色。全部计算在浏览器本地完成，可下载结果图。</p>
+  <p class="lede">框选（或不框选=整张图）统计图中占比最高的几个颜色并提供色号，再把指定颜色替换成新颜色，方便调色试色；可叠加色觉模拟（红盲 / 绿盲 / 蓝盲 / 全色盲视角），检查配色对色觉障碍读者是否分得开。全部计算在浏览器本地完成，可下载结果图。</p>
 </header>
 
 <div class="clayout">
@@ -533,6 +535,7 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
       <button id="cl-clearsel" class="cl-btn" type="button" disabled>清除框选</button>
       <label class="cl-check"><input type="checkbox" id="cl-highlight"> 高亮将被替换的像素</label>
       <label class="cl-check" title="高亮遮罩的颜色，可自选"><input type="color" id="cl-hlcolor" value="#FF4081"> 高亮色</label>
+      <span class="cl-cb"><label for="cl-cbtype">色觉模拟</label><select id="cl-cbtype" title="按二色视觉矩阵近似模拟色觉障碍读者看到的成图效果"><option value="">不模拟</option><option value="prot" title="红色盲：缺失红锥，红/绿/橙互混">Protanopia</option><option value="deut" title="绿色盲：缺失绿锥，最常见的色觉缺陷">Deuteranopia</option><option value="trit" title="蓝色盲：缺失蓝锥，蓝/绿、黄/红互混">Tritanopia</option><option value="achroma" title="全色盲：只剩明暗层次">Achromatopsia</option></select><input type="range" id="cl-cbstrength" class="tolrange" min="10" max="100" step="5" value="100" aria-label="色觉模拟强度" title="模拟强度：100% = 完全二色视觉，调低近似红色弱 / 绿色弱等部分色觉缺陷"><span class="mono" id="cl-cbstrengthval">100%</span></span>
     </div>
     <p class="cl-status" id="cl-status"></p>
   </section>
@@ -542,7 +545,7 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
       <h3>主色 · 当前区域</h3>
       <div class="cl-row"><label>数量</label><input type="range" id="cl-count" min="4" max="20" step="1" value="8" aria-label="主色数量"><span class="mono" id="cl-countval">8</span></div>
       <div class="cl-palette" id="cl-palette"><p class="cl-note">载入图片后自动统计（按占比排序）</p></div>
-      <p class="cl-note">点击色块设为「目标色」；「复制」拿色号；「屏蔽」把背景色（含相近色）移出统计。</p>
+      <p class="cl-note">点击色块设为「目标色」；「复制」拿色号；「屏蔽」把背景色（含相近色）移出统计。开启色觉模拟时，色块右侧并排显示模拟后的颜色。</p>
       <div class="cl-blacklist" id="cl-blacklist" hidden>
         <div class="cl-bl-head"><span>黑名单 · 以下颜色不计入主色统计</span><button id="cl-blclear" class="cl-btn cl-mini" type="button">清空</button></div>
         <div class="cl-bl-chips" id="cl-blchips"></div>
@@ -561,8 +564,10 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
       <div class="cl-actions">
         <button id="cl-undo" class="cl-btn" type="button" disabled>撤销上一步</button>
         <button id="cl-resetimg" class="cl-btn" type="button">还原原图</button>
+        <button id="cl-cbapply" class="cl-btn" type="button" disabled title="把当前色觉模拟的结果真正写进图像像素（可撤销），写回后下载 PNG 即为模拟图">固化模拟效果</button>
         <button id="cl-download" class="cl-btn cl-primary" type="button" disabled>下载 PNG</button>
       </div>
+      <p class="cl-note">色觉模拟只改显示、不改像素；「固化模拟效果」才把模拟结果写回图像（可撤销 / 还原原图），写回后预览自动关闭以免叠加两次。</p>
     </section>
   </aside>
 </div>
@@ -581,7 +586,7 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
 </div>"""
     head = f'<script defer src="../assets/color-lab.js?v={BUILD_VER}"></script>'
     return page_shell(cfg, "色彩实验", body, depth=1,
-                      meta_desc="框选图片区域统计主要颜色（色块 + HEX/RGB 色号），并可将指定颜色替换为新颜色；浏览器本地完成，支持下载结果图",
+                      meta_desc="框选图片区域统计主要颜色（色块 + HEX/RGB 色号），可将指定颜色替换为新颜色，并叠加红盲/绿盲/蓝盲色觉模拟检查配色；浏览器本地完成，支持下载结果图",
                       og_url=f"{SITE_URL}/color-lab/",
                       head_extra=head)
 
@@ -748,7 +753,7 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
              "", "## 核心页面", "",
              "- [图库首页](" + SITE_URL + "/)",
              "- [全站搜索](" + SITE_URL + "/search/)",
-             "- [色彩实验](" + SITE_URL + "/color-lab/)（框选取色 + 颜色替换调色工具）",
+             "- [色彩实验](" + SITE_URL + "/color-lab/)（框选取色 + 颜色替换调色 + 色觉模拟工具）",
              "- [全站统计](" + SITE_URL + "/statistics/)（收录量、主色构成、高频颜色、标签词云、热看榜）",
              "- [关于本站](" + SITE_URL + "/about/)（站点定位、数据来源与说明）",
              "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
