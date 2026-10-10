@@ -20,7 +20,7 @@
   }
   var RSEED = rseed() || newSeed();
 
-  /* ── 三源降级：当前源失败就自动换下一个源 ── */
+  /* ── 逐源降级：当前源失败就自动换下一个源 ── */
   function bind(img) {
     var rel = img.getAttribute("data-rel");
     var i = CFG.active;
@@ -121,7 +121,7 @@
 
   /* ── 全站搜索独立页（/search/）：静态站没有检索后端，直接在 gallery-data.js
      的全量元数据上做客户端匹配（id / DOI / 标签 / 日期，多词空格分隔 = 同时命中）。
-     结果行带缩略图，经 bind() 走三源降级；无 thumb 的条目直接输出「无图」占位。
+     结果行带缩略图，经 bind() 走逐源降级；无 thumb 的条目直接输出「无图」占位。
      放在网格逻辑之前 —— 搜索页没有 #grid 会提前 return ── */
   var spageQ = document.getElementById("spage-q");
   if (spageQ) {
@@ -171,7 +171,7 @@
           + '<span class="sres-body"><span class="sres-id">' + hl("图 " + it.id, tokens) + '</span>'
           + '<span class="sres-meta">' + meta.join('<i class="sres-sep">·</i>') + '</span></span></a>';
       }).join("");
-      // 动态插入的缩略图要手动绑三源降级（gallery.js 只自动绑页面已有的 img[data-rel]）
+      // 动态插入的缩略图要手动绑逐源降级（gallery.js 只自动绑页面已有的 img[data-rel]）
       sList.querySelectorAll("img[data-rel]").forEach(bind);
     }
     // ?q= 预填：与主站 /search?q= 行为一致，结果可分享

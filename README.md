@@ -19,7 +19,7 @@
 - 排序：新到旧 / 旧到新 / 随机；筛选结果可经 URL 参数分享
 - 右侧悬浮按钮队列：全站搜索 / 返回 Home / GitHub / 明暗主题 / 回到顶部
 
-图片不打包进站点，由 GitHub 分发并逐图自动降级（jsDelivr → GitHub raw → OSS），
+图片不打包进站点，由 GitHub 分发并逐图自动降级（jsDelivr → GitHub raw），
 访问需具备 GitHub 访问能力；加载前按真实比例显示占位层，零抖动。
 
 ## 本地预览

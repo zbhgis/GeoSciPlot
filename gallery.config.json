@@ -6,10 +6,6 @@
   "branch": "main",
   "owner": "zbhgis",
   "activeSource": 0,
-  "oss": {
-    "bucket": "",
-    "region": "oss-cn-hangzhou"
-  },
   "tracker": "/api/v1/track",
   "api": "",
   "server": {

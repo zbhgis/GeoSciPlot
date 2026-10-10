@@ -85,11 +85,11 @@ site_trash/           过期详情页的暂存区（已 gitignore，可随时手
 ## 图片源与降级
 
 图片不打包进站点，全部由 GitHub 分发，逐图自动降级（顺序在 `gallery.config.json` 的
-`activeSource`）：jsDelivr（CDN，默认首选）→ GitHub raw → OSS 兜底（未配置）。
+`activeSource`）：jsDelivr（CDN，默认首选）→ GitHub raw。
 
 **加载占位**：卡片 / 搜索结果行 / 详情页大图在图片加载前显示「加载中」占位层——
 `<img>` 带缩略图真实 `width/height`（refs.json 提供），浏览器提前预留同比例空间
-（零抖动），图片画出后自然盖住占位层；三源全部失败时连占位盒一起换成
+（零抖动），图片画出后自然盖住占位层；各源全部失败时连占位盒一起换成
 「图片加载失败」提示块。
 
 本地预览：`python scripts/build_site.py --preview`，然后 `cd site && python -m http.server 7332`。

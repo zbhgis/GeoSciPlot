@@ -2,7 +2,7 @@
 """GeoSciPlot 静态站生成器：读 meta/refs.json → 生成 site/ 纯静态站点。
 
 用法：
-    python scripts/build_site.py              # 生产构建（图片走 jsDelivr/raw/OSS 三源）
+    python scripts/build_site.py              # 生产构建（图片走 jsDelivr / GitHub raw 逐源降级）
     python scripts/build_site.py --preview    # 本地预览（把 images/ 复制进 site/，源改本地）
 
 产出：
@@ -11,7 +11,7 @@
     site/search/index.html       全站搜索独立页（缩略图结果行，任意终端可用）
     site/color-lab/index.html    色彩实验独立页（框选取色 + 颜色替换调色 + 色觉模拟工具）
     site/assets/style.css        样式（源：assets_src/style.css，此处仅读取复制）
-    site/assets/gallery.js       三源降级加载 + 分页/筛选/排序 + 统计打点
+    site/assets/gallery.js       逐源降级加载 + 分页/筛选/排序 + 统计打点
                                  （源：assets_src/gallery.js；构建期在其头部注入 window.GALLERY 配置）
     site/assets/gallery-data.js  全量图元数据（首页网格与搜索页共用）
 
@@ -56,7 +56,6 @@ DEFAULT_CFG = {
     "branch": "main",
     "owner": "zbhgis",
     "activeSource": 1,
-    "oss": {"bucket": "", "region": "oss-cn-hangzhou"},
     "tracker": "/api/v1/track",
 }
 
@@ -72,15 +71,11 @@ def build_sources(cfg: dict, preview: bool = False) -> list[dict]:
     owner = cfg.get("owner") or "OWNER"
     repo = cfg["repo"]
     branch = cfg.get("branch", "main")
-    oss = cfg.get("oss", {})
-    bucket = oss.get("bucket") or "BUCKET"
-    region = oss.get("region", "oss-cn-hangzhou")
-    # 图片一律走 GitHub 链接（jsDelivr CDN → raw 直链 → OSS 兜底），
+    # 图片一律走 GitHub 链接（jsDelivr CDN → raw 直链），
     # 本站不存图片不分发图片（服务器带宽留给站点本身）。
     sources = [
         {"id": "jsdelivr", "label": "jsDelivr", "base": f"https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/images"},
         {"id": "raw", "label": "GitHub raw", "base": f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/images"},
-        {"id": "oss", "label": "OSS 兜底", "base": f"https://{bucket}.{region}.aliyuncs.com/{repo.lower()}/images"},
     ]
     if preview:
         # 本地预览：图片副本就在 site/images/，同源加载即可
@@ -488,7 +483,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
 def build_search_page(cfg: dict, items: list[dict]) -> str:
     """全站搜索独立页：版式对齐主站 zbhgis.com 的 /search。
     结果行由 gallery.js 在客户端渲染（数据来自 gallery-data.js），
-    缩略图与网格卡片一样走三源降级；结果链接经 data-up 前缀回详情页。"""
+    缩略图与网格卡片一样走逐源降级；结果链接经 data-up 前缀回详情页。"""
     body = f"""<header class="site">
   <p class="kicker">GEOSCIPILOT · SEARCH</p>
   <h1 class="spage-title">全站搜索</h1>
