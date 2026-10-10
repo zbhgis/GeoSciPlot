@@ -348,12 +348,20 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 /* 舞台条上的「显示大小」滑杆：调 .cl-stage 宽度百分比（40–100%），localStorage 记忆 */
 /* 高亮色拾取器（小号，随 checkbox 同行） */
 .cl-stagebar input[type=color]{width:26px;height:20px;padding:1px;border:1px solid var(--line2);border-radius:6px;background:var(--bg);cursor:pointer}
-/* 色觉模拟控件（与高亮色同属「查看辅助」，挂在舞台条上）：类型下拉 + 强度滑杆 */
-.cl-cb{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px}
+/* 色觉模拟控件（与高亮色同属「查看辅助」，挂在舞台条上）：类型下拉 + 强度滑杆。
+   舞台条各项宽度随 selinfo 文案变（「未框选…」/「已框选 …px（占整图 …%）」长短不同），
+   用 margin-left:auto 把这一组顶到行尾：宽屏下所有剩余空白都落在它左边，
+   与「高亮色」自然拉开，前面再补一条竖线作分组界 */
+.cl-cb{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;margin-left:auto;padding-left:16px;border-left:1px solid var(--line)}
 .cl-cb>label{font-size:var(--fs-xs);letter-spacing:.06em;color:var(--faint)}
 .cl-cb select{padding:4px 11px;font-size:var(--fs-xs)}
 .cl-cb input[type=range]{width:86px}
 .cl-cb>.mono{min-width:32px;font-size:var(--fs-xs);color:var(--dim)}
+/* 窄屏这一组必然换行到自己一行：此时靠右 + 行首竖线像 bug，退回左对齐、去掉分隔线。
+   必须写在上面那条之后——媒体查询不加权重，放前面会被同行宽的常规规则盖掉 */
+@media (max-width:1000px){
+  .cl-cb{margin-left:0;padding-left:0;border-left:none}
+}
 /* ── 色彩实验 · 放大镜层：单击画布打开，滚轮缩放/拖拽平移/＋−/适配/1:1，
    内容来自当前（可能已替换）的画布状态，并叠加框选矩形 ── */
 .cl-zoom{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:color-mix(in srgb,var(--bg) 92%,transparent)}
