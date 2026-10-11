@@ -278,14 +278,42 @@ def card_html(item: dict, base: str) -> str:
 # 「URL ?sort= > localStorage 偏好」纠正——宽屏慢网能看到一瞬间默认态再跳变。
 # 内联脚本紧跟 sortseg 输出、解析期同步执行，按与 gallery.js 相同的优先级预置
 # aria-pressed 消除闪烁；不写 localStorage，URL 排序仅本次生效的语义不变
-SORT_PRESTATE = (
-    '<script>(function(){try{var v=new URLSearchParams(location.search).get("sort"),'
-    'ok=["added","added_asc","color","random"];'
-    'if(ok.indexOf(v)<0){v=null;try{v=localStorage.getItem("gsp-sort2")}catch(e){}'
-    'if(ok.indexOf(v)<0)v=null;}'
-    'if(v)document.querySelectorAll("#sortseg button").forEach(function(b){'
-    'b.setAttribute("aria-pressed",String(b.getAttribute("data-sort")===v))})}catch(e){}})();</script>'
-)
+# 筛选控件首帧预置：静态 HTML 把全部控件写成默认态（新到旧按下、chips 全选、
+# 取色器白色、输入框留空、面板展开），gallery.js 加载后才按「URL 参数 >
+# localStorage 偏好」纠正——慢网下能看到一瞬间默认态再跳变（?sort=random 分享、
+# 收起过筛选面板、?tag= 标签跳转等场景）。STATE_PRESTATE 内联脚本紧跟 sortseg
+# 输出、解析期同步执行（先于卡片网格绘制），按与 gallery.js 相同的优先级预置
+# 各控件状态消除闪烁；不写 localStorage，「URL 排序仅本次生效」语义不变
+STATE_PRESTATE = """<script>(function(){try{
+var P=new URLSearchParams(location.search);
+var col=false;try{col=localStorage.getItem("gsp-filters")==="hidden"}catch(e){}
+if(col){var fb=document.getElementById("filters");if(fb)fb.setAttribute("hidden","");
+var fbB=document.getElementById("filterBtn");if(fbB){fbB.textContent="筛选 ▾";
+fbB.setAttribute("aria-expanded","false")}}
+var q=P.get("q");if(q){var qi=document.getElementById("q");if(qi)qi.value=q}
+["from","to"].forEach(function(k){var v=P.get(k);if(v){
+var el=document.getElementById("f-"+k);if(el)el.value=v}});
+var t=P.get("tag");if(t){var names=t.split("|");
+document.querySelectorAll('#filters .chips[data-key="tag"] button.chip[data-v]')
+.forEach(function(b){b.setAttribute("aria-pressed",
+String(names.indexOf(b.getAttribute("data-v"))>-1))})}
+var c=String(P.get("color")||"").replace(/^#/,"");
+if(/^[0-9a-fA-F]{6}$/.test(c)){c="#"+c.toUpperCase();
+var ci=document.getElementById("f-color");if(ci)ci.value=c;
+var ch=document.getElementById("f-colorhex");if(ch)ch.value=c.slice(1);
+var cc=document.getElementById("f-colorclear");if(cc)cc.hidden=false}
+var tv=parseInt(P.get("tol"),10);
+if(tv>=0&&tv<=150){var fe=document.getElementById("f-tol");if(fe)fe.value=String(tv);
+var fv=document.getElementById("f-tolval");if(fv)fv.textContent=String(tv)}
+var pv=parseFloat(P.get("pct"));
+if(pv>=0&&pv<=100){var fp=document.getElementById("f-minpct");if(fp)fp.value=String(pv);
+var fv2=document.getElementById("f-minpctval");if(fv2)fv2.textContent=pv+"%"}
+var v=P.get("sort"),ok=["added","added_asc","color","random"];
+if(ok.indexOf(v)<0){v=null;try{v=localStorage.getItem("gsp-sort2")}catch(e){}
+if(ok.indexOf(v)<0)v=null}
+if(v)document.querySelectorAll("#sortseg button").forEach(function(b){
+b.setAttribute("aria-pressed",String(b.getAttribute("data-sort")===v))})
+}catch(e){}})();</script>"""
 
 
 def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
@@ -345,7 +373,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
   + '<button type="button" data-sort="added_asc" aria-pressed="false" title="上传日期 旧→新"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-8M4.8 8.7 8 5.5l3.2 3.2M3 2.5h10"/></svg><span>旧到新</span></button>'
   + '<button type="button" data-sort="color" aria-pressed="false" title="按与筛选颜色的相近程度排序（需先在「颜色」行选色）"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.2"/><path d="M8 1.2v2.4M8 12.4v2.4M1.2 8h2.4M12.4 8h2.4"/></svg><span>相近</span></button>'
   + '<button type="button" data-sort="random" aria-pressed="false" title="随机排序"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5h2.2c3.2 0 4.6 7 7.6 7H14M2 11.5h2.2c1.3 0 2.2-.9 3-2M8.8 6.5c.8-1.1 1.7-2 3-2H14M12.3 3l1.7 1.5L12.3 6M12.3 10l1.7 1.5-1.7 1.5"/></svg><span>随机</span></button>'
-  + '</span>' + SORT_PRESTATE)}
+  + '</span>' + STATE_PRESTATE)}
 </div>
 
 <main class="grid" id="grid">
