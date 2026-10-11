@@ -187,8 +187,12 @@ def page_shell(
     og_url: str = "",
     extra_assets: list[str] | None = None,
     active_nav: str = "",
+    up_override: str | None = None,
 ) -> str:
-    up = "../" if depth else ""
+    # up_override：错误页专用。404 由 nginx error_page 内部重定向，浏览器地址
+    # 停留在原始路径（可能是 /a/b/ 任意深度），相对资源路径必然断链，只有
+    # 根绝对路径在任何深度都成立
+    up = up_override if up_override is not None else ("../" if depth else "")
     gh = gh_url or "https://github.com/{}/{}".format(
         cfg.get("owner") or "OWNER", cfg["repo"])
     desc = meta_desc or f"{cfg['subtitle']} —— {cfg['lede']}"
@@ -819,6 +823,11 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
 
     today = time.strftime("%Y-%m-%d")
     img_base = sources[active]["base"]
+    # sitemap 的 image:loc 规范要求绝对 URL：生产本就是 jsdelivr 绝对地址，
+    # --preview 的 img_base 是相对路径 /images（本地文件不部署，sitemap 不被消费，
+    # 但保持良构免得校验器报错）——统一补全成绝对地址
+    if not img_base.startswith("http"):
+        img_base = SITE_URL + img_base
     urls = ["<url><loc>" + SITE_URL + "/</loc><lastmod>" + today + "</lastmod></url>",
             "<url><loc>" + SITE_URL + "/search/</loc><lastmod>" + today + "</lastmod></url>",
             "<url><loc>" + SITE_URL + "/color-lab/</loc><lastmod>" + today + "</lastmod></url>",
@@ -1048,6 +1057,7 @@ def main() -> int:
         body404,
         meta_desc="页面不存在",
         head_extra='<meta name="robots" content="noindex, nofollow">',
+        up_override="/",
     ), encoding="utf-8")
 
     pages = max(1, -(-len(items) // PAGE_SIZE))
