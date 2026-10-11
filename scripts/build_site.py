@@ -947,7 +947,11 @@ def main() -> int:
                if re.match(r"^[0-9A-Fa-f]{6}$", h)],
     } for it in items]
     (SITE / "assets" / "gallery-data.js").write_text(
-        "window.GALLERY_DATA = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n",
+        # < 转义成 \u003c：与 stats-data.js 同一口径——数据若改为内联 <script>，
+        # 原始 "</script>" 或标签文本会截断脚本
+        "window.GALLERY_DATA = "
+        + json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+        + ";\n",
         encoding="utf-8")
 
     img_base = sources[active]["base"]   # 静态 HTML 里图片的绝对地址（与 gallery.js 的起始源一致）
