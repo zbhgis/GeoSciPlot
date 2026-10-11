@@ -1162,7 +1162,12 @@ function renderManage(items, total) {
   var box = document.getElementById("manageList");
   box.innerHTML = "";
   editOpen = null;
-  if (!items.length) { box.appendChild(el("p", "note", "图库为空")); return; }
+  if (!items.length) {
+    box.appendChild(el("p", "note", mItems.length
+      ? "没有匹配的图片，调整筛选条件试试"
+      : "图库为空"));
+    return;
+  }
   items.forEach(function (it) { box.appendChild(manageRow(it)); });
   box.appendChild(pagerBar(total, mPage, M_PER, function (p) {
     mPage = p;
@@ -1214,9 +1219,9 @@ function manageRow(it) {
         rawTagsDel([it.id]);      // 随图持久化的待发布标签一并清掉
       });
     });
-    act.appendChild(btnEdit);
-    act.appendChild(btnDel);
   });
+  act.appendChild(btnEdit);
+  act.appendChild(btnDel);
   node.appendChild(act);
   return node;
 }
