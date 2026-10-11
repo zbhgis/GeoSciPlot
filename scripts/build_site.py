@@ -870,8 +870,14 @@ def main() -> int:
     # site_trash/ 已 gitignore，偶尔手动清空即可。
     if SITE.exists():
         trash = ROOT / "site_trash"
+        # 本轮仍要生成的详情页（SITE / it["id"]）必须留在原地——白名单只排除了
+        # 固定栏目，漏了这条 live 比对会把全部详情页当"过期"搬进 site_trash
+        # 再原样重建，site_trash 随每次构建增长。空库时 live 为空集，全部照搬。
+        live = {it["id"] for it in items}
         for d in SITE.iterdir():
-            if d.is_dir() and d.name not in ("assets", "images", "search", "color-lab", "statistics", "about") and (d / "index.html").exists():
+            if (d.is_dir() and d.name not in ("assets", "images", "search", "color-lab", "statistics", "about")
+                    and d.name not in live
+                    and (d / "index.html").exists()):
                 trash.mkdir(parents=True, exist_ok=True)
                 dest = trash / (d.name + "-" + str(int(time.time())))
                 print(f"· 过期详情页 {d.name} → site_trash/（不删除）")
