@@ -98,6 +98,14 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 .tagpick button[aria-pressed=true]{color:var(--accent);border-color:var(--accent)}
 .tagnew{display:flex;gap:6px;margin-top:7px}
 .tagnew input{max-width:260px}
+/* 分页条（图片管理 / raw 暂存区共用）：胶囊页码 + 当前页点亮 */
+.pager{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:16px 0 0;padding-top:14px;border-top:1px solid var(--line)}
+.pager button{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;padding:4px 11px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--dim);cursor:pointer;transition:color .15s,border-color .15s}
+.pager button:hover:not(:disabled){color:var(--text);border-color:var(--accent)}
+.pager button:disabled{opacity:.35;cursor:not-allowed}
+.pager button.on{color:var(--accent);border-color:var(--accent)}
+.pager .info,.pager .pggap{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint)}
+.pager .info{margin-left:6px}
 </style>
 </head>
 <body>
@@ -1033,6 +1041,41 @@ document.getElementById("btnPush").addEventListener("click", function () {
 /* ── 图片管理（查 / 改 / 删 + 复刻主页的搜索筛选机制）── */
 var mItems = [];
 var mFilter = { q: "", tag: "*", from: "", to: "", doi: "*" };
+var mPage = 1;
+var M_PER = 30;          // 图片管理每页条数：行含缩略图，整表渲染太重
+/* 分页条：上一页 / 页码（当前 ±2 窗口 + 首尾，间隔用 …）/ 下一页 + 位置信息；
+   总页数 ≤1 时返回中性空节点（空 .pager 会渲染一条孤立的分隔线）。onPage
+   收到目标页码，由调用方改页码并重渲染 */
+function pagerBar(total, page, per, onPage) {
+  var pages = Math.max(1, Math.ceil(total / per));
+  if (pages <= 1) return el("span");
+  var bar = el("div", "pager");
+  var mk = function (txt, target, on, dis) {
+    var b = el("button", "pg" + (on ? " on" : ""), txt);
+    b.type = "button";
+    if (dis) b.disabled = true;
+    else b.addEventListener("click", function () { onPage(target); });
+    return b;
+  };
+  bar.appendChild(mk("上一页", page - 1, false, page <= 1));
+  var shown = [];
+  for (var p = 1; p <= pages; p++)
+    if (p === 1 || p === pages || Math.abs(p - page) <= 2) shown.push(p);
+  var last = 0;
+  shown.forEach(function (p) {
+    if (p - last > 1) bar.appendChild(el("span", "pggap", "…"));
+    bar.appendChild(mk(String(p), p, p === page, false));
+    last = p;
+  });
+  bar.appendChild(mk("下一页", page + 1, false, page >= pages));
+  bar.appendChild(el("span", "info", "第 " + page + " / " + pages + " 页 · 共 " + total + " 条"));
+  return bar;
+}
+/* 翻页后把列表顶部滚回可视区（页面本身是整页滚动） */
+function scrollListTop(id) {
+  var b = document.getElementById(id);
+  if (b) b.scrollIntoView({ block: "start" });
+}
 function mFiltered() {
   return mItems.filter(function (it) {
     if (mFilter.tag !== "*" && (it.tags || []).indexOf(mFilter.tag) === -1) return false;
@@ -1064,6 +1107,7 @@ function mRenderChips() {
     b.innerHTML = label + (n !== undefined ? ' <span class="n">' + n + "</span>" : "");
     b.addEventListener("click", function () {
       mFilter.tag = (mFilter.tag === val ? "*" : val);
+      mPage = 1;                                 // 筛选变化：回到第一页
       mRenderChips(); mRender();
     });
     box.appendChild(b);
@@ -1079,13 +1123,14 @@ function mWire() {
   var r = document.getElementById("mReset");
   if (s && !s.dataset.wired) {
     s.dataset.wired = "1";
-    s.addEventListener("input", function () { mFilter.q = s.value.trim().toLowerCase(); mRender(); });
-    d.addEventListener("change", function () { mFilter.doi = d.value; mRender(); });
-    f.addEventListener("change", function () { mFilter.from = f.value; mRender(); });
-    t.addEventListener("change", function () { mFilter.to = t.value; mRender(); });
+    s.addEventListener("input", function () { mFilter.q = s.value.trim().toLowerCase(); mPage = 1; mRender(); });
+    d.addEventListener("change", function () { mFilter.doi = d.value; mPage = 1; mRender(); });
+    f.addEventListener("change", function () { mFilter.from = f.value; mPage = 1; mRender(); });
+    t.addEventListener("change", function () { mFilter.to = t.value; mPage = 1; mRender(); });
     r.addEventListener("click", function () {
       mFilter = { q: "", tag: "*", from: "", to: "", doi: "*" };
       s.value = ""; d.value = "*"; f.value = ""; t.value = "";
+      mPage = 1;
       mRenderChips(); mRender();
     });
   }
@@ -1102,7 +1147,9 @@ function mRender() {
   var c = document.getElementById("mCount");
   if (c) c.textContent = (mFilter.q || mFilter.tag !== "*" || mFilter.from || mFilter.to || mFilter.doi !== "*")
     ? "匹配 " + list.length + " / " + mItems.length + " 张" : "共 " + mItems.length + " 张";
-  renderManage(list);
+  var pages = Math.max(1, Math.ceil(list.length / M_PER));
+  if (mPage > pages) mPage = pages;               // 删除等操作后条数变少：页码回缩
+  renderManage(list.slice((mPage - 1) * M_PER, mPage * M_PER), list.length);
 }
 function loadItems() {
   return api("/api/items").then(function (refs) {
@@ -1111,12 +1158,17 @@ function loadItems() {
     mRender();
   });
 }
-function renderManage(items) {
+function renderManage(items, total) {
   var box = document.getElementById("manageList");
   box.innerHTML = "";
   editOpen = null;
   if (!items.length) { box.appendChild(el("p", "note", "图库为空")); return; }
   items.forEach(function (it) { box.appendChild(manageRow(it)); });
+  box.appendChild(pagerBar(total, mPage, M_PER, function (p) {
+    mPage = p;
+    mRender();
+    scrollListTop("manageList");
+  }));
 }
 function manageRow(it) {
   var node = el("div", "mrow");
@@ -1234,6 +1286,8 @@ document.getElementById("btnSync").addEventListener("click", function () {
    页面加载时拉一次，点 raw 标签直接用缓存渲染；改动后置 null 强制重拉。 */
 var rawFiles = null;
 var rawFilter = "*";
+var rawPage = 1;
+var R_PER = 30;          // raw 暂存区每页条数：行含预览缩略图
 
 function fmtSize(n) {
   n = n || 0;
@@ -1293,6 +1347,7 @@ function renderRawChips() {
     b.innerHTML = x[0] + ' <span class="n">' + x[2] + "</span>";
     b.addEventListener("click", function () {
       rawFilter = (rawFilter === x[1] ? "*" : x[1]);
+      rawPage = 1;                               // 筛选变化：回到第一页
       renderRawChips(); renderRaw();
     });
     box.appendChild(b);
@@ -1315,7 +1370,16 @@ function renderRaw() {
       : "raw/ 是空的。注意：图发布后仍会留在 raw/（作为收件箱留存），可随时在这里清空。"));
     return;
   }
-  list.forEach(function (f) { box.appendChild(rawRow(f)); });
+  var pages = Math.max(1, Math.ceil(list.length / R_PER));
+  if (rawPage > pages) rawPage = pages;          // 发布/删除后条数变少：页码回缩
+  list.slice((rawPage - 1) * R_PER, rawPage * R_PER).forEach(function (f) {
+    box.appendChild(rawRow(f));
+  });
+  box.appendChild(pagerBar(list.length, rawPage, R_PER, function (p) {
+    rawPage = p;
+    renderRaw();
+    scrollListTop("rawList");
+  }));
 }
 function rawRow(f) {
   var node = el("div", "mrow");

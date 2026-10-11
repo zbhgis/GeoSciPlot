@@ -208,7 +208,7 @@ def page_shell(
 <meta property="og:type" content="{og_type}">
 <meta property="og:url" content="{og_url}">{og_img}
 {head_extra}<link rel="stylesheet" href="{up}assets/style.css?v={BUILD_VER}">
-<link rel="icon" type="image/png" href="{up}assets/favicon.png">
+<link rel="icon" type="image/png" href="{up}assets/favicon.png?v={BUILD_VER}">
 <script>try{{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t);var f=localStorage.getItem("gsp-fs");if(f)document.documentElement.setAttribute("data-fs",f)}}catch(e){{}}</script>
 </head>
 <body>
@@ -251,7 +251,7 @@ def filter_row(label: str, inner: str) -> str:
     return f'<div class="fgroup"><span class="flabel">{esc(label)}</span>{inner}</div>'
 
 
-def card_html(item: dict) -> str:
+def card_html(item: dict, base: str) -> str:
     tags = item.get("tags") or []
     cap = " · ".join(tags) if tags else "—"
     # alt 用语义标签（图片搜索/读屏的主入口），哈希 id 只做无标签时的兜底
@@ -260,16 +260,21 @@ def card_html(item: dict) -> str:
     # .c-covbox::before 的「加载中」层在图片画出前可见（CSS 同款占位语言）
     w, h = int(item.get("width") or 0), int(item.get("height") or 0)
     dims = f' width="{w}" height="{h}"' if w and h else ""
+    # src 在构建期就写死成活动源的绝对地址：gallery.js 的 bind() 运行时也会赋同一个值
+    # （不重复请求），但这样爬虫抓原始 HTML、AI 引擎读页面时能直接看到图片地址，
+    # LCP 也不必等 JS 跑起来。data-rel 保留——逐源降级靠它换下一个源。
+    thumb = str(item.get("thumb") or "")
+    src = f' src="{esc(base + "/" + thumb)}"' if thumb else ""
     # 标签做成 accent 描边徽章（同 MacroBiodiv .c-j 语言）：flex-wrap 换行，
     # 多标签不再被单行截断；无标签回落一条弱化的 —
     badges = "".join(f"<i>{esc(str(t))}</i>" for t in tags) or '<i class="none">—</i>'
     return f"""  <a class="card" href="{esc(item['id'])}/" data-id="{esc(item['id'])}" title="{esc(' · '.join(tags))}">
-    <span class="c-covbox"><img data-rel="{esc(item.get('thumb'))}"{dims} alt="{esc(alt)}" loading="lazy"></span>
+    <span class="c-covbox"><img{src} data-rel="{esc(item.get('thumb'))}"{dims} alt="{esc(alt)}" loading="lazy"></span>
     <span class="cap"><span class="tags">{badges}</span></span>
   </a>"""
 
 
-def build_index(cfg: dict, items: list[dict]) -> str:
+def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
     tag_counter: Counter = Counter()
     for it in items:
         for t in it.get("tags", []):
@@ -288,7 +293,7 @@ def build_index(cfg: dict, items: list[dict]) -> str:
                 'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
                 '<path d="M6 3l5 5-5 5"/></svg>')
     body = f"""<header class="site">
-  <h1><img class="logo" src="assets/logo.png" alt="GeoSciPlot logo">{esc(cfg['title'])}</h1>
+  <h1><img class="logo" src="assets/logo.png?v={BUILD_VER}" alt="GeoSciPlot logo">{esc(cfg['title'])}</h1>
   <a class="gh-note" href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener" target="_blank" title="在 GitHub 查看图片源文件">{ghsvg}<span>图片存储于 <b>GitHub</b>，访问需具备 GitHub 访问能力（点此查看仓库）</span></a>
   <p class="lede">{esc(cfg['lede'])}</p>
 </header>
@@ -330,7 +335,7 @@ def build_index(cfg: dict, items: list[dict]) -> str:
 </div>
 
 <main class="grid" id="grid">
-{chr(10).join(card_html(it) for it in first_page)}
+{chr(10).join(card_html(it, img_base) for it in first_page)}
 </main>
 <p class="empty" id="empty">没有符合条件的图片</p>
 
@@ -355,6 +360,12 @@ def build_index(cfg: dict, items: list[dict]) -> str:
     return page_shell(cfg, cfg["subtitle"], body,
                       meta_desc=f"{cfg['lede']}（{len(items)} 张图，可搜索、可筛选、按上传日期浏览）",
                       head_extra=head)
+
+
+def doi_bare(v) -> str:
+    """展示用短 DOI：剥掉 https://doi.org/ 前缀（refs.json 存的是完整 URL），
+    链接场景由调用方自行拼接"""
+    return str(v or "").removeprefix("https://doi.org/").removeprefix("http://doi.org/")
 
 
 def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
@@ -431,10 +442,15 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     # 标签（主题 · 图表类型）才是图片搜索与语义检索的入口；无标签时退回 id。
     sem = " · ".join(str(t) for t in tags)
     main_alt = sem if sem else f"图 {it['id']}"
+    full_url = f"{abs_base}/{it.get('full', '')}"
+    thumb_url = f"{abs_base}/{it.get('thumb', '')}"
+    # h1 语义优先（与 <title> 同一口径），哈希 id 仍留在标题里供人核对；
+    # 之前这里是个 <h2>图 {id}</h2>——页面没有 h1，且 id 对搜索/AI 零信息量
+    h1_text = f"{sem} · 图 {it['id']}" if sem else f"图 {it['id']}"
     body = f"""<a class="back" id="backLink" href="../">{back_ico}返回全部</a>
-<h2 class="id-title">图 {esc(it['id'])}</h2>
+<h1 class="id-title">{esc(h1_text)}</h1>
 <figure class="shot">
-  <img data-rel="{esc(it.get('full'))}" alt="{esc(main_alt)}" width="{w}" height="{h}">
+  <img src="{esc(full_url)}" data-rel="{esc(it.get('full'))}" alt="{esc(main_alt)}" width="{w}" height="{h}" fetchpriority="high">
 </figure>
 <p class="cl-go-row"><a class="cl-go" href="../color-lab/?id={esc(it['id'])}">{ICO_PALETTE}转到色彩实验 · 取色 / 调色</a></p>
 <dl class="meta">
@@ -447,12 +463,10 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
 {chr(10).join(pager)}"""
     gh_img = "https://github.com/{}/{}/blob/{}/images/{}".format(
         cfg.get("owner") or "OWNER", cfg["repo"], cfg.get("branch", "main"), it.get("full", ""))
-    full_url = f"{abs_base}/{it.get('full', '')}"
-    thumb_url = f"{abs_base}/{it.get('thumb', '')}"
     tags = [str(t) for t in it.get("tags", [])]
     added = str(it.get("added") or "")
     desc_parts = [t for t in [" · ".join(tags), added] if t]
-    detail_desc = (" · ".join(desc_parts) + f" · DOI: {it.get('doi')}" if it.get("doi") else " · ".join(desc_parts)) or cfg["lede"]
+    detail_desc = (" · ".join(desc_parts) + f" · DOI: {doi_bare(it.get('doi'))}" if it.get("doi") else " · ".join(desc_parts)) or cfg["lede"]
     image_ld = json.dumps({
         "@context": "https://schema.org",
         "@type": "ImageObject",
@@ -474,9 +488,11 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     # "图 c29fd21ed1（北极）" 对图片/语义搜索毫无信息量
     title_text = (f"{sem} · 地学科研绘图参考" if sem
                   else f"图 {it['id']} · 地学科研绘图参考")
+    # og:image 经 head_extra 输出（比 page_shell 版多 width/height，爬虫建图更省事）；
+    # og_image 参数留空避免同一 meta 输出两遍
     return page_shell(cfg, title_text, body, depth=1, gh_url=gh_img,
                       meta_desc=detail_desc, head_extra=head,
-                      og_type="article", og_image=full_url,
+                      og_type="article",
                       og_url=f"{SITE_URL}/{it['id']}/")
 
 
@@ -716,6 +732,21 @@ def build_about(cfg: dict) -> str:
                       og_url=SITE_URL + "/about/", active_nav="about")
 
 
+# 标签中英对照：只用于 llms.txt 的英文检索词（让英文提问能命中这批图），站点界面仍是纯中文。
+# 表里没有的标签原样输出中文——不臆造译名，加新标签时在这里补一行即可。
+TAG_EN = {
+    "复杂组图": "multi-panel composite figure",
+    "单一组图": "single-panel figure",
+    "矩形局部地图": "rectangular inset location map",
+    "局部放大图": "zoomed-in detail inset",
+    "样点分布图": "sampling-station map",
+    "古地理": "paleogeography",
+    "北极": "Arctic",
+    "半球": "hemisphere",
+    "半环形": "semi-annular panel layout",
+}
+
+
 def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: int) -> None:
     """生成 robots.txt / sitemap.xml / llms.txt —— 图库站的 SEO/GEO 三件套。"""
     nl = chr(10)
@@ -730,6 +761,7 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
     (SITE / "robots.txt").write_text(nl.join(parts), encoding="utf-8")
 
     today = time.strftime("%Y-%m-%d")
+    img_base = sources[active]["base"]
     urls = ["<url><loc>" + SITE_URL + "/</loc><lastmod>" + today + "</lastmod></url>",
             "<url><loc>" + SITE_URL + "/search/</loc><lastmod>" + today + "</lastmod></url>",
             "<url><loc>" + SITE_URL + "/color-lab/</loc><lastmod>" + today + "</lastmod></url>",
@@ -737,14 +769,48 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
             "<url><loc>" + SITE_URL + "/about/</loc><lastmod>" + today + "</lastmod></url>"]
     for it in items:
         lm = str(it.get("added") or today)
-        urls.append("<url><loc>" + SITE_URL + "/" + it["id"] + "/</loc><lastmod>" + lm + "</lastmod></url>")
+        # Google 图片扩展：把详情页与原图直链绑在一起，图片搜索才有可索引的地址
+        # （<img src> 由 JS 赋值的页面，图片爬虫看不到 URL）。license 字段留空——
+        # 版权归各原作者，本站无权声明许可
+        full = str(it.get("full") or "")
+        sem = " · ".join(str(t) for t in (it.get("tags") or []))
+        img_block = ""
+        if full:
+            cap = " · ".join(x for x in [sem, str(it.get("added") or ""),
+                                         ("DOI: " + doi_bare(it["doi"])) if it.get("doi") else ""] if x)
+            img_block = ("<image:image><image:loc>" + esc(img_base + "/" + full) + "</image:loc>"
+                         + "<image:title>" + esc(sem or ("图 " + it["id"])) + "</image:title>"
+                         + "<image:caption>" + esc(cap or ("图 " + it["id"])) + "</image:caption></image:image>")
+        urls.append("<url><loc>" + SITE_URL + "/" + it["id"] + "/</loc><lastmod>" + lm + "</lastmod>"
+                    + img_block + "</url>")
     sm = nl.join(["<?xml version=" + chr(34) + "1.0" + chr(34) + " encoding=" + chr(34) + "UTF-8" + chr(34) + "?>",
-                  "<urlset xmlns=" + chr(34) + "http://www.sitemaps.org/schemas/sitemap/0.9" + chr(34) + ">"]
+                  "<urlset xmlns=" + chr(34) + "http://www.sitemaps.org/schemas/sitemap/0.9" + chr(34)
+                  + " xmlns:image=" + chr(34) + "http://www.google.com/schemas/sitemap-image/1.1" + chr(34) + ">"]
                  + urls + ["</urlset>"])
     (SITE / "sitemap.xml").write_text(sm, encoding="utf-8")
 
     lines = ["# " + cfg.get("title", "geosciplot"), "",
              cfg.get("subtitle", "") + "（" + SITE_URL + "）—— " + cfg.get("lede", ""),
+             "", "## Overview (EN)", "",
+             "GeoSciPlot is an open reference gallery of figures published in Earth-science",
+             "literature — polar and paleogeographic maps, sampling-station maps, multi-panel",
+             "composites and their colour palettes. It exists so researchers can reuse proven",
+             "visual conventions when plotting their own data, not to redistribute the papers.",
+             "",
+             "- " + str(len(items)) + " figures, one page per figure at " + SITE_URL + "/<id>/ ;",
+             "  each page lists its tags, the source paper DOI, the upload date, the pixel size",
+             "  and the dominant colours extracted from the image.",
+             "- Tags are Chinese; every entry below repeats them with an English gloss.",
+             "- Browse: " + SITE_URL + "/ (filter by journal, paper year or upload date, 30 per page).",
+             "- Search: " + SITE_URL + "/search/?q=<keyword> matches id / DOI / tag.",
+             "- Colour lab: " + SITE_URL + "/color-lab/ — crop a region, rank its dominant colours",
+             "  with HEX codes, replace one colour, preview the result under Protanopia /",
+             "  Deuteranopia / Tritanopia / Achromatopsia simulation, and export a PNG.",
+             "  Everything runs locally in the browser.",
+             "- Statistics: " + SITE_URL + "/statistics/ — collection size, colour composition,",
+             "  most-used colours, tag word cloud, most-viewed figures.",
+             "- Image files are served by jsDelivr / GitHub raw from the GitHub repository, not",
+             "  from this server. Direct image URLs are in sitemap.xml (image:loc entries).",
              "", "## 核心页面", "",
              "- [图库首页](" + SITE_URL + "/)",
              "- [全站搜索](" + SITE_URL + "/search/)",
@@ -753,15 +819,22 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
              "- [关于本站](" + SITE_URL + "/about/)（站点定位、数据来源与说明）",
              "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
     for it in items:
-        tags = " · ".join(str(t) for t in it.get("tags", []))
-        doi = str(it.get("doi") or "")
+        raw_tags = [str(t) for t in (it.get("tags") or [])]
+        tags = " · ".join(raw_tags)
+        en = " / ".join(TAG_EN[t] for t in raw_tags if t in TAG_EN)
+        doi = doi_bare(it.get("doi"))
         added = str(it.get("added") or "")
-        meta = " · ".join(x for x in [tags, doi, added] if x)
+        w, h = int(it.get("width") or 0), int(it.get("height") or 0)
+        dims = f"{w}×{h}px" if w and h else ""
+        top = " ".join(str(c.get("hex", "")) for c in (it.get("colors") or [])[:3]).strip()
+        palette = ("palette " + top) if top else ""
+        meta = " · ".join(x for x in [tags, en, dims, palette, doi, added] if x)
         line = "- [图 " + it["id"] + "](" + SITE_URL + "/" + it["id"] + "/)"
         lines.append(line + (" — " + meta if meta else ""))
     lines += ["", "## 说明", "",
               "- 图片本体由 jsDelivr / GitHub raw 分发，各详情页附原始论文 DOI 与上传日期",
-              "- 图片元数据的机器可读版见 sitemap.xml"]
+              "- 图片元数据的机器可读版见 sitemap.xml（含 image:loc 图片直链与图注）",
+              "- 英文主题词由维护者整理的标签对照表给出，未收录的标签保持中文原样"]
     (SITE / "llms.txt").write_text(nl.join(lines) + nl, encoding="utf-8")
     # IndexNow key 文件：与主站 zbhgis.com 共用同一把 key（IndexNow 允许同一
     # 所有者在多个站点托管同一 key 文件）。ping-search.sh 推送前探测本地址可达。
@@ -788,7 +861,6 @@ def main() -> int:
         return 1
 
     sources = build_sources(cfg, preview=args.preview)
-    active = 0 if args.preview else int(cfg.get("activeSource", 0))
     active = 0 if args.preview else int(cfg.get("activeSource", 1))
     active = max(0, min(active, len(sources) - 1))
 
@@ -872,7 +944,8 @@ def main() -> int:
         "window.GALLERY_DATA = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n",
         encoding="utf-8")
 
-    (SITE / "index.html").write_text(build_index(cfg, items), encoding="utf-8")
+    img_base = sources[active]["base"]   # 静态 HTML 里图片的绝对地址（与 gallery.js 的起始源一致）
+    (SITE / "index.html").write_text(build_index(cfg, items, img_base), encoding="utf-8")
     search_dir = SITE / "search"
     search_dir.mkdir(parents=True, exist_ok=True)
     (search_dir / "index.html").write_text(build_search_page(cfg, items), encoding="utf-8")

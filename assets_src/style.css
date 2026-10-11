@@ -236,7 +236,9 @@ dl.meta dd .swatches{display:flex;flex-wrap:wrap;gap:8px}
   .pager .pn-next .dir{justify-content:flex-start}
   .pager .pn-empty{display:none}
 }
-h2.id-title{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-h2);font-weight:500;margin:0 0 20px;color:var(--dim);letter-spacing:.02em}
+/* 详情页主标题（现为 h1）：用类选择器与标签名解绑，并显式复位 display/line-height——
+   全局 h1 是首页 hero 的超大 flex 标题，不覆盖回来会把详情页标题拉成 68px 一行图钉 */
+.id-title{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-h2);font-weight:500;line-height:1.35;margin:0 0 20px;color:var(--dim);letter-spacing:.02em}
 /* ── 全站搜索独立页（/search/）：版式参考主站 zbhgis.com 的 /search
    （kicker + 大标题 + 结果行），结果行带缩略图，无图显示虚线占位；
    颜色一律取自主题变量，明暗两套自动跟随 ── */
