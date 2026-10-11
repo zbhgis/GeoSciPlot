@@ -121,8 +121,12 @@ function attachImageLightbox(
   // ───────────────────────── 图片资格判定 ─────────────────────────
   // 链接里的图默认是导航元素（徽章、封面跳转），不劫持点击，data-lightbox="on"
   // 可强制参与；data-no-lightbox 反向排除；自然尺寸过小的按徽章/图标处理。
+  // 灯箱自己的大图（lbx-img）也要排除：根节点就挂在容器里（本站挂 body），
+  // 关闭后 DOM 仍在，第二次打开收集图片列表时会把自己算进去——计数器凭空多出
+  // "1 / 2"、箭头出现，单指拖动被当成"切换到第二张（还是自己）"而像失效。
   const isEligible = (img                  )          => {
     if (!img.matches(selector)) return false;
+    if (img.closest("[data-lbx]")) return false;
     if (img.hasAttribute("data-no-lightbox")) return false;
     if (img.closest("a[href]") && img.dataset.lightbox !== "on") return false;
     if (exclude && (img.matches(exclude) || img.closest(exclude))) return false;
