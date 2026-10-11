@@ -208,6 +208,7 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
     · <b>标准导入</b>：剪贴板里是「编号 DOI 列表 + 按顺序的图」时
       （如 <b>1. https://doi.org/…</b> 共 N 行，下面跟 N 张图），
       点按钮或直接 Ctrl+V，都会把 DOI 与图<b>按顺序一一配对</b>并自动预填；
+      编号行里的 <b>重复 DOI</b>（同一篇论文多张图）按位置照常配对，不会跳过；
       数量对不上会明确提示，不会静默丢弃。<br>
     · <b>raw/ 是收件箱兼原图留存</b>：图发布后仍留在里面（在「raw 暂存区」里标记为「已发布副本」）；
       逐字节原图另存于 <b>images/full/</b>，所以清空 raw/ 不会损坏图库，但未发布的图会丢。<br>
@@ -668,16 +669,30 @@ document.addEventListener("paste", function (e) {
    浏览器拒绝授权时按 Ctrl+V —— 粘贴路径也会解析文本里的 DOI 并按顺序配对。 */
 var STD_LABEL = "标准导入（DOI 列表 + 按顺序的图）";
 
-/* 从文本里按出现顺序抽 DOI，去重保序；保留原文写法（库里存的也是完整 URL 形式） */
+/* 从文本里抽 DOI，供「编号列表 + 按顺序的图」标准导入做位置配对。
+   ⚠️ 绝不能按 DOI 去重：配对是**第 i 个 DOI ↔ 第 i 张图**，
+   同一篇论文配多张图时编号列表里出现相同 DOI 是正常输入
+   （1、2 两行同 DOI → 第 2 张图也该拿它），去重会让后面的
+   配对整体前移一格、最后一张落空（实测踩过）。
+   优先只认「行首编号」的行（1. / 1、 / 1: / 1) 前缀），这样正文里
+   顺带出现的 DOI 不会打乱位置；没有编号行时退回全文按出现顺序抽取。 */
 function parseDois(text) {
-  var out = [], seen = {};
-  var re = /((?:https?:\/\/)?(?:dx\.)?doi\.org\/[^\s"'<>]+|10\.\d{4,9}\/[^\s"'<>]+)/gi;
+  var reDoi = /((?:https?:\/\/)?(?:dx\.)?doi\.org\/[^\s"'<>]+|10\.\d{4,9}\/[^\s"'<>]+)/i;
+  var reNum = /^\s*\d{1,3}\s*[.、:：)）]\s*(\S.*)$/;
+  var numbered = [];
+  String(text || "").split(/\r?\n/).forEach(function (ln) {
+    var mn = reNum.exec(ln);
+    if (!mn) return;
+    var md = reDoi.exec(mn[1]);
+    if (md) numbered.push(md[1].replace(/[.,;]+$/, "").trim());
+  });
+  if (numbered.length) return numbered;
+  var out = [];
+  var reAll = /((?:https?:\/\/)?(?:dx\.)?doi\.org\/[^\s"'<>]+|10\.\d{4,9}\/[^\s"'<>]+)/gi;
   var m;
-  while ((m = re.exec(String(text || "")))) {
+  while ((m = reAll.exec(String(text || "")))) {
     var d = m[1].replace(/[.,;]+$/, "").trim();
-    if (!d || seen[d.toLowerCase()]) continue;
-    seen[d.toLowerCase()] = 1;
-    out.push(d);
+    if (d) out.push(d);
   }
   return out;
 }
