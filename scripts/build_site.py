@@ -194,6 +194,16 @@ def page_shell(
     desc = meta_desc or f"{cfg['subtitle']} —— {cfg['lede']}"
     og_url = og_url or (SITE_URL + ("/" if not depth else ""))
     og_img = f'\n<meta property="og:image" content="{esc(og_image)}">' if og_image else ""
+    # Twitter/X 卡片：详情页的 og:image 在 head_extra 里（含尺寸与完整 twitter 组），
+    # 这里让位避免 twitter:card 重复输出；其余页面按有无 og_image 出大图/摘要卡
+    tw = ""
+    if "og:image" not in head_extra:
+        tw_card = "summary_large_image" if og_image else "summary"
+        tw = (f'\n<meta name="twitter:card" content="{tw_card}">'
+              f'\n<meta name="twitter:title" content="{esc(title)}">'
+              f'\n<meta name="twitter:description" content="{esc(desc[:200])}">')
+        if og_image:
+            tw += f'\n<meta name="twitter:image" content="{esc(og_image)}">'
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -206,7 +216,7 @@ def page_shell(
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(desc)}">
 <meta property="og:type" content="{og_type}">
-<meta property="og:url" content="{og_url}">{og_img}
+<meta property="og:url" content="{og_url}">{og_img}{tw}
 {head_extra}<link rel="stylesheet" href="{up}assets/style.css?v={BUILD_VER}">
 <link rel="icon" type="image/png" href="{up}assets/favicon.png?v={BUILD_VER}">
 <script>try{{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t);var f=localStorage.getItem("gsp-fs");if(f)document.documentElement.setAttribute("data-fs",f)}}catch(e){{}}</script>
@@ -522,14 +532,19 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
         "inLanguage": "zh-CN",
         "author": {"@type": "Organization", "name": cfg.get("title", "geosciplot"), "url": SITE_URL},
     }, ensure_ascii=False)
-    og_meta = (f'<meta property="og:image" content="{esc(full_url)}">'
-               f'<meta property="og:image:width" content="{it.get("width", 0)}">'
-               f'<meta property="og:image:height" content="{it.get("height", 0)}">')
-    head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>')
     # 详情页 title 语义优先：标签（主题 · 类型）打头，哈希 id 只在无标签时兜底——
     # "图 c29fd21ed1（北极）" 对图片/语义搜索毫无信息量
     title_text = (f"{sem} · 地学科研绘图参考" if sem
                   else f"图 {it['id']} · 地学科研绘图参考")
+    og_meta = (f'<meta property="og:image" content="{esc(full_url)}">'
+               f'<meta property="og:image:width" content="{it.get("width", 0)}">'
+               f'<meta property="og:image:height" content="{it.get("height", 0)}">'
+               # Twitter/X 大图卡与 og:image 同源（构建期写死绝对地址）
+               f'<meta name="twitter:card" content="summary_large_image">'
+               f'<meta name="twitter:title" content="{esc(title_text)}">'
+               f'<meta name="twitter:description" content="{esc(detail_desc[:200])}">'
+               f'<meta name="twitter:image" content="{esc(full_url)}">')
+    head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>')
     # og:image 经 head_extra 输出（比 page_shell 版多 width/height，爬虫建图更省事）；
     # og_image 参数留空避免同一 meta 输出两遍
     return page_shell(cfg, title_text, body, depth=1, gh_url=gh_img,
