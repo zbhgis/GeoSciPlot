@@ -1755,7 +1755,9 @@
     {
       "id": "558b9c18b9",
       "doi": "https://doi.org/10.1073/pnas.2424552122",
-      "tags": [],
+      "tags": [
+        "双变量"
+      ],
       "width": 4248,
       "height": 3374,
       "ext": "png",
