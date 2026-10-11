@@ -809,8 +809,32 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
+    def _trusted(self) -> bool:
+        """本机信任校验（与主站 admin-server.ts 的 trusted() 同一防御）。
+
+        rebinding：攻击者域名 A 记录指到 127.0.0.1 后浏览器视为同源，但 Host 头
+        仍是攻击者域名 → Host 白名单直接挡死。
+        CSRF：本服务的 POST 全部是简单请求（fetch 带任意 Content-Type 的 JSON），
+        免预检即可跨站发出；跨站时浏览器必带 Origin 头 → 非本机 Origin 一律拒绝；
+        curl 等本机工具不带 Origin → 放行。没有这层，任意网页可打 /api/delete、
+        甚至 /api/init 用本机 SSH key 把仓库 push 到攻击者远端。"""
+        port = self.server.server_address[1]
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host not in (f"127.0.0.1:{port}", f"localhost:{port}",
+                        "127.0.0.1", "localhost"):
+            return False
+        if (self.command or "").upper() not in ("GET", "HEAD"):
+            origin = (self.headers.get("Origin") or "").strip().lower()
+            if origin and origin not in (f"http://127.0.0.1:{port}",
+                                         f"http://localhost:{port}"):
+                return False
+        return True
+
     def do_GET(self):
         try:
+            if not self._trusted():
+                self._send(403, b"forbidden", "text/plain; charset=utf-8")
+                return
             self._handle_get()
         except Exception as e:
             self._safe_500(e)
@@ -841,6 +865,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            if not self._trusted():
+                self._send(403, b"forbidden", "text/plain; charset=utf-8")
+                return
             self._handle_post()
         except Exception as e:
             self._safe_500(e)
