@@ -197,6 +197,10 @@ def page_shell(
         cfg.get("owner") or "OWNER", cfg["repo"])
     desc = meta_desc or f"{cfg['subtitle']} —— {cfg['lede']}"
     og_url = og_url or (SITE_URL + ("/" if not depth else ""))
+    # 无图页（首页/工具页）的 og:image 用站点 logo 兜底：分享卡片无图就是灰底块。
+    # 详情页的 og:image 在 head_extra 里（带尺寸），此处不注入避免重复
+    if not og_image and "og:image" not in head_extra:
+        og_image = SITE_URL + "/assets/logo.png?v=" + BUILD_VER
     og_img = f'\n<meta property="og:image" content="{esc(og_image)}">' if og_image else ""
     # Twitter/X 卡片：详情页的 og:image 在 head_extra 里（含尺寸与完整 twitter 组），
     # 这里让位避免 twitter:card 重复输出；其余页面按有无 og_image 出大图/摘要卡
