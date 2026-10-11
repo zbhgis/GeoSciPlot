@@ -274,6 +274,20 @@ def card_html(item: dict, base: str) -> str:
   </a>"""
 
 
+# 排序按钮首帧预置：静态 HTML 把「新到旧」写死为按下态，gallery.js 加载后才按
+# 「URL ?sort= > localStorage 偏好」纠正——宽屏慢网能看到一瞬间默认态再跳变。
+# 内联脚本紧跟 sortseg 输出、解析期同步执行，按与 gallery.js 相同的优先级预置
+# aria-pressed 消除闪烁；不写 localStorage，URL 排序仅本次生效的语义不变
+SORT_PRESTATE = (
+    '<script>(function(){try{var v=new URLSearchParams(location.search).get("sort"),'
+    'ok=["added","added_asc","color","random"];'
+    'if(ok.indexOf(v)<0){v=null;try{v=localStorage.getItem("gsp-sort2")}catch(e){}'
+    'if(ok.indexOf(v)<0)v=null;}'
+    'if(v)document.querySelectorAll("#sortseg button").forEach(function(b){'
+    'b.setAttribute("aria-pressed",String(b.getAttribute("data-sort")===v))})}catch(e){}})();</script>'
+)
+
+
 def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
     tag_counter: Counter = Counter()
     for it in items:
@@ -331,7 +345,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
   + '<button type="button" data-sort="added_asc" aria-pressed="false" title="上传日期 旧→新"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.5v-8M4.8 8.7 8 5.5l3.2 3.2M3 2.5h10"/></svg><span>旧到新</span></button>'
   + '<button type="button" data-sort="color" aria-pressed="false" title="按与筛选颜色的相近程度排序（需先在「颜色」行选色）"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="5.2"/><path d="M8 1.2v2.4M8 12.4v2.4M1.2 8h2.4M12.4 8h2.4"/></svg><span>相近</span></button>'
   + '<button type="button" data-sort="random" aria-pressed="false" title="随机排序"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5h2.2c3.2 0 4.6 7 7.6 7H14M2 11.5h2.2c1.3 0 2.2-.9 3-2M8.8 6.5c.8-1.1 1.7-2 3-2H14M12.3 3l1.7 1.5L12.3 6M12.3 10l1.7 1.5-1.7 1.5"/></svg><span>随机</span></button>'
-  + '</span>')}
+  + '</span>' + SORT_PRESTATE)}
 </div>
 
 <main class="grid" id="grid">
