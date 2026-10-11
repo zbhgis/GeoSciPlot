@@ -90,16 +90,32 @@ def content_id(path: Path) -> str:
 
 
 def load_refs() -> dict:
+    """refs.json 是全站元数据的唯一真源：损坏时备份现场并抛错，绝不静默归零
+    ——静默返回空库后，下一次「更新元数据」就把空库写回，全部图片的
+    标签/DOI/收录时间整批丢失。主站 loadConfig 的同款教训。"""
     if REFS_JSON.exists():
         try:
-            return json.loads(REFS_JSON.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            pass
+            data = json.loads(REFS_JSON.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("items"), list):
+                return data
+            raise ValueError("形状不符（缺 items 数组）")
+        except (json.JSONDecodeError, ValueError) as e:
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            backup = REFS_JSON.parent / (REFS_JSON.name + f".corrupt-{stamp}")
+            backup.write_bytes(REFS_JSON.read_bytes())
+            raise RuntimeError(
+                f"refs.json 损坏（{e}），已备份为 {backup.name}"
+                "——修复或恢复该文件后重试，拒绝以空库覆盖"
+            ) from e
     return {"items": []}
 
 
 def save_refs(refs: dict) -> None:
-    REFS_JSON.write_text(json.dumps(refs, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # 原子写（tmp + replace）：写一半崩溃不留半截 JSON——半截 JSON 会触发上面的
+    # 损坏防护抛错，管理台与发布全部停摆
+    tmp = REFS_JSON.parent / (REFS_JSON.name + ".tmp")
+    tmp.write_text(json.dumps(refs, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(REFS_JSON)
 
 
 def read_titles() -> tuple[list[str], dict[str, dict]]:
