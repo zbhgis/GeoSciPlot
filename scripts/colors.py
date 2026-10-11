@@ -120,7 +120,11 @@ def backfill(force: bool = False, dry_run: bool = False) -> int:
         print(f"  {it['id']}  {len(colors)} 色  前3："
               + " ".join(f"{c['hex']}({c['pct']}%)" for c in colors[:3]))
     if not dry_run and n_done:
-        REFS_JSON.write_text(json.dumps(refs, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        # 原子写（tmp + replace），与 admin.save_refs / prepare.py 同一口径：
+        # 写一半崩溃不留半截 JSON，避免下次回填按损坏处理
+        tmp = REFS_JSON.parent / (REFS_JSON.name + ".tmp")
+        tmp.write_text(json.dumps(refs, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(REFS_JSON)
         print(f"\n写入 {REFS_JSON.relative_to(ROOT)}")
     print(f"计算 {n_done} 条 · 已有跳过 {n_skip} 条 · 失败 {n_fail} 条 · 共 {len(items)} 条")
     return 0

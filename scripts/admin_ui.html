@@ -534,19 +534,6 @@ function stamp() {
   return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" +
          p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
 }
-/* 浏览器/系统给剪贴板图片合成的「通用占位名」—— 不含任何信息量，
-   照单收下只会让 raw/ 里堆满 image.png / image (1).png。
-   ⚠️ 只作用于**粘贴**路径；从磁盘拖进来的文件走 handleFiles()，不经过这里、
-   即使文件真叫 image.png 也保留原名。 */
-var PLACEHOLDER_BASE = [
-  "image", "untitled", "unsaved", "clipboard", "blob", "pasted", "pasted-image",
-  "pastedimage", "screenshot", "screen shot", "无标题", "未命名", "图片", "截图"
-];
-function isPlaceholderName(base) {
-  if (!base) return true;
-  var k = String(base).toLowerCase().replace(/\s*\(\d+\)$/, "").trim();  // image (1) → image
-  return PLACEHOLDER_BASE.indexOf(k) > -1;
-}
 
 /* 从 text/html 里抠 <img src>，保序、按 src 去重 */
 function htmlImageSources(html) {
@@ -1104,7 +1091,13 @@ function mRenderChips() {
     var b = document.createElement("button");
     b.type = "button";
     b.setAttribute("aria-pressed", String(mFilter.tag === val));
-    b.innerHTML = label + (n !== undefined ? ' <span class="n">' + n + "</span>" : "");
+    /* 标签名是用户输入的自由文本，必须走 textContent —— innerHTML 会把它当
+       HTML 渲染，标签名形如 <img src=x onerror=…> 时直接在管理页注入元素 */
+    b.textContent = label;
+    if (n !== undefined) {
+      b.appendChild(document.createTextNode(" "));
+      b.appendChild(el("span", "n", String(n)));
+    }
     b.addEventListener("click", function () {
       mFilter.tag = (mFilter.tag === val ? "*" : val);
       mPage = 1;                                 // 筛选变化：回到第一页

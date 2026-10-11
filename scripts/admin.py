@@ -511,11 +511,14 @@ def do_delete(fid: str) -> dict:
     removed: list[str] = []
     for key in ("thumb", "full"):
         p = IMG_DIR / str(it.get(key, ""))
-        if p.exists():
+        # is_file() 而非 exists()：字段缺失时路径落在 images/ 目录本身，
+        # exists() 为真、unlink() 对目录抛 PermissionError——此时图片已删、
+        # save_refs 未执行，状态撕裂且每次重试都卡在同一处
+        if p.is_file():
             p.unlink()
             removed.append(str(p.relative_to(ROOT)))
     raw_file = RAW_DIR / str(it.get("origName", ""))
-    if raw_file.exists():
+    if raw_file.is_file():
         raw_file.unlink()
         removed.append(str(raw_file.relative_to(ROOT)))
 
@@ -839,11 +842,13 @@ class Handler(BaseHTTPRequestHandler):
         if host not in (f"127.0.0.1:{port}", f"localhost:{port}",
                         "127.0.0.1", "localhost"):
             return False
-        if (self.command or "").upper() not in ("GET", "HEAD"):
-            origin = (self.headers.get("Origin") or "").strip().lower()
-            if origin and origin not in (f"http://127.0.0.1:{port}",
-                                         f"http://localhost:{port}"):
-                return False
+        # Origin 只要有就校验（不限方法）：跨站 fetch 的 GET 同样带 Origin，
+        # 不挡的话 /api/fetch-image 代理可被任意网页免预检滥用；同源 GET、
+        # 地址栏导航、curl 等本机工具都不带 Origin，照常放行
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if origin and origin not in (f"http://127.0.0.1:{port}",
+                                     f"http://localhost:{port}"):
+            return False
         return True
 
     def do_GET(self):

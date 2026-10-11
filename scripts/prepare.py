@@ -318,7 +318,12 @@ def main() -> int:
     if args.dry_run:
         print("\n[dry-run] 未写入任何文件")
     else:
-        REFS_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        # 原子写（tmp + replace），与 admin.save_refs 同一口径：写一半崩溃不留
+        # 半截 JSON——半截 JSON 会在下次运行被 load_existing 静默按空库处理，
+        # raw/ 已清空的图会被 prune_unused 连产品带条目整批抹掉
+        tmp = REFS_JSON.parent / (REFS_JSON.name + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(REFS_JSON)
         print(f"\n写入 {REFS_JSON.relative_to(ROOT)}")
         removed = prune_unused(keep_paths)
         if removed:

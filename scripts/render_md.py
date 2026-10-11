@@ -45,7 +45,9 @@ def json_loads(s: str) -> list:
 
 
 def _esc(s: str) -> str:
-    return html.escape(s, quote=False)
+    # quote 不能关：_esc 的输出大量落在 alt="{...}" / href="{...}" 等
+    # 属性位置，不转义引号就能注入 onerror= 之类的任意属性
+    return html.escape(s, quote=True)
 
 
 def _inline(text: str) -> str:

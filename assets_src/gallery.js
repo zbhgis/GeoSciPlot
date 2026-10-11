@@ -45,10 +45,12 @@
   }
 
   /* 统计打点：所有页面（首页 + 详情页）都要执行。之前放在网格逻辑之后，
-     详情页因没有 #grid 提前 return，打点从未跑过（被浏览一直为空的根因） */
-  if (CFG.tracker && !location.hostname.match(/^(localhost|127\.0\.0\.1|)$/)) {
+     详情页因没有 #grid 提前 return，打点从未跑过（被浏览一直为空的根因）。
+     DNT 只能跳过打点本身，绝不能 return —— 本文件整个包在一个 IIFE 里，
+     在这里 return 会把搜索页、网格重渲、返回链接、色块复制等全站交互杀掉 */
+  if (CFG.tracker && !location.hostname.match(/^(localhost|127\.0\.0\.1|)$/)
+      && navigator.doNotTrack !== "1") {
     try {
-      if (navigator.doNotTrack === "1") return;
       fetch(CFG.tracker, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -472,7 +474,10 @@
     if (next) next.disabled = state.page >= pages;
     paintNums(state.page, pages);
     if (count) {
-      var filtered = state.q || state.tag !== "*" || state.from || state.to || state.color;
+      /* tags=null = 标签全选（不筛选）；空数组同样视为不筛选（与 pass() 一致）。
+         旧代码写的是 state.tag !== "*"——该字段不存在恒为真，导致无筛选时
+         也显示「匹配 N / N 张」而非「共 N 张」 */
+      var filtered = !!(state.q || state.tags || state.from || state.to || state.color);
       count.textContent = filtered ? "匹配 " + list.length + " / " + ITEMS.length + " 张"
                                    : "共 " + ITEMS.length + " 张";
     }
