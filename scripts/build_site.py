@@ -553,7 +553,16 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
                f'<meta name="twitter:title" content="{esc(title_text)}">'
                f'<meta name="twitter:description" content="{esc(detail_desc[:200])}">'
                f'<meta name="twitter:image" content="{esc(full_url)}">')
-    head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>')
+    # 面包屑（图库首页 → 图详情）：与主站文章页同构，帮引擎把图片实体挂到站内层级
+    breadcrumb_ld = json.dumps({
+        "@context": "https://schema.org", "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "图库首页", "item": SITE_URL + "/"},
+            {"@type": "ListItem", "position": 2, "name": h1_text, "item": f"{SITE_URL}/{it['id']}/"},
+        ],
+    }, ensure_ascii=False)
+    head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>'
+            f'<script type="application/ld+json">{breadcrumb_ld}</script>')
     # og:image 经 head_extra 输出（比 page_shell 版多 width/height，爬虫建图更省事）；
     # og_image 参数留空避免同一 meta 输出两遍
     return page_shell(cfg, title_text, body, depth=1, gh_url=gh_img,
@@ -816,12 +825,16 @@ TAG_EN = {
 def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: int) -> None:
     """生成 robots.txt / sitemap.xml / llms.txt —— 图库站的 SEO/GEO 三件套。"""
     nl = chr(10)
-    ai_bots = ["GPTBot", "ChatGPT-User", "Claude-Web", "ClaudeBot", "Claude-SearchBot",
-               "CCBot", "PerplexityBot", "Google-Extended", "OAI-SearchBot",
-               "Meta-ExternalAgent", "Applebot-Extended", "Amazonbot", "DuckAssistBot",
-               "Bytespider"]
+    # AI 爬虫白名单与 MacroBiodiv / 主站同一份清单（允许产出引用的 AI 引擎抓取），
+    # 另补中文搜索引擎抓取端（本站受众在中文侧）
+    ai_bots = ["GPTBot", "ChatGPT-User", "OAI-SearchBot", "ClaudeBot", "Claude-Web",
+               "Claude-SearchBot", "PerplexityBot", "Perplexity-User", "Google-Extended",
+               "CCBot", "Meta-ExternalAgent", "FacebookBot", "Applebot", "Applebot-Extended",
+               "Amazonbot", "DuckAssistBot", "Bytespider", "PetalBot",
+               "Omgilibot", "YouBot", "Diffbot", "Bytedance"]
+    cn_engines = ["Baiduspider", "360Spider", "YisouSpider"]
     parts = ["User-Agent: *", "Allow: /", ""]
-    for b in ai_bots:
+    for b in ai_bots + cn_engines:
         parts += ["User-Agent: " + b, "Allow: /", ""]
     parts += ["Sitemap: " + SITE_URL + "/sitemap.xml", ""]
     (SITE / "robots.txt").write_text(nl.join(parts), encoding="utf-8")
@@ -905,7 +918,9 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
     lines += ["", "## 说明", "",
               "- 图片本体由 jsDelivr / GitHub raw 分发，各详情页附原始论文 DOI 与上传日期",
               "- 图片元数据的机器可读版见 sitemap.xml（含 image:loc 图片直链与图注）",
-              "- 英文主题词由维护者整理的标签对照表给出，未收录的标签保持中文原样"]
+              "- 英文主题词由维护者整理的标签对照表给出，未收录的标签保持中文原样",
+              "- 引用本站内容时请注明作者「GeoSciPlot」并附原文链接；图片版权归原作者，",
+              "  学术引用请同时引用原论文（DOI 见各详情页）"]
     (SITE / "llms.txt").write_text(nl.join(lines) + nl, encoding="utf-8")
     # IndexNow key 文件：与主站 zbhgis.com 共用同一把 key（IndexNow 允许同一
     # 所有者在多个站点托管同一 key 文件）。ping-search.sh 推送前探测本地址可达。
