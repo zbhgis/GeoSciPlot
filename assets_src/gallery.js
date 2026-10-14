@@ -272,7 +272,7 @@
 
   /* ── 分页 + 筛选 + 排序 ── */
   var state = { q: "", tags: null, from: "", to: "", sort: "added", color: "", tol: 60, minpct: 0, page: 1, per: PAGE };
-  /* tags=null = 标签全选（不筛选）；数组 = 仅这些标签（OR 命中）。
+  /* tags=null = 无选中（不筛选，正向选择语义 2026-10-14）；数组 = 选中的标签（OR 命中）。
      DOM（chips 的 aria-pressed）是唯一真源，state.tags 由它派生。 */
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
@@ -487,19 +487,20 @@
   }
   function resetPage() { state.page = 1; render(); }
 
-  /* ── 标签多选：chips 的 aria-pressed 是真源。默认全选（构建期即 pressed=true），
-     点击剔除、全选/反选；全选态下 URL 不带 tag 参数 ── */
+  /* ── 标签多选（正向选择，2026-10-14 与 MacroBiodiv RSS 配置页统一）：
+     chips 的 aria-pressed 是真源。默认全不选（构建期即 pressed=false）= 不筛选，
+     点击选中/取消（选中值之间 OR）、全选/反选；全选态等同不过滤，URL 不带 tag 参数 ── */
   var tagBox = document.querySelector('.chips[data-key="tag"]');
   function tagChips() { return tagBox ? tagBox.querySelectorAll("button.chip[data-v]") : []; }
   function readTags() {
     if (!tagBox) return;
     var sel = [], c = tagChips();
     c.forEach(function (b) { if (b.getAttribute("aria-pressed") === "true") sel.push(b.getAttribute("data-v")); });
-    state.tags = sel.length === c.length ? null : sel;
+    state.tags = (sel.length === 0 || sel.length === c.length) ? null : sel;
   }
   function writeTags() {
     tagChips().forEach(function (b) {
-      b.setAttribute("aria-pressed", String(!state.tags || state.tags.indexOf(b.getAttribute("data-v")) > -1));
+      b.setAttribute("aria-pressed", String(!!state.tags && state.tags.indexOf(b.getAttribute("data-v")) > -1));
     });
   }
   if (tagBox) tagBox.addEventListener("click", function (e) {
@@ -644,10 +645,9 @@
   function activeFilters() {
     var parts = [];
     if (state.tags) {
-      var allT = [], ex = [];
-      tagChips().forEach(function (b) { allT.push(b.getAttribute("data-v")); });
-      allT.forEach(function (t) { if (state.tags.indexOf(t) < 0) ex.push(t); });
-      parts.push("标签 " + (ex.length > 0 && ex.length <= 3 ? "排除 " + ex.join("、") : "仅 " + state.tags.join("、")));
+      var selT2 = state.tags;
+      parts.push("标签 " + (selT2.length <= 3 ? selT2.join("、")
+        : selT2.slice(0, 3).join("、") + " 等 " + selT2.length + " 项"));
     }
     if (state.from || state.to) parts.push("上传 " + (state.from || "…") + " ~ " + (state.to || "…"));
     if (state.q) parts.push("搜索 " + state.q);
@@ -721,7 +721,7 @@
           b.setAttribute("aria-pressed", String(on));
           if (on) selT.push(b.getAttribute("data-v"));
         });
-        state.tags = selT.length === c0.length ? null : selT;
+        state.tags = (selT.length === 0 || selT.length === c0.length) ? null : selT;
         if (state.tags) applied = true;
         return;
       }
