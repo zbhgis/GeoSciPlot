@@ -491,7 +491,7 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 
 /* ── 关于本站页（/about/）：窄栏 prose —— 排版逐条镜像 MacroBiodiv .wk-content
    （fs-base 正文 1.75 行高、md-h1/md-h2 标题规格、strong 淡蓝、链接 accent 无下划线） ── */
-.about-wrap{max-width:760px;margin:0 auto;padding:34px 20px 20px}
+.about-wrap{max-width:760px;margin:0;padding:34px 20px 20px}   /* 左对齐：与标题/kicker 同列（与 MacroBiodiv 版式统一 2026-10-14） */
 .about-body{font-size:var(--fs-base);color:var(--dim)}
 .about-body h2.md-h1{margin:40px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line2);font-size:var(--fs-h2);font-weight:700;line-height:1.35;color:var(--text)}
 .about-body h3.md-h2{margin:32px 0 12px;font-size:var(--fs-h2);font-weight:600;line-height:1.4;color:var(--text)}
