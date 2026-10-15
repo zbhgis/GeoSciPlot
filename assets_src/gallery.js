@@ -271,9 +271,11 @@
   grid.querySelectorAll("img[data-rel]").forEach(bind);   // 首屏静态卡片也要绑降级
 
   /* ── 分页 + 筛选 + 排序 ── */
-  var state = { q: "", tags: null, from: "", to: "", sort: "added", color: "", tol: 60, minpct: 0, page: 1, per: PAGE };
-  /* tags=null = 无选中（不筛选，正向选择语义 2026-10-14）；数组 = 选中的标签（OR 命中）。
-     DOM（chips 的 aria-pressed）是唯一真源，state.tags 由它派生。 */
+  var state = { q: "", tags: null, tagStrict: false, from: "", to: "", sort: "added", color: "", tol: 60, minpct: 0, page: 1, per: PAGE };
+  /* tags=null = 无选中（不筛选，正向选择语义 2026-10-14）；数组 = 选中的标签。
+     tagStrict=false 普通（OR：命中任一选中标签即保留）；true 严格（图片携带的
+     每个标签都必须被选中，带任一未选中标签的图排除——如带「双变量+美国」的图
+     在只选「双变量」时会被排除）。DOM（chips 的 aria-pressed）是唯一真源。 */
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
     if ([20, 30, 50].indexOf(savedPer) > -1) state.per = savedPer;   // 仅接受合法档位，旧值自动回默认 30
@@ -367,8 +369,15 @@
   function pass(it) {
     if (state.tags) {
       var tg = it.tg || [], hit = false;
-      for (var ti = 0; ti < tg.length; ti++) if (state.tags.indexOf(tg[ti]) > -1) { hit = true; break; }
-      if (!hit) return false;   // OR 语义：至少命中一个选中标签；无标签的图在筛选时隐藏
+      if (state.tagStrict) {
+        if (tg.length === 0) return false;   // 严格：无标签的图与选中标签集无关联，隐藏
+        for (var si = 0; si < tg.length; si++) {
+          if (state.tags.indexOf(tg[si]) < 0) return false;   // 携带未选中标签 → 排除（子集语义）
+        }
+      } else {
+        for (var ti = 0; ti < tg.length; ti++) if (state.tags.indexOf(tg[ti]) > -1) { hit = true; break; }
+        if (!hit) return false;   // 普通 OR：至少命中一个选中标签；无标签的图在筛选时隐藏
+      }
     }
     if (state.from && (it.ad || "") < state.from) return false;
     if (state.to && (it.ad || "") > state.to) return false;
@@ -445,7 +454,10 @@
       var parts = [];
       var qv = ((q && q.value) ? q.value : state.q).trim();
       if (qv) parts.push("q=" + encodeURIComponent(qv));
-      if (state.tags) parts.push("tag=" + encodeURIComponent(state.tags.join("|")));
+      if (state.tags) {
+        parts.push("tag=" + encodeURIComponent(state.tags.join("|")));
+        if (state.tagStrict) parts.push("mode=strict");
+      }
       if (state.from) parts.push("from=" + encodeURIComponent(state.from));
       if (state.to) parts.push("to=" + encodeURIComponent(state.to));
       if (state.sort !== "added") parts.push("sort=" + encodeURIComponent(state.sort));
@@ -503,11 +515,26 @@
       b.setAttribute("aria-pressed", String(!!state.tags && state.tags.indexOf(b.getAttribute("data-v")) > -1));
     });
   }
+  function writeStrict() {
+    var b = tagBox ? tagBox.querySelector('.chip-act[data-act="strict"]') : null;
+    if (!b) return;
+    b.setAttribute("data-on", String(state.tagStrict));
+    b.setAttribute("aria-pressed", String(state.tagStrict));
+    b.title = state.tagStrict
+      ? "严格模式开：图片携带的每个标签都必须被选中（点击关闭）"
+      : "严格模式：图片携带的每个标签都必须被选中，带任一未选中标签的图会被排除";
+  }
   if (tagBox) tagBox.addEventListener("click", function (e) {
     var act = e.target.closest ? e.target.closest(".chip-act") : null;
     if (act) {
-      var all = act.getAttribute("data-act") === "all";
-      tagChips().forEach(function (b) { b.setAttribute("aria-pressed", String(all ? true : b.getAttribute("aria-pressed") !== "true")); });
+      var a = act.getAttribute("data-act");
+      if (a === "strict") {
+        state.tagStrict = !state.tagStrict;
+        writeStrict();
+      } else {
+        var all = a === "all";
+        tagChips().forEach(function (b) { b.setAttribute("aria-pressed", String(all ? true : b.getAttribute("aria-pressed") !== "true")); });
+      }
     } else {
       var chip = e.target.closest ? e.target.closest("button.chip[data-v]") : null;
       if (!chip) return;
@@ -558,8 +585,8 @@
 
   var reset = document.getElementById("reset");
   if (reset) reset.addEventListener("click", function () {
-    state = { q: "", tags: null, from: "", to: "", sort: state.sort, color: "", tol: 60, minpct: 0, page: 1, per: state.per };
-    setCrgb(); syncColorUI(); writeTags();
+    state = { q: "", tags: null, tagStrict: false, from: "", to: "", sort: state.sort, color: "", tol: 60, minpct: 0, page: 1, per: state.per };
+    setCrgb(); syncColorUI(); writeTags(); writeStrict();
     var fF = document.getElementById("f-from"), fT = document.getElementById("f-to");
     if (fF) fF.value = "";
     if (fT) fT.value = "";
@@ -646,7 +673,7 @@
     var parts = [];
     if (state.tags) {
       var selT2 = state.tags;
-      parts.push("标签 " + (selT2.length <= 3 ? selT2.join("、")
+      parts.push("标签 " + (state.tagStrict ? "严格 · " : "") + (selT2.length <= 3 ? selT2.join("、")
         : selT2.slice(0, 3).join("、") + " 等 " + selT2.length + " 项"));
     }
     if (state.from || state.to) parts.push("上传 " + (state.from || "…") + " ~ " + (state.to || "…"));
@@ -678,11 +705,11 @@
   }
 
   /* 支持带参数的链接（标签跳转 / 分享筛选结果 / 返回恢复）：
-     /?tag=海冰&q=xxx&from=…&to=…&sort=added_asc&color=1F4E79&tol=60&page=3 */
+     /?tag=海冰&mode=strict&q=xxx&from=…&to=…&sort=added_asc&color=1F4E79&tol=60&page=3 */
   var applied = false;
   try {
     var params = new URLSearchParams(location.search);
-    ["q", "tag", "from", "to", "sort", "color", "tol", "pct", "page"].forEach(function (k) {
+    ["q", "tag", "mode", "from", "to", "sort", "color", "tol", "pct", "page"].forEach(function (k) {
       var v = params.get(k);
       if (!v) return;
       if (k === "page") {
@@ -712,6 +739,10 @@
       if (k === "pct") {
         var pv = parseFloat(v);
         if (pv >= 0 && pv <= 100) { state.minpct = pv; if (state.color) applied = true; }
+        return;
+      }
+      if (k === "mode") {   // 标签匹配模式：strict=图片所有标签都必须在选中集内
+        if (v === "strict") { state.tagStrict = true; writeStrict(); applied = true; }
         return;
       }
       if (k === "tag") {   // 多选：tag=A|B|C（兼容旧的单值链接）

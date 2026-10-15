@@ -140,6 +140,8 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .chips button[aria-pressed=false] .n{opacity:.55;text-decoration:none}
 .chips .chip-act{border-style:dashed;color:var(--faint);font-size:var(--fs-xs);padding:5px 11px}
 .chips .chip-act:hover{color:var(--accent);border-color:var(--accent);background:transparent}
+/* 严格模式点亮：accent 描边 + soft 底，与排序选中同语言 */
+.chips .chip-act[data-on=true]{color:var(--accent);border-color:var(--accent);background:var(--accent-soft);border-style:solid;font-weight:500}
 /* ── 颜色筛选：取色器 + hex 输入 + 容差滑块（首页筛选区第一行） ── */
 .colorbox{display:inline-flex;align-items:center;gap:6px}
 .colorbox input[type=color]{width:38px;height:30px;padding:1px 2px;border:1px solid var(--line2);border-radius:999px;background:var(--bg);cursor:pointer;color-scheme:dark light}

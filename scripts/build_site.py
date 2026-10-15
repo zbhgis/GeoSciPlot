@@ -257,12 +257,15 @@ def flat(values, default: str = "—") -> Counter:
 
 def chips(values: Counter, key: str) -> str:
     """多选标签 chips（正向选择语义，2026-10-14 与 MacroBiodiv 统一）：默认全不选，
-    点击=选中该标签（选中值之间 OR），行尾提供 全选/反选。"""
+    点击=选中该标签（选中值之间 OR），行尾提供 全选/反选/严格。
+    严格=图片携带的每个标签都必须被选中（带任一未选中标签的图排除）。"""
     items = []
     for name, n in sorted(values.items(), key=lambda kv: (-kv[1], str(kv[0]))):
         items.append(f'<button type="button" class="chip" data-v="{esc(name)}" aria-pressed="false">{esc(name)}<i class="n">{n}</i></button>')
     items.append('<button type="button" class="chip chip-act" data-act="all">全选</button>')
     items.append('<button type="button" class="chip chip-act" data-act="invert">反选</button>')
+    items.append('<button type="button" class="chip chip-act" data-act="strict" data-on="false" aria-pressed="false" '
+                 'title="严格模式：图片携带的每个标签都必须被选中，带任一未选中标签的图会被排除">严格</button>')
     return f'<div class="chips" data-key="{key}">\n  ' + "\n  ".join(items) + "\n</div>"
 
 
