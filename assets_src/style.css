@@ -383,9 +383,9 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .cl-go:hover{color:var(--bg);filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 4px 16px color-mix(in srgb,var(--accent) 48%,transparent)}
 .cl-go .mnav-ico{width:15px;height:15px}
 
-/* ── 全站统计页（/stats/）：访客向数据面板 —— hero 总览 tile + 热看榜 +
+/* ── 全站统计页（/statistics/）：访客向数据面板 —— hero 总览 tile + 点击量榜 +
    SVG 环形图/上传动态面积图 + 条形图 + 标签词云。筛选（标签/画幅/上传日期）
-   联动重算图表；热看榜与 hero 浏览数来自统计服务，为全量口径不随筛选重算
+   联动重算图表；点击量榜与 hero 浏览数来自统计服务，为全量口径不随筛选重算
    （版式与 MacroBiodiv /statistics/ 同源，统计项为图库口径） ── */
 .st-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:22px 0 0}
 @media (max-width:860px){.st-hero{grid-template-columns:1fr 1fr}}

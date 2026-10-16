@@ -902,7 +902,7 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
              "- [图库首页](" + SITE_URL + "/)",
              "- [全站搜索](" + SITE_URL + "/search/)",
              "- [色彩实验](" + SITE_URL + "/color-lab/)（框选取色 + 颜色替换调色 + 色觉模拟工具）",
-             "- [全站统计](" + SITE_URL + "/statistics/)（收录量、主色构成、高频颜色、标签词云、热看榜）",
+             "- [全站统计](" + SITE_URL + "/statistics/)（收录量、主色构成、高频颜色、标签词云、点击量榜）",
              "- [关于本站](" + SITE_URL + "/about/)（站点定位、数据来源与说明）",
              "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
     for it in items:

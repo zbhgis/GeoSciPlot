@@ -461,7 +461,7 @@
   const rankBox = el("st-rank");
   const viewsEl = el("stv-views");
   /* API 为空 = 同源（nginx 把 /api/ 反代到主站统计服务），不能当作「未配置」——
-     此前若写成 if (!LOCAL && API)，线上 api 默认空串会导致热看榜永远不 fetch（实测踩过） */
+     此前若写成 if (!LOCAL && API)，线上 api 默认空串会导致点击量榜永远不 fetch（实测踩过） */
   if (!LOCAL) {
     fetch((API || "") + "/api/v1/stats/views?prefix=/geosciplot/")
       .then((r) => (r.ok ? r.json() : null))
