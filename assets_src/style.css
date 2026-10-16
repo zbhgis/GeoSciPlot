@@ -396,7 +396,7 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .st-tc1{--tc:#58a6ff}.st-tc2{--tc:#3fb950}.st-tc3{--tc:#a371f7}.st-tc4{--tc:#f0883e}
 :root[data-theme=light] .st-tc1{--tc:#0969da}:root[data-theme=light] .st-tc2{--tc:#1a7f37}
 :root[data-theme=light] .st-tc3{--tc:#8250df}:root[data-theme=light] .st-tc4{--tc:#bc4c00}
-/* 热看图片 Top 5：行内淡色底条 = 浏览量占比（--w），No.1 实心章 / 2·3 描边章 */
+/* 点击量 Top 5：行内淡色底条 = 浏览量占比（--w），No.1 实心章 / 2·3 描边章 */
 .st-hot{margin:14px 0 0}
 .st-card h3{display:flex;align-items:baseline;gap:8px;margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);font-weight:500;letter-spacing:.06em;color:var(--dim)}
 .st-card h3 em{margin-left:auto;font-style:normal;font-weight:400;letter-spacing:0;color:var(--faint)}

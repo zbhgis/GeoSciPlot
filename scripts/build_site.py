@@ -716,10 +716,10 @@ def build_stats_data(cfg: dict, items: list[dict]) -> None:
 
 
 def build_stats_page(cfg: dict, items: list[dict]) -> str:
-    """全站统计页（访客向数据面板）：hero 总览 + 热看图片 + 筛选（标签/画幅/
+    """全站统计页（访客向数据面板）：hero 总览 + 点击量 + 筛选（标签/画幅/
     上传日期区间）联动重算 —— 上传动态面积图 · 主色构成环形图 · 高频颜色条形图 ·
     标签词云。数据来自 stats-data.js（仅本页注入）；
-    热看榜与 hero 浏览数来自统计服务，为全量口径不随筛选重算。"""
+    点击量榜与 hero 浏览数来自统计服务，为全量口径不随筛选重算。"""
     # 屏蔽色工具行：全部色族罗列（点按切换、点亮即屏蔽），两张颜色卡共用同一份
     # 状态（stats.js 的 BL.fams，localStorage 记忆）；色族集合与 colorFamily 一致
     st_fams = [("白", "#FFFFFF"), ("黑", "#000000"), ("灰", "#808080"),
@@ -742,7 +742,7 @@ def build_stats_page(cfg: dict, items: list[dict]) -> str:
   <div class="st-tile st-tc4"><b id="stv-views">…</b><span>图片被浏览 · 次</span></div>
 </section>
 
-<section class="st-card st-hot"><h3>热看图片<em>Top 5 · 按访客浏览量 · 全量口径</em></h3>
+<section class="st-card st-hot"><h3>点击量<em>Top 5 · 按访客浏览量 · 全量口径</em></h3>
 <div class="st-ranks" id="st-rank"><p class="st-none">加载中…</p></div></section>
 
 <div class="st-filter">
