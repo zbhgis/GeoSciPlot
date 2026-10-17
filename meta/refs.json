@@ -1,6 +1,6 @@
 {
   "generated": "2026-10-16",
-  "count": 309,
+  "count": 308,
   "thumbMax": 480,
   "items": [
     {
@@ -8942,104 +8942,6 @@
         {
           "hex": "#4B4B4B",
           "pct": 0.09
-        }
-      ]
-    },
-    {
-      "id": "0cc6b36fe4",
-      "doi": "https://doi.org/10.1038/s41467-026-71931-w",
-      "tags": [
-        "双变量",
-        "欧洲"
-      ],
-      "width": 735,
-      "height": 611,
-      "ext": "png",
-      "thumb": "thumb/2026-10-16/0cc6b36fe4.webp",
-      "full": "full/2026-10-16/0cc6b36fe4.png",
-      "bytes": 157492,
-      "origName": "paste-20261016-211059-2.png",
-      "added": "2026-10-16",
-      "colors": [
-        {
-          "hex": "#EBEBEB",
-          "pct": 76.96
-        },
-        {
-          "hex": "#ABABAB",
-          "pct": 6.36
-        },
-        {
-          "hex": "#6B6B6B",
-          "pct": 4.74
-        },
-        {
-          "hex": "#CCCCCC",
-          "pct": 3.89
-        },
-        {
-          "hex": "#8C8C8C",
-          "pct": 2.78
-        },
-        {
-          "hex": "#5D66A8",
-          "pct": 1.27
-        },
-        {
-          "hex": "#75A6C4",
-          "pct": 1.09
-        },
-        {
-          "hex": "#8A61AF",
-          "pct": 0.68
-        },
-        {
-          "hex": "#BB63B1",
-          "pct": 0.62
-        },
-        {
-          "hex": "#A5ACD7",
-          "pct": 0.31
-        },
-        {
-          "hex": "#3B4799",
-          "pct": 0.3
-        },
-        {
-          "hex": "#AFE4E4",
-          "pct": 0.3
-        },
-        {
-          "hex": "#7DCDCE",
-          "pct": 0.04
-        },
-        {
-          "hex": "#9887C3",
-          "pct": 0.01
-        },
-        {
-          "hex": "#CC8AC5",
-          "pct": 0.01
-        },
-        {
-          "hex": "#FFF8C3",
-          "pct": 0.01
-        },
-        {
-          "hex": "#896485",
-          "pct": 0.01
-        },
-        {
-          "hex": "#CEA884",
-          "pct": 0.0
-        },
-        {
-          "hex": "#FD0202",
-          "pct": 0.0
-        },
-        {
-          "hex": "#276AB6",
-          "pct": 0.0
         }
       ]
     },
