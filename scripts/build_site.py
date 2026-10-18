@@ -419,8 +419,32 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
         "url": SITE_URL,
         "description": cfg["lede"],
         "inLanguage": "zh-CN",
+        # SearchAction：/search/ 支持 id/DOI/标签检索（?q= 预填，gallery.js L207），
+        # 声明后引擎可把站内检索挂进结果（MacroBiodiv 首页同款）
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": {"@type": "EntryPoint",
+                       "urlTemplate": SITE_URL + "/search/?q={search_term_string}"},
+            "query-input": "required name=search_term_string",
+        },
     }, ensure_ascii=False)
-    head = f'<script type="application/ld+json">{website_ld}</script>'
+    # CollectionPage + 全量图片 ItemList（2026-10-18）：首页是图库主落地页，
+    # 与 sitemap 的 image 扩展同源互补——结构化实体清单供 AI 引擎直接取用
+    col_ld = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "全部图片",
+        "description": cfg["lede"],
+        "url": SITE_URL + "/",
+        "inLanguage": "zh-CN",
+        "itemListElement": [
+            {"@type": "ListItem", "position": i + 1,
+             "name": (" · ".join(str(t) for t in (it.get("tags") or [])) or f"图 {it['id']}"),
+             "url": f"{SITE_URL}/{it['id']}/"}
+            for i, it in enumerate(items)],
+    }, ensure_ascii=False)
+    head = (f'<script type="application/ld+json">{website_ld}</script>'
+            f'<script type="application/ld+json">{col_ld}</script>')
     return page_shell(cfg, cfg["subtitle"], body,
                       meta_desc=f"{cfg['lede']}（{len(items)} 张图，可搜索、可筛选、按上传日期浏览）",
                       head_extra=head)
