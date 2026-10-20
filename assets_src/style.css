@@ -426,7 +426,10 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .st-none{margin:4px 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint)}
 /* 条形图：细轨 + 进场生长动画（每次重渲染触发；reduced-motion 关闭） */
 .st-bars{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-.st-row{display:grid;grid-template-columns:minmax(84px,190px) 1fr 34px;gap:10px;align-items:center}
+/* 标签列必须用固定宽度：minmax(84px,190px) 这类「固定值上限」轨道会在
+   maximize-tracks 阶段被剩余空间撑到上限（fr 轨道之后才分），导致标签列
+   恒为 190px、右对齐的单字标签左侧空出大片 —— 图表整体看起来偏右 */
+.st-row{display:grid;grid-template-columns:84px 1fr 34px;gap:10px;align-items:center}
 .st-k{font-size:var(--fs-xs);color:var(--dim);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .st-bar{position:relative;height:16px;border-radius:4px;background:var(--bg);overflow:hidden}
 .st-bar i{position:absolute;left:0;top:0;bottom:0;min-width:3px;background:var(--accent);opacity:.8;border-radius:4px;transform-origin:left;animation:stgrow .55s cubic-bezier(.25,.8,.35,1) both}
@@ -488,7 +491,7 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
   .st-donut{flex-direction:column;align-items:stretch;gap:12px}
   .st-donut svg{width:176px;height:176px;margin:0 auto}
   .st-legend{width:100%;min-width:0}
-  .st-row{grid-template-columns:minmax(64px,110px) 1fr 30px;gap:8px}
+  .st-row{grid-template-columns:64px 1fr 30px;gap:8px}
 }
 
 /* ── 关于本站页（/about/）：全宽 prose —— 排版逐条镜像 MacroBiodiv .wk-content
