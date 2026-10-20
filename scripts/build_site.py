@@ -197,11 +197,6 @@ def page_shell(
         cfg.get("owner") or "OWNER", cfg["repo"])
     desc = meta_desc or f"{cfg['subtitle']} —— {cfg['lede']}"
     og_url = og_url or (SITE_URL + ("/" if not depth else ""))
-    # RSS 自动发现：atom.xml（图库更新 feed，build_seo_files 生成）——阅读器贴
-    # 域名即可发现；绝对路径在任何深度都成立
-    feed_link = (f'<link rel="alternate" type="application/atom+xml" '
-                 f'title="{esc(cfg.get("title", "geosciplot"))} · 图库更新" '
-                 f'href="{SITE_URL}/atom.xml">')
     # 无图页（首页/工具页）的 og:image 用站点 logo 兜底：分享卡片无图就是灰底块。
     # 详情页的 og:image 在 head_extra 里（带尺寸），此处不注入避免重复
     if not og_image and "og:image" not in head_extra:
@@ -225,7 +220,6 @@ def page_shell(
 <title>{esc(title)} | geosciplot</title>
 <meta name="description" content="{esc(desc)}">
 <link rel="canonical" href="{og_url}">
-{feed_link}
 <meta property="og:site_name" content="geosciplot">
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(desc)}">
@@ -906,45 +900,6 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
                  + urls + ["</urlset>"])
     (SITE / "sitemap.xml").write_text(sm, encoding="utf-8")
 
-    # Atom 订阅 feed（2026-10-18）：三站中此前唯一没有 RSS 的站，阅读器/聚合器
-    # 靠它发现增量。条目取最近 20 张（按上传日期新→旧）；日期用纯日期——
-    # MacroBiodiv 实证：带时区的整点时间戳会被 Zotero 换算成本地时刻显示 16:00:00
-    FEED_N = 20
-    latest = sorted(items, key=lambda it: str(it.get("added") or ""), reverse=True)[:FEED_N]
-    feed_updated = str((latest[0].get("added") if latest else "") or today)
-    entries = []
-    for it in latest:
-        iid = str(it.get("id") or "")
-        if not iid:
-            continue
-        sem_i = " · ".join(str(t) for t in (it.get("tags") or []))
-        title_i = (sem_i + " · 图 " + iid) if sem_i else ("图 " + iid)
-        added_i = str(it.get("added") or today)
-        doi_i = doi_bare(it.get("doi"))
-        meta_i = " · ".join(x for x in [sem_i, added_i, ("DOI: " + doi_i) if doi_i else ""] if x)
-        thumb_i = str(it.get("thumb") or "")
-        thumb_url_i = (img_base + "/" + thumb_i) if thumb_i else ""
-        content_html = (f'<img src="{esc(thumb_url_i)}" alt="{esc(title_i)}">'
-                        + (f"<p>{esc(meta_i)}</p>" if meta_i else ""))
-        entries.append(
-            "<entry><id>" + SITE_URL + "/" + iid + "/</id>"
-            + "<title>" + esc(title_i) + "</title>"
-            + '<link href="' + SITE_URL + "/" + iid + '/"/>'
-            + "<updated>" + esc(added_i) + "</updated>"
-            + "<summary>" + esc(meta_i or title_i) + "</summary>"
-            + '<content type="html">' + esc(content_html) + "</content></entry>")
-    atom = nl.join([
-        '<?xml version=' + chr(34) + "1.0" + chr(34) + ' encoding=' + chr(34) + "utf-8" + chr(34) + '?>',
-        '<feed xmlns=' + chr(34) + "http://www.w3.org/2005/Atom" + chr(34) + '>',
-        "<title>" + esc(cfg.get("title", "geosciplot")) + " · 图库更新</title>",
-        '<link href="' + SITE_URL + '/"/>',
-        '<link rel="self" href="' + SITE_URL + '/atom.xml"/>',
-        "<id>" + SITE_URL + "/</id>",
-        "<updated>" + esc(feed_updated) + "</updated>",
-        "<subtitle>" + esc(cfg.get("lede", "")) + "</subtitle>",
-    ] + entries + ["</feed>"])
-    (SITE / "atom.xml").write_text(atom, encoding="utf-8")
-
     lines = ["# " + cfg.get("title", "geosciplot"), "",
              cfg.get("subtitle", "") + "（" + SITE_URL + "）—— " + cfg.get("lede", ""),
              "", "## Overview (EN)", "",
@@ -970,9 +925,8 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
              "", "## 核心页面", "",
              "- [图库首页](" + SITE_URL + "/)",
              "- [全站搜索](" + SITE_URL + "/search/)",
-             "- [RSS 订阅](" + SITE_URL + "/atom.xml) — 最近 " + str(FEED_N) + " 张入库图表（Atom，含缩略图与 DOI）",
              "- [色彩实验](" + SITE_URL + "/color-lab/)（框选取色 + 颜色替换调色 + 色觉模拟工具）",
-             "- [全站统计](" + SITE_URL + "/statistics/)（收录量、主色构成、高频颜色、标签词云、热看榜）",
+             "- [全站统计](" + SITE_URL + "/statistics/)（收录量、主色构成、高频颜色、标签词云、点击量榜）",
              "- [关于本站](" + SITE_URL + "/about/)（站点定位、数据来源与说明）",
              "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
     for it in items:
@@ -1001,7 +955,7 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
     if key_file.exists():
         key = key_file.read_text(encoding="utf-8").strip()
         (SITE / (key + ".txt")).write_text(key, encoding="utf-8")
-    print("· SEO/GEO 已生成：robots.txt / sitemap.xml / atom.xml / llms.txt（" + str(len(items)) + " 张图）")
+    print("· SEO/GEO 三件套已生成：robots.txt / sitemap.xml / llms.txt（" + str(len(items)) + " 张图）")
 
 
 def main() -> int:
