@@ -154,9 +154,11 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
       <label class="mono" style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px"><input type="checkbox" id="doSync" checked style="width:auto"> 同步到服务器</label>
     </div>
     <div class="row">
-      <button class="primary" id="btnPublish">发布（生成站点 + 提交）</button>
+      <button id="btnStage">暂存到本地（不推送）</button>
+      <button class="primary" id="btnPublish">保存并推送（构建 + 提交 + 同步）</button>
       <button id="btnPush">仅执行 git push</button>
     </div>
+    <p class="note" style="margin-top:8px">批量改图建议：先「暂存到本地」攒一批 → 到「图片管理」页点「一键推送全部」，只等一次。</p>
     <div class="log" id="log"></div>
   </div>
 
@@ -176,6 +178,13 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
       <button id="btnSync">同步站点到服务器</button>
       <span class="note">把 site/ 推到服务器（需先在服务器 authorized_keys 里加本机公钥，见 README）</span>
     </div>
+    <h2>一键推送</h2>
+    <div class="row" style="margin:0 0 16px">
+      <input id="deployMsg" style="flex:1 1 240px;max-width:360px" placeholder="提交信息（留空自动生成）">
+      <button class="primary" id="btnDeploy">一键推送全部</button>
+      <span class="note">把所有已暂存/已保存的变更一次性：增量入库 → 构建站点 → git 提交推送 → 同步服务器。<br>推送期间不能再保存或重复推送。</span>
+    </div>
+    <div class="log" id="mLog"></div>
     <div id="manageList"><p class="note">读取中…</p></div>
   </div>
 
@@ -217,8 +226,11 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
       会在输入框下方列出同 DOI 的图片 id（DOI 大小写不敏感）。
       <b>这只是提示、不阻断发布</b> —— 同一篇论文配多张图是正常情况。<br>
     · 若上传后不发布，图片仍留在 raw/，下次生成会以「未命名」收录，可在 meta/titles.csv 里补。<br>
+    · <b>批量修改的正确姿势</b>：图片管理页里每条「暂存保存」都是纯本地写（毫秒级），
+      连续改多少条都不用等；改完点<b>「一键推送全部」</b>，把所有暂存过的变更
+      （含 raw/ 里未入库的图、其他图片的改动）一次性构建站点、提交推送并同步服务器。<br>
     · 删除图片会同时移除缩略图、原图副本、raw/ 原图与索引条目，并同步 GitHub。<br>
-    · 发布 = 写 meta/titles.csv → prepare.py → build_site.py → git add/commit/push →（可选）同步服务器。
+    · 保存并推送 = 暂存 + 一键推送：写 meta/titles.csv → prepare.py → build_site.py → git add/commit/push →（可选）同步服务器。
   </p>
 </div>
 
@@ -401,6 +413,10 @@ function loadStatus() {
     box.appendChild(el("span", "", "分支 " + s.branch));
     box.appendChild(el("span", "", "图库 " + s.count + " 张"));
     box.appendChild(el("span", "", "未提交 " + s.dirty + " 项"));
+    var up = s.unpushed || 0;
+    var ub = el("span", "badge" + (up ? " warn" : ""), "未推送 " + up + " 提交");
+    if (!up) ub.style.color = "var(--dim)";
+    box.appendChild(ub);
     document.getElementById("initBox").style.display = s.isRepo ? "none" : "block";
     document.getElementById("remote").value = s.defaultRemote || "";
     allTags = s.tags || [];
@@ -933,9 +949,9 @@ function buildItemNode(rec) {
   return node;
 }
 
-/* ── 发布 ── */
-function renderLog(log) {
-  var box = document.getElementById("log");
+/* ── 发布 / 暂存 ── */
+function renderLog(log, boxId) {
+  var box = document.getElementById(boxId || "log");
   box.innerHTML = "";
   (log || []).forEach(function (s) {
     var row = el("div", "step");
@@ -960,48 +976,71 @@ function renderLog(log) {
     }
   });
 }
-/* 长操作统一走后台任务：POST 拿任务号 → 每 0.8s 轮询进度 → 实时滚动日志 → 结束回调 */
-function runJob(path, body, done) {
+/* 长操作统一走后台任务：POST 拿任务号 → 每 0.8s 轮询进度 → 实时滚动日志 → 结束回调。
+   boxId：日志渲染目标（添加图片页默认 #log，图片管理页传 mLog） */
+function runJob(path, body, done, boxId) {
   api(path, body).then(function (res) {
     var jid = res && res.job;
     if (!jid) {                                  // 兼容同步返回的结果
-      if (res && res.log) renderLog(res.log);
+      if (res && res.log) renderLog(res.log, boxId);
       if (done) done(res || { ok: false });
       return;
     }
     var timer = setInterval(function () {
       api("/api/job/" + jid).then(function (s) {
-        renderLog(s.log);
+        renderLog(s.log, boxId);
         if (!s.done) return;
         clearInterval(timer);
-        if (s.hint) document.getElementById("log").appendChild(el("div", "hint", s.hint));
+        if (s.hint) document.getElementById(boxId || "log").appendChild(el("div", "hint", s.hint));
         if (done) done({ ok: s.ok, log: s.log, hint: s.hint });
       }).catch(function () { /* 网络抖动，下轮再取 */ });
     }, 800);
   }).catch(function (e) {
-    renderLog([{ step: "请求失败", ok: false, out: String(e) }]);
+    renderLog([{ step: "请求失败", ok: false, out: String(e) }], boxId);
     if (done) done({ ok: false });
   });
 }
-function publish() {
-  if (!pending.length) { toast("还没有待发布的图片——先拖图上传，或等 raw/ 自动恢复"); return; }
-  var items = pending.map(function (p) {
+function collectItems() {
+  return pending.map(function (p) {
     return {
       id: p.id,
       tags: (p.tags || "").split("|").map(function (t) { return t.trim(); }).filter(Boolean),
       doi: p.doi || ""
     };
   });
+}
+/* 暂存到本地（不推送）：写元数据表 + 入库缩略图/索引，秒级～十几秒，
+   攒够一批后到「图片管理」页点「一键推送全部」统一构建、提交、同步 */
+function stage() {
+  if (!pending.length) { toast("还没有待发布的图片——先拖图上传，或等 raw/ 自动恢复"); return; }
+  var items = collectItems();
+  askConfirm("将 " + items.length + " 张图暂存到本地：\n"
+    + "· 写入元数据表，生成缩略图与索引\n"
+    + "· 不构建站点、不推送（之后点「一键推送全部」统一发布）\n\n确认开始？", function () {
+    var btn = document.getElementById("btnStage");
+    btn.disabled = true;
+    btn.textContent = "暂存中…";
+    runJob("/api/stage", { items: items }, function (res) {
+      if (res.ok) { dropPendingAll(); invalidateRaw(); toast("已暂存到本地（未推送）"); }
+      btn.disabled = false;
+      btn.textContent = "暂存到本地（不推送）";
+      loadStatus();
+    });
+  });
+}
+function publish() {
+  if (!pending.length) { toast("还没有待发布的图片——先拖图上传，或等 raw/ 自动恢复"); return; }
+  var items = collectItems();
   var doPush = document.getElementById("doPush").checked;
   var doSync = document.getElementById("doSync").checked;
-  var summary = "即将发布 " + items.length + " 张图：\n"
-    + "· 生成缩略图与索引、构建站点\n"
+  var summary = "即将保存并推送 " + items.length + " 张图：\n"
+    + "· 写入元数据、生成缩略图与索引、构建站点\n"
     + (doPush ? "· 推送到 GitHub\n" : "· 不推送 GitHub\n")
     + (doSync ? "· 同步到服务器" : "· 不同步服务器（需手动 scp）");
   askConfirm(summary + "\n\n确认开始？", function () {
   var btn = document.getElementById("btnPublish");
   btn.disabled = true;
-  btn.textContent = "发布中…（下方看实时进度）";
+  btn.textContent = "推送中…（下方看实时进度）";
   document.getElementById("log").scrollIntoView({ behavior: "smooth", block: "nearest" });
   runJob("/api/publish", {
     items: items,
@@ -1011,7 +1050,7 @@ function publish() {
   }, function (res) {
     if (res.ok) { dropPendingAll(); invalidateRaw(); }   // raw/ 里的图已入库，状态变了
     btn.disabled = false;
-    btn.textContent = "发布（生成站点 + 提交）";
+    btn.textContent = "保存并推送（构建 + 提交 + 同步）";
     loadStatus();
   });
   });
@@ -1019,6 +1058,7 @@ function publish() {
 
 /* ── 初始化 / 推送 ── */
 document.getElementById("btnPublish").addEventListener("click", publish);
+document.getElementById("btnStage").addEventListener("click", stage);
 document.getElementById("btnInit").addEventListener("click", function () {
   var btn = document.getElementById("btnInit");
   btn.disabled = true;
@@ -1264,7 +1304,7 @@ function openEdit(node, it) {
   var btnRow = el("div", "full");
   btnRow.style.display = "flex";
   btnRow.style.gap = "8px";
-  var save = el("button", "primary tiny", "保存");
+  var save = el("button", "primary tiny", "暂存保存");
   var cancel = el("button", "tiny", "取消");
   btnRow.appendChild(save);
   btnRow.appendChild(cancel);
@@ -1273,13 +1313,21 @@ function openEdit(node, it) {
   editOpen = form;
   save.addEventListener("click", function () {
     save.disabled = true;
-    save.textContent = "保存中…";
-    runJob("/api/update", { items: [{ id: it.id,
-                                      tags: it.tags, doi: it.doi }],
-                            push: document.getElementById("doPush").checked,
-                            sync: document.getElementById("doSync").checked }, function () {
+    save.textContent = "暂存中…";
+    /* 暂存 = 纯本地写 titles.csv + refs.json，毫秒级同步返回，不构建不推送。
+       连续改多条都很快，改完到上方点「一键推送全部」统一发布 */
+    api("/api/save", { items: [{ id: it.id, tags: it.tags, doi: it.doi }] }).then(function (r) {
+      if (!r || !r.ok) {
+        toast("暂存失败：" + ((r && r.error) || "未知错误"));
+        save.disabled = false; save.textContent = "暂存保存";
+        return;
+      }
+      toast("已暂存到本地（未推送）——改完后点「一键推送全部」统一发布");
       editOpen.remove(); editOpen = null;
       loadItems(); loadStatus();
+    }).catch(function (e) {
+      toast("暂存失败：" + e);
+      save.disabled = false; save.textContent = "暂存保存";
     });
   });
   cancel.addEventListener("click", function () { form.remove(); editOpen = null; });
@@ -1291,6 +1339,25 @@ document.getElementById("btnSync").addEventListener("click", function () {
   runJob("/api/sync-server", {}, function () {
     btn.disabled = false;
     btn.textContent = "同步站点到服务器";
+  }, "mLog");
+});
+/* 一键推送全部：所有「暂存/保存」过的变更（含 raw/ 里未入库的图、其他图片的改动）
+   一次性 增量入库 → 构建站点 → git 提交推送 → 同步服务器 */
+document.getElementById("btnDeploy").addEventListener("click", function () {
+  var btn = document.getElementById("btnDeploy");
+  askConfirm("一键推送全部已保存的变更：\n"
+    + "· 增量入库（raw/ 里未处理的图一并收录）\n"
+    + "· 生成站点\n"
+    + "· git 提交并推送到 GitHub\n"
+    + "· 同步到服务器\n\n确认开始？", function () {
+    btn.disabled = true;
+    btn.textContent = "推送中…（下方看实时进度）";
+    document.getElementById("mLog").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    runJob("/api/deploy", { message: document.getElementById("deployMsg").value }, function () {
+      btn.disabled = false;
+      btn.textContent = "一键推送全部";
+      loadStatus();
+    }, "mLog");
   });
 });
 

@@ -10,9 +10,12 @@
     1. 拖拽 / 点击选择 / Ctrl+V 粘贴上传图片 → 存入 raw/，按内容算出 id，并给出缩略图预览
        （粘贴支持混合内容：自动只提取其中的图片；text/html 里的远程 <img> 由本机服务代取）
     2. 逐张填写 期刊 / 论文发表 / 标签 / 说明
-    3. 图片管理：增删查改（元数据修改、删除图片），改动自动同步 GitHub 与线上站点
+    3. 图片管理：增删查改。元数据「保存」= **暂存到本地**（titles.csv + refs.json，
+       毫秒级，不构建不推送）——可以连续改很多条再统一推送；
+       「一键推送全部」= 把所有已暂存/已保存的变更一次性：prepare 增量入库
+       → 构建站点 → git 提交推送 →（可选）同步服务器
     4. raw 暂存区：查看 raw/ 里全部文件（含已发布图的副本，可筛选/单个删除），一键清空 raw/
-    5. 点「发布」→ 自动执行：写 meta/titles.csv → prepare.py → build_site.py
+    5. 点「保存并推送」→ 自动执行：写 meta/titles.csv → prepare.py → build_site.py
        → git add / commit / push →（可选）同步到服务器
 
 为什么不需要登录：服务只监听 127.0.0.1，物理上只有本机能连；推送用你本机已配置的
@@ -183,6 +186,10 @@ def repo_state() -> dict:
         branch = out if code == 0 else "main"
         code, out = run(["git", "status", "--porcelain"])
         dirty = len([l for l in out.splitlines() if l.strip()]) if code == 0 else 0
+        # 本地领先远端的提交数：暂存模型的「有东西没推」指示灯。
+        # origin/<branch> 是本地引用（上次 fetch/push 时更新），这里不做网络请求，够用
+        code, out = run(["git", "rev-list", "--count", f"origin/{branch}..HEAD"])
+        unpushed = int(out.strip()) if code == 0 and out.strip().isdigit() else 0
 
     # 归一化后的 DOI → 已入库图片 id 的倒排索引，供「添加图片」页做同 DOI 提示
     dois: dict[str, list[str]] = {}
@@ -197,6 +204,7 @@ def repo_state() -> dict:
         "remote": remote,
         "branch": branch,
         "dirty": dirty,
+        "unpushed": unpushed,
         "count": len(items),
         "tags": sorted({t for i in items for t in (i.get("tags") or [])}),
         "dois": dois,
@@ -212,6 +220,13 @@ def repo_state() -> dict:
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
 
+# 流水线互斥：构建/提交/推送/删除这类「会动 site/、git、refs.json」的任务
+# 同一时间只允许一个——否则暂存写一半、流水线读一半，产物就是撕裂状态。
+# 暂存类操作（/api/save）也会先看这把锁，忙时直接拒绝而不是排队。
+PIPELINE_LOCK = threading.Lock()
+PIPELINE_KINDS = {"publish", "update", "delete", "stage", "deploy",
+                  "sync-server", "init", "push"}
+
 
 def step(log: list[dict], name: str, cmd: list[str] | None, timeout: int = 300) -> tuple[bool, str]:
     """带「运行中」标记的步骤：先写入 ok=None 条目（前端显示 …），命令结束后回填结果。"""
@@ -226,8 +241,15 @@ def step(log: list[dict], name: str, cmd: list[str] | None, timeout: int = 300) 
 
 
 def start_job(kind: str, body: dict) -> str:
-    """启动后台任务，立即返回任务号。"""
+    """启动后台任务，立即返回任务号。流水线类任务互斥：忙时直接返回「秒败」任务。"""
     jid = uuid.uuid4().hex[:8]
+    if kind in PIPELINE_KINDS and not PIPELINE_LOCK.acquire(blocking=False):
+        with JOBS_LOCK:
+            JOBS[jid] = {"kind": kind, "done": True, "ok": False,
+                         "hint": "已有发布/推送任务在运行——等下方日志显示结束后再操作",
+                         "log": [{"step": "忙碌", "ok": False,
+                                  "out": "同一时间只允许一条发布/推送流水线"}]}
+        return jid
     job = {"kind": kind, "log": [], "done": False, "ok": None, "hint": ""}
     with JOBS_LOCK:
         JOBS[jid] = job
@@ -240,9 +262,11 @@ def start_job(kind: str, body: dict) -> str:
             if kind == "publish":
                 res = do_publish(body.get("items") or [], body.get("message") or "",
                                  bool(body.get("push", True)), bool(body.get("sync", True)))
-            elif kind == "update":
-                res = do_update_and_finish(body.get("items") or [], body.get("message") or "",
-                                           bool(body.get("push", True)), bool(body.get("sync", True)))
+            elif kind == "stage":
+                res = do_stage(body.get("items") or [])
+            elif kind == "deploy":
+                res = do_deploy(body.get("message") or "",
+                                bool(body.get("push", True)), bool(body.get("sync", True)))
             elif kind == "delete":
                 res = do_delete_and_finish((body.get("id") or "").strip(), body.get("message") or "",
                                            bool(body.get("push", True)), bool(body.get("sync", True)))
@@ -256,6 +280,9 @@ def start_job(kind: str, body: dict) -> str:
                 res = {"ok": False, "log": [{"step": kind, "ok": False, "out": "未知任务类型"}]}
         except Exception as e:            # 后台线程绝不能静默死掉
             res = {"ok": False, "hint": "", "log": [{"step": "后台任务异常", "ok": False, "out": repr(e)}]}
+        finally:
+            if kind in PIPELINE_KINDS:
+                PIPELINE_LOCK.release()
         with JOBS_LOCK:
             job["log"] = res.get("log", job["log"])
             job["done"] = True
@@ -630,9 +657,8 @@ def pipeline_after_content(log: list[dict], message: str, push: bool, sync: bool
     return {"ok": True, "log": log}
 
 
-def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = True) -> dict:
-    log: list[dict] = []
-
+def apply_items_to_csv(items: list[dict]) -> int:
+    """把「待发布表单」的元数据写进 titles.csv（保留未提及字段的旧值）。"""
     fields, rows = read_titles()
     for f in CSV_FIELDS:
         if f not in fields:
@@ -656,6 +682,42 @@ def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = 
         rows[fid] = row
         written += 1
     write_titles(fields, rows)
+    return written
+
+
+def do_stage(items: list[dict]) -> dict:
+    """暂存到本地（不推送）：写 titles.csv + prepare.py 增量入库（缩略图 + refs.json）。
+
+    之后不构建站点、不碰 git——攒够一批后点「一键推送全部」统一发布。
+    prepare.py 本身是增量的：raw/ 里没有新图时直接跳过（防误删保险），秒级返回。"""
+    log: list[dict] = []
+    written = apply_items_to_csv(items)
+    log.append({"step": "写入标题表", "ok": True, "out": f"meta/titles.csv 更新 {written} 条"})
+    ok, out = step(log, "生成图片与索引 (prepare.py)", [PYTHON, "scripts/prepare.py"])
+    if not ok:
+        return {"ok": False, "log": log, "hint": "prepare.py 失败，未暂存"}
+    log.append({"step": "暂存完成", "ok": True,
+                "out": f"{written} 张图已入库本地索引（未构建站点、未推送）——改完后点「一键推送全部」统一发布"})
+    return {"ok": True, "log": log}
+
+
+def do_deploy(message: str, push: bool = True, sync: bool = True) -> dict:
+    """一键推送所有已保存的变更：prepare 增量入库 → 构建站点 → git 提交推送 →（可选）同步服务器。
+
+    「所有已保存的」= 此前用「暂存」写进 titles.csv / refs.json 的元数据改动、
+    raw/ 里还没入库的图（prepare 增量收录），以及一切未提交的本地文件——
+    流水线对内容不可知，git add -A 全收。"""
+    log: list[dict] = []
+    ok, out = step(log, "增量入库 (prepare.py)", [PYTHON, "scripts/prepare.py"])
+    if not ok:
+        return {"ok": False, "log": log, "hint": "prepare.py 失败，未继续后面的步骤"}
+    return pipeline_after_content(log, message or "update: 图库内容变更", push, sync)
+
+
+def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = True) -> dict:
+    """保存并推送 = 暂存（写表 + 入库）+ 完整流水线。"""
+    log: list[dict] = []
+    written = apply_items_to_csv(items)
     log.append({"step": "写入标题表", "ok": True, "out": f"meta/titles.csv 更新 {written} 条"})
 
     ok, out = step(log, "生成图片与索引 (prepare.py)", [PYTHON, "scripts/prepare.py"])
@@ -699,14 +761,6 @@ def do_init(remote: str) -> dict:
     if not ok:
         return {"ok": False, "log": log, "hint": "首次推送失败：检查远端仓库与 SSH key"}
     return {"ok": True, "log": log}
-
-
-def do_update_and_finish(updates: list[dict], message: str, push: bool, sync: bool) -> dict:
-    res = do_update(updates)
-    if not res.get("ok"):
-        return res
-    log = res.get("log", [])
-    return pipeline_after_content(log, message or "update: 图库元信息变更", push, sync)
 
 
 def do_delete_and_finish(fid: str, message: str, push: bool, sync: bool) -> dict:
@@ -905,7 +959,14 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/raw/clear":
             # 纯本地删文件，很快，保持同步返回（与 /api/raw/delete 一致）
             self._json(do_raw_clear())
-        elif path in ("/api/publish", "/api/update", "/api/delete",
+        elif path == "/api/save":
+            # 元数据暂存：纯本地读写（titles.csv + refs.json），毫秒级，同步返回。
+            # 流水线正在跑时拒绝——refs.json / titles.csv 可能正被读取，写了就是撕裂状态
+            if PIPELINE_LOCK.locked():
+                self._json({"ok": False, "error": "已有发布/推送任务在运行，等它结束后再保存"})
+            else:
+                self._json(do_update(body.get("items") or []))
+        elif path in ("/api/publish", "/api/stage", "/api/deploy", "/api/delete",
                       "/api/sync-server", "/api/init", "/api/push"):
             # 长操作：立即返回任务号，后台线程执行，前端轮询 /api/job/<id>
             self._json({"job": start_job(path[len("/api/"):], body)})
