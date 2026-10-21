@@ -102,7 +102,7 @@ header.site{padding:72px 0 0}
 .kicker{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0}
 h1{display:flex;align-items:center;gap:18px;font-size:clamp(44px,6.5vw,68px);line-height:1.08;letter-spacing:-.03em;margin:24px 0 0;font-weight:700}
 h1 img.logo{height:clamp(44px,5.4vw,58px);width:auto;flex:none}
-.lede{font-size:var(--fs-base);color:var(--dim);max-width:52ch;margin:20px 0 0}
+.lede{font-size:var(--fs-base);color:var(--dim);margin:20px 0 0}
 .gh-note{display:inline-flex;align-items:center;gap:9px;margin:18px 0 0;padding:9px 16px;border:1px solid var(--accent);border-left-width:3px;border-radius:6px;background:var(--card);font-size:var(--fs-md);color:var(--text)}
 .gh-note svg{width:16px;height:16px;flex:none;color:var(--accent)}
 .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:22px 0 6px}
