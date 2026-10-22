@@ -251,9 +251,9 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
                "Amazonbot", "DuckAssistBot", "Bytespider", "PetalBot",
                "Omgilibot", "YouBot", "Diffbot", "Bytedance"]
     cn_engines = ["Baiduspider", "360Spider", "YisouSpider"]
-    parts = ["User-Agent: *", "Allow: /", ""]
+    parts = ["User-Agent: *", "Allow: /", "Disallow: /api/", ""]
     for b in ai_bots + cn_engines:
-        parts += ["User-Agent: " + b, "Allow: /", ""]
+        parts += ["User-Agent: " + b, "Allow: /", "Disallow: /api/", ""]
     parts += ["Sitemap: " + SITE_URL + "/sitemap.xml", ""]
     (SITE / "robots.txt").write_text(nl.join(parts), encoding="utf-8")
 
@@ -315,15 +315,29 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
              "  Everything runs locally in the browser.",
              "- Statistics: " + SITE_URL + "/statistics/ — collection size, colour composition,",
              "  most-used colours, tag word cloud, most-viewed figures.",
+             "- Mapping guide: " + SITE_URL + "/guide/ — practical notes on scientific map-making;",
+             "  a five-part 'global map projections in top journals' series with Python code and figures.",
              "- Image files are served by jsDelivr / GitHub raw from the GitHub repository, not",
              "  from this server. Direct image URLs are in sitemap.xml (image:loc entries).",
              "", "## 核心页面", "",
              "- [图库首页](" + SITE_URL + "/)",
              "- [全站搜索](" + SITE_URL + "/search/)",
              "- [色彩实验](" + SITE_URL + "/color-lab/)（框选取色 + 颜色替换调色 + 色觉模拟工具）",
+             "- [制图经验](" + SITE_URL + "/guide/)（科研制图经验；含「顶刊中的全球地图投影」系列）",
              "- [全站统计](" + SITE_URL + "/statistics/)（收录量、主色构成、高频颜色、标签词云、点击量榜）",
              "- [关于本站](" + SITE_URL + "/about/)（站点定位、数据来源与说明）",
-             "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
+             ""]
+    if guide_posts:
+        lines += ["## 制图经验（共 " + str(len(guide_posts)) + " 篇）", ""]
+        lines += ["- [" + p["title"] + "](" + SITE_URL + "/guide/" + p["slug"] + "/)"
+                  + (" — " + p["summary"] if p.get("summary") else "")
+                  + "（" + (p.get("date") or "") + "）" for p in guide_posts]
+        lines += [""]
+    lines += ["## 姊妹站点", "",
+              "- [浩瀚地学主站](https://www.zbhgis.com) — 个人技术博客：遥感 / GIS / Python / 地学研究",
+              "- [MacroBiodiv 文献库](https://macrobiodiv.zbhgis.com) — 宏观生态与生物多样性文献库：",
+              "  Crossref / OpenAlex 元数据、AI 中文摘要、每周速递",
+              "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
     for it in items:
         raw_tags = [str(t) for t in (it.get("tags") or [])]
         tags = " · ".join(raw_tags)

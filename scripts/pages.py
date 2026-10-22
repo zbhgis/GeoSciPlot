@@ -731,10 +731,43 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
 </article></main>
 <aside class="wk-toc"><div class="wk-toc-in"><h4 class="wk-side-hd">此页内容</h4><nav>{toc_rows}</nav></div></aside>
 </div>"""
+    url = SITE_URL + f"/guide/{p['slug']}/"
+    ld = {
+        "@context": "https://schema.org", "@type": "BlogPosting",
+        "headline": p["title"],
+        "description": p["summary"],
+        "datePublished": p["date"],
+        "dateModified": p["date"],
+        "inLanguage": "zh-CN",
+        "url": url,
+        "mainEntityOfPage": {"@type": "WebPage", "@id": url},
+        "image": p["og_image"] or SITE_URL + "/assets/logo.png",
+        "author": {"@type": "Person", "name": "zbhgis 浩瀚地学",
+                   "url": "https://github.com/zbhgis"},
+        "publisher": {"@type": "Organization", "name": "GeoSciPlot", "url": SITE_URL,
+                      "logo": {"@type": "ImageObject", "url": SITE_URL + "/assets/logo.png"}},
+        "articleSection": "制图经验",
+        "keywords": "地图投影, 科研绘图, Python, Cartopy, Spilhaus, Orthographic",
+    }
+    bc = {
+        "@context": "https://schema.org", "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "图库首页", "item": SITE_URL + "/"},
+            {"@type": "ListItem", "position": 2, "name": "制图经验", "item": SITE_URL + "/guide/"},
+            {"@type": "ListItem", "position": 3, "name": p["title"], "item": url},
+        ],
+    }
+    head = (f'<meta property="article:published_time" content="{p["date"]}">'
+            f'<meta property="article:modified_time" content="{p["date"]}">'
+            f'<meta property="article:section" content="制图经验">'
+            f'<script type="application/ld+json">'
+            f'{json.dumps(ld, ensure_ascii=False).replace("<", "\\u003c")}</script>'
+            f'<script type="application/ld+json">'
+            f'{json.dumps(bc, ensure_ascii=False).replace("<", "\\u003c")}</script>')
     return page_shell(
         cfg, f'{p["title"]} · {cfg["title"]}', body, depth=2,
         meta_desc=p["summary"], og_type="article", og_image=p["og_image"],
-        og_url=SITE_URL + f"/guide/{p['slug']}/",
+        og_url=url, head_extra=head,
         extra_assets=["article-toc.js"], active_nav="guide", bare=True)
 
 
@@ -768,9 +801,27 @@ def render_guide_list(cfg: dict, posts: list[dict]) -> str:
 
 <div class="wk-quicknav">{chips}</div>
 <div class="wk-groups">{sections}</div>"""
+    col_ld = {
+        "@context": "https://schema.org", "@type": "CollectionPage",
+        "name": "制图经验",
+        "description": "个人科研制图过程中的一些经验整理",
+        "url": SITE_URL + "/guide/",
+        "inLanguage": "zh-CN",
+        "hasPart": {
+            "@type": "ItemList",
+            "numberOfItems": len(posts),
+            "itemListElement": [
+                {"@type": "ListItem", "position": i + 1, "name": p["title"],
+                 "url": SITE_URL + f"/guide/{p['slug']}/"}
+                for i, p in enumerate(posts)
+            ],
+        },
+    }
+    head = ('<script type="application/ld+json">'
+            + json.dumps(col_ld, ensure_ascii=False).replace("<", "\\u003c") + "</script>")
     return page_shell(cfg, f"制图经验 · {cfg['title']}", body, depth=1,
                       meta_desc=f"地学科研制图经验整理，共 {len(posts)} 篇。",
-                      og_url=SITE_URL + "/guide/", active_nav="guide")
+                      og_url=SITE_URL + "/guide/", active_nav="guide", head_extra=head)
 
 
 def render_404(cfg: dict) -> str:
