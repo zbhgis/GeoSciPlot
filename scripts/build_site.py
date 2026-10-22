@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import shutil
@@ -190,10 +191,18 @@ def build_guide(cfg: dict) -> list[dict]:
         words = len(plain)
         first_img = re.search(r'<p class="wk-img"><img src="([^"]+)"', doc)
         month = f"{date[:4]}年{int(date[5:7])}月" if re.match(r"^\d{4}-\d{2}", date) else "未分组"
+        # llms-full.txt 用的可读纯文本：直接剥 HTML 标签，保留段落换行。
+        # plain_text() 为字数统计服务，会把所有空白压掉，不能拿来当全文。
+        full_text = html.unescape(re.sub(r"<[^>]+>", " ", doc))
+        full_text = re.sub(r"[ \t]+", " ", full_text)
+        full_text = re.sub(r"(?m)^[ \t]+", "", full_text)
+        full_text = re.sub(r"(?m)[ \t]+$", "", full_text)
+        full_text = re.sub(r"\n\s*\n\s*\n+", "\n\n", full_text).strip()
         posts.append({
             "slug": slug, "title": title, "date": date, "month": month,
             "doc": doc, "toc": toc, "words": words, "reading": max(1, -(-words // 200)),
             "summary": summary, "og_image": first_img.group(1) if first_img else "",
+            "text": full_text,
         })
     if not posts:
         return []
@@ -207,6 +216,36 @@ def build_guide(cfg: dict) -> list[dict]:
     (SITE / "guide").mkdir(parents=True, exist_ok=True)
     (SITE / "guide" / "index.html").write_text(
         render_guide_list(cfg, posts), encoding="utf-8")
+
+    # Atom 订阅（guide 专属 feed）：条目 = 全部制图经验文章，updated = 最新发布。
+    # 此前全站图片 feed 曾被 revert（140ba2a revert ec29776）——本次范围收窄到
+    # /guide/ 一处，alternate link 也只注入 guide 两页，不重蹈全站 head 膨胀
+    def esc_x(s: str) -> str:
+        return html.escape(str(s), quote=False)
+
+    updated = posts[0]["date"] + "T00:00:00Z"   # posts 已按日期降序，[0] 即最新
+    entries = "".join(
+        '<entry>'
+        f'<title>{esc_x(p["title"])}</title>'
+        f'<link rel="alternate" type="text/html" href="{SITE_URL}/guide/{p["slug"]}/"/>'
+        f'<id>{SITE_URL}/guide/{p["slug"]}/</id>'
+        f'<published>{p["date"]}T00:00:00Z</published>'
+        f'<updated>{p["date"]}T00:00:00Z</updated>'
+        f'<summary>{esc_x(p["summary"])}</summary>'
+        '</entry>'
+        for p in posts)
+    feed = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<feed xmlns="http://www.w3.org/2005/Atom">'
+        f'<title>{esc_x(cfg["title"] + " · 制图经验")}</title>'
+        '<subtitle>个人科研制图过程中的一些经验整理</subtitle>'
+        f'<link rel="alternate" type="text/html" href="{SITE_URL}/guide/"/>'
+        f'<link rel="self" type="application/atom+xml" href="{SITE_URL}/guide/atom.xml"/>'
+        f'<id>{SITE_URL}/guide/</id>'
+        f'<updated>{updated}</updated>'
+        '<author><name>zbhgis 浩瀚地学</name><uri>https://github.com/zbhgis</uri></author>'
+        + entries + '</feed>')
+    (SITE / "guide" / "atom.xml").write_text(feed, encoding="utf-8")
 
     # 过期文章目录 → 改名移入 site_trash（与周报/图库同一模式，绝不原地删除）
     trash = ROOT / "site_trash"
@@ -264,17 +303,30 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
     # 但保持良构免得校验器报错）——统一补全成绝对地址
     if not img_base.startswith("http"):
         img_base = SITE_URL + img_base
-    urls = ["<url><loc>" + SITE_URL + "/</loc><lastmod>" + today + "</lastmod></url>",
-            "<url><loc>" + SITE_URL + "/search/</loc><lastmod>" + today + "</lastmod></url>",
-            "<url><loc>" + SITE_URL + "/color-lab/</loc><lastmod>" + today + "</lastmod></url>",
-            "<url><loc>" + SITE_URL + "/guide/</loc><lastmod>" + today + "</lastmod></url>",
-            "<url><loc>" + SITE_URL + "/statistics/</loc><lastmod>" + today + "</lastmod></url>",
-            "<url><loc>" + SITE_URL + "/about/</loc><lastmod>" + today + "</lastmod></url>"]
+    # lastmod 用内容自身的真实时间，而不是构建时间——每次构建都写 "今天"，
+    # 引擎会学会忽略这个字段。没有可靠时间的页面宁可不给 lastmod。
+    item_lastmod = max((str(it.get("added") or "").strip() for it in items), default="") or today
+    guide_lastmod = max((p.get("date") or "" for p in (guide_posts or [])), default="")
+    about_src = ROOT / "content" / "about.md"
+    about_lastmod = (time.strftime("%Y-%m-%d", time.localtime(about_src.stat().st_mtime))
+                     if about_src.exists() else "")
+
+    def url_entry(loc: str, lastmod: str = "") -> str:
+        lm = ("<lastmod>" + lastmod + "</lastmod>") if lastmod else ""
+        return "<url><loc>" + loc + "</loc>" + lm + "</url>"
+
+    urls = [url_entry(SITE_URL + "/", item_lastmod),
+            # /search/ 与 /color-lab/ 是交互工具页，内容不随数据变化，不给假 lastmod
+            url_entry(SITE_URL + "/search/"),
+            url_entry(SITE_URL + "/color-lab/"),
+            url_entry(SITE_URL + "/guide/", guide_lastmod),
+            # 统计页随收录量变化，与首页同源
+            url_entry(SITE_URL + "/statistics/", item_lastmod),
+            url_entry(SITE_URL + "/about/", about_lastmod)]
     for p in (guide_posts or []):
-        urls.append("<url><loc>" + SITE_URL + "/guide/" + p["slug"] + "/</loc><lastmod>"
-                    + (p["date"] or today) + "</lastmod></url>")
+        urls.append(url_entry(SITE_URL + "/guide/" + p["slug"] + "/", p.get("date") or ""))
     for it in items:
-        lm = str(it.get("added") or today)
+        lm = str(it.get("added") or "").strip()
         # Google 图片扩展：把详情页与原图直链绑在一起，图片搜索才有可索引的地址
         # （<img src> 由 JS 赋值的页面，图片爬虫看不到 URL）。license 字段留空——
         # 版权归各原作者，本站无权声明许可
@@ -287,8 +339,8 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
             img_block = ("<image:image><image:loc>" + esc(img_base + "/" + full) + "</image:loc>"
                          + "<image:title>" + esc(sem or ("图 " + it["id"])) + "</image:title>"
                          + "<image:caption>" + esc(cap or ("图 " + it["id"])) + "</image:caption></image:image>")
-        urls.append("<url><loc>" + SITE_URL + "/" + it["id"] + "/</loc><lastmod>" + lm + "</lastmod>"
-                    + img_block + "</url>")
+        urls.append("<url><loc>" + SITE_URL + "/" + it["id"] + "/</loc>"
+                    + (("<lastmod>" + lm + "</lastmod>") if lm else "") + img_block + "</url>")
     sm = nl.join(["<?xml version=" + chr(34) + "1.0" + chr(34) + " encoding=" + chr(34) + "UTF-8" + chr(34) + "?>",
                   "<urlset xmlns=" + chr(34) + "http://www.sitemaps.org/schemas/sitemap/0.9" + chr(34)
                   + " xmlns:image=" + chr(34) + "http://www.google.com/schemas/sitemap-image/1.1" + chr(34) + ">"]
@@ -328,6 +380,10 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
              "- [关于本站](" + SITE_URL + "/about/)（站点定位、数据来源与说明）",
              ""]
     if guide_posts:
+        # 顶层声明全文入口：AI 引擎从 llms.txt 就能发现 llms-full.txt
+        lines[4:4] = ["> 制图经验全文（纯文本，供整段引用）：" + SITE_URL + "/llms-full.txt", ""]
+        lines += ["- [制图经验全文](" + SITE_URL + "/llms-full.txt)（"
+                  + str(len(guide_posts)) + " 篇纯文本全文）", ""]
         lines += ["## 制图经验（共 " + str(len(guide_posts)) + " 篇）", ""]
         lines += ["- [" + p["title"] + "](" + SITE_URL + "/guide/" + p["slug"] + "/)"
                   + (" — " + p["summary"] if p.get("summary") else "")
@@ -358,8 +414,21 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
               "- 引用本站内容时请注明作者「GeoSciPlot」并附原文链接；图片版权归原作者，",
               "  学术引用请同时引用原论文（DOI 见各详情页）"]
     (SITE / "llms.txt").write_text(nl.join(lines) + nl, encoding="utf-8")
+    # llms-full.txt：制图经验全文。图库页本身只有图注与元数据，真正值得整段引用
+    # 的中文长文在 guide/；与 MacroBiodiv 的 llms.txt / llms-full.txt 两层结构对齐。
+    if guide_posts:
+        full = ["# " + cfg.get("title", "GeoSciPlot") + " · 制图经验全文", "",
+                "> 本文件是 " + SITE_URL + "/guide/ 栏目全部文章的纯文本全文，供 AI 引擎整段引用。",
+                "> 索引文件：" + SITE_URL + "/llms.txt · 图片目录见 " + SITE_URL + "/sitemap.xml", ""]
+        for p in guide_posts:
+            full += ["## " + p["title"], "",
+                     "- URL: " + SITE_URL + "/guide/" + p["slug"] + "/",
+                     "- 日期: " + (p.get("date") or ""),
+                     "- 摘要: " + (p.get("summary") or ""), "",
+                     p.get("text") or "", "", "---", ""]
+        (SITE / "llms-full.txt").write_text(nl.join(full) + nl, encoding="utf-8")
     # IndexNow key 文件：与主站 zbhgis.com 共用同一把 key（IndexNow 允许同一
-    # 所有者在多个站点托管同一 key 文件）。ping-search.sh 推送前探测本地址可达。
+    # 所有者在一个或多个站点托管同一 key 文件）。ping-search.sh 推送前探测本地址可达。
     key_file = ROOT / "deploy" / "indexnow.key"
     if key_file.exists():
         key = key_file.read_text(encoding="utf-8").strip()

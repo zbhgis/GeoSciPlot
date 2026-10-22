@@ -153,3 +153,19 @@ function initArticleTOC() {
 }
 
 initArticleTOC();
+
+// ── 渲染颜色切换（MacroBiodiv 每周速递同款）：html[data-rstyle] 已由
+// <head> 内联脚本按 localStorage（gsp-rstyle）设好，这里只回写按钮选中态；
+// 点击写偏好后刷新 —— 样式切换走整页重渲染（口径同 MB papers.js）──
+(() => {
+  const btns = document.querySelectorAll(".rst-btn");
+  if (!btns.length) return;
+  const cur = document.documentElement.getAttribute("data-rstyle") || "plain";
+  btns.forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.getAttribute("data-rs") === cur));
+    b.addEventListener("click", () => {
+      try { localStorage.setItem("gsp-rstyle", b.getAttribute("data-rs")); } catch (err) { /* 隐私模式忽略 */ }
+      location.reload();
+    });
+  });
+})();

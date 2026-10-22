@@ -13,6 +13,16 @@ from urllib.parse import quote
 
 from site_common import BUILD_VER, PAGE_SIZE, ROOT, SITE_URL, doi_bare, esc
 
+# 作者实体：与主站 /about 的 Person 共用同一 URL 与 sameAs，把子域内容归因到
+# 同一作者（E-E-A-T / GEO）。站点是品牌，publisher 仍用 Organization。
+AUTHOR_LD = {
+    "@type": "Person",
+    "name": "zbhgis 浩瀚地学",
+    "url": "https://www.zbhgis.com/about",
+    "image": "https://www.zbhgis.com/avatar.jpg",
+    "sameAs": ["https://github.com/zbhgis", "https://zbhgis.github.io",
+               "https://zbhgis.blog.csdn.net"],
+}
 
 
 # 调色板图标（lucide palette）：导航菜单「色彩实验」与详情页「转到色彩实验」共用
@@ -135,11 +145,19 @@ def page_shell(
     body_inner = "" if bare else body
     extra_scripts = "".join(
         f'<script src="{up}assets/{a}?v={BUILD_VER}"></script>' for a in (extra_assets or []))
+    # GEO：每页 head 声明 llms.txt / llms-full.txt，AI 引擎从任意落地页都能发现
+    # 语义索引；llms.txt 内部再指向全文（两层结构与 MacroBiodiv 对齐）
+    llms_links = (f'<link rel="alternate" type="text/plain" href="{SITE_URL}/llms.txt" title="llms.txt">'
+                  f'<link rel="alternate" type="text/plain" href="{SITE_URL}/llms-full.txt" title="llms-full.txt">')
+    # 图片站让搜索引擎出大图预览；404 已自带 noindex，不能再叠加 index
+    robots_meta = ("" if "noindex" in head_extra else
+                   '<meta name="robots" content="index, follow, max-image-preview:large,'
+                   ' max-snippet:-1, max-video-preview:-1">')
     return _render(
         "shell.html",
         TITLE=esc(title), DESC=esc(desc), OG_URL=og_url,
         OG_TITLE=esc(title), OG_DESC=esc(desc), OG_TYPE=og_type,
-        OG_EXTRA=og_img + tw, HEAD_EXTRA=head_extra,
+        OG_EXTRA=og_img + tw, HEAD_EXTRA=llms_links + robots_meta + head_extra,
         UP=up, BUILD_VER=BUILD_VER,
         NAV=nav_html(cfg, up, active_nav),
         BODY_OUTER=body_outer, BODY_INNER=body_inner, GH=gh,
@@ -319,6 +337,8 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
         "url": SITE_URL,
         "description": cfg["lede"],
         "inLanguage": "zh-CN",
+        # 站点品牌归 Organization，作者归到家主站同一 Person 实体（跨域实体图谱）
+        "publisher": AUTHOR_LD,
         # SearchAction：/search/ 支持 id/DOI/标签检索（?q= 预填，gallery.js L207），
         # 声明后引擎可把站内检索挂进结果（MacroBiodiv 首页同款）
         "potentialAction": {
@@ -337,11 +357,19 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
         "description": cfg["lede"],
         "url": SITE_URL + "/",
         "inLanguage": "zh-CN",
-        "itemListElement": [
-            {"@type": "ListItem", "position": i + 1,
-             "name": (" · ".join(str(t) for t in (it.get("tags") or [])) or f"图 {it['id']}"),
-             "url": f"{SITE_URL}/{it['id']}/"}
-            for i, it in enumerate(items)],
+        "isPartOf": {"@type": "WebSite", "name": cfg.get("title", "GeoSciPlot"),
+                     "url": SITE_URL + "/"},
+        # itemListElement 是 ItemList 的属性；CollectionPage 通过 hasPart 挂清单，
+        # 引擎才能把「这个页面聚合了哪些图」当成一个整体实体读取
+        "hasPart": {
+            "@type": "ItemList",
+            "numberOfItems": len(items),
+            "itemListElement": [
+                {"@type": "ListItem", "position": i + 1,
+                 "name": (" · ".join(str(t) for t in (it.get("tags") or [])) or f"图 {it['id']}"),
+                 "url": f"{SITE_URL}/{it['id']}/"}
+                for i, it in enumerate(items)],
+        },
     }, ensure_ascii=False)
     head = (f'<script type="application/ld+json">{website_ld}</script>'
             f'<script type="application/ld+json">{col_ld}</script>')
@@ -447,7 +475,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
         cfg.get("owner") or "OWNER", cfg["repo"], cfg.get("branch", "main"), it.get("full", ""))
     tags = [str(t) for t in it.get("tags", [])]
     added = str(it.get("added") or "")
-    desc_parts = [t for t in [" · ".join(tags), added] if t]
+    desc_parts = [t for t in [" · ".join(tags), added, f"图 {it['id']}"] if t]
     detail_desc = (" · ".join(desc_parts) + f" · DOI: {doi_bare(it.get('doi'))}" if it.get("doi") else " · ".join(desc_parts)) or cfg["lede"]
     image_ld = json.dumps({
         "@context": "https://schema.org",
@@ -462,9 +490,9 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
         "inLanguage": "zh-CN",
         "author": {"@type": "Organization", "name": cfg.get("title", "geosciplot"), "url": SITE_URL},
     }, ensure_ascii=False)
-    # 详情页 title 语义优先：标签（主题 · 类型）打头，哈希 id 只在无标签时兜底——
-    # "图 c29fd21ed1（北极）" 对图片/语义搜索毫无信息量
-    title_text = (f"{sem} · 地学科研绘图参考" if sem
+    # 详情页 title 语义优先：标签（主题 · 类型）打头，末尾带图 id。
+    # 仅用标签会大量撞标题（同主题同类型的图很多），id 让每条 title 唯一。
+    title_text = (f"{sem} · 图 {it['id']} · 地学科研绘图参考" if sem
                   else f"图 {it['id']} · 地学科研绘图参考")
     og_meta = (f'<meta property="og:image" content="{esc(full_url)}">'
                f'<meta property="og:image:width" content="{it.get("width", 0)}">'
@@ -677,8 +705,42 @@ def render_about_page(cfg: dict, doc: str) -> str:
 <div class="about-wrap">
 <article class="about-body">{doc}</article>
 </div>"""
+    # AboutPage + 主站同一 Person 实体：搜索引擎/AI 引擎可把「关于」页
+    # 认定为作者与站点归属的规范说明页（E-E-A-T）
+    about_ld = json.dumps({
+        "@context": "https://schema.org", "@type": "AboutPage",
+        "name": f"关于本站 · {cfg.get('title', 'GeoSciPlot')}",
+        "url": SITE_URL + "/about/",
+        "description": "关于 GeoSciPlot：站点定位、数据来源、图片版权与引用说明。",
+        "inLanguage": "zh-CN",
+        "mainEntity": AUTHOR_LD,
+        "isPartOf": {"@type": "WebSite", "name": cfg.get("title", "GeoSciPlot"),
+                     "url": SITE_URL + "/"},
+    }, ensure_ascii=False).replace("<", "\\u003c")
+    head = '<script type="application/ld+json">' + about_ld + "</script>"
     return page_shell(cfg, "关于本站", body, depth=1,
-                      og_url=SITE_URL + "/about/", active_nav="about")
+                      meta_desc="关于 GeoSciPlot：站点定位、数据来源、图片版权与引用说明。",
+                      og_url=SITE_URL + "/about/", active_nav="about", head_extra=head)
+
+
+# 渲染颜色切换（MacroBiodiv 每周速递同款五档圆点，2026-10-22 补齐）：
+# plain=系统色无装饰，accent/green/purple/orange=标题竖线+强调色重映射。
+# 偏好存 localStorage gsp-rstyle，shell.html 防闪烁脚本在首帧前恢复（同 MB mbd-rstyle）
+RSTYLE_DOTS = (
+    ("plain", "普通样式：系统色，标题无装饰", "rst-dot-plain"),
+    ("accent", "强调样式：蓝色渲染", "rst-dot-accent"),
+    ("green", "强调样式：绿色渲染", "rst-dot-green"),
+    ("purple", "强调样式：淡紫渲染", "rst-dot-purple"),
+    ("orange", "强调样式：橘色渲染", "rst-dot-orange"),
+)
+
+
+def rstyle_toggle(default: str) -> str:
+    btns = "".join(
+        f'<button type="button" class="rst-btn" data-rs="{v}" title="{t}"'
+        f' aria-pressed="{str(default == v).lower()}"><i class="rst-dot {c}"></i></button>'
+        for v, t, c in RSTYLE_DOTS)
+    return f'<span class="rstyle" role="group" aria-label="渲染颜色切换">{btns}</span>'
 
 
 def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
@@ -724,7 +786,7 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
 <main class="wk-main"><article>
 <h1 class="wk-deco wk-h1">{esc(p["title"])}</h1>
 <div class="wk-tagsrow"><span class="wk-tag">{esc(p["month"])}</span></div>
-<div class="wk-meta"><a href="https://github.com/zbhgis" target="_blank" rel="noopener" title="作者 GitHub 主页">{ico_user}zbhgis 浩瀚地学</a><span>{ico_doc}{p["words"]} 字</span><span>{ico_clock}约 {p["reading"]} 分钟</span></div>
+<div class="wk-meta"><a href="https://github.com/zbhgis" target="_blank" rel="noopener" title="作者 GitHub 主页">{ico_user}zbhgis 浩瀚地学</a><span>{ico_doc}{p["words"]} 字</span><span>{ico_clock}约 {p["reading"]} 分钟</span>{rstyle_toggle("plain")}</div>
 <div class="wk-dates"><span>创建于 <time datetime="{p["date"]}">{p["date"]}</time></span></div>
 <div class="wk-content">{p["doc"]}</div>
 <nav class="wk-prevnext" aria-label="文章导航">{pn_cell(prev_p, False)}{pn_cell(next_p, True)}</nav>
@@ -742,10 +804,14 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
         "url": url,
         "mainEntityOfPage": {"@type": "WebPage", "@id": url},
         "image": p["og_image"] or SITE_URL + "/assets/logo.png",
-        "author": {"@type": "Person", "name": "zbhgis 浩瀚地学",
-                   "url": "https://github.com/zbhgis"},
+        # 作者用主站同一 Person 实体（url + sameAs），把子域长文归因到同一作者；
+        # publisher 仍是站点品牌，founder 指向该 Person，形成 Organization→Person 图谱
+        "author": AUTHOR_LD,
         "publisher": {"@type": "Organization", "name": "GeoSciPlot", "url": SITE_URL,
-                      "logo": {"@type": "ImageObject", "url": SITE_URL + "/assets/logo.png"}},
+                      "logo": {"@type": "ImageObject", "url": SITE_URL + "/assets/logo.png"},
+                      "founder": AUTHOR_LD},
+        "isPartOf": {"@type": "WebSite", "name": cfg.get("title", "GeoSciPlot"),
+                     "url": SITE_URL + "/"},
         "articleSection": "制图经验",
         "keywords": "地图投影, 科研绘图, Python, Cartopy, Spilhaus, Orthographic",
     }
@@ -757,7 +823,9 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
             {"@type": "ListItem", "position": 3, "name": p["title"], "item": url},
         ],
     }
-    head = (f'<meta property="article:published_time" content="{p["date"]}">'
+    head = (f'<link rel="alternate" type="application/atom+xml" '
+            f'title="制图经验 · 更新订阅" href="{SITE_URL}/guide/atom.xml">'
+            f'<meta property="article:published_time" content="{p["date"]}">'
             f'<meta property="article:modified_time" content="{p["date"]}">'
             f'<meta property="article:section" content="制图经验">'
             f'<script type="application/ld+json">'
@@ -799,7 +867,7 @@ def render_guide_list(cfg: dict, posts: list[dict]) -> str:
   <p class="lede">个人科研制图过程中的一些经验整理</p>
 </header>
 
-<div class="wk-quicknav">{chips}</div>
+<div class="wk-quicknav">{chips}<a class="wk-btn" href="{SITE_URL}/guide/atom.xml" title="Atom 订阅：把链接贴到 RSS 阅读器即可跟踪更新">Atom 订阅</a></div>
 <div class="wk-groups">{sections}</div>"""
     col_ld = {
         "@context": "https://schema.org", "@type": "CollectionPage",
@@ -817,8 +885,21 @@ def render_guide_list(cfg: dict, posts: list[dict]) -> str:
             ],
         },
     }
-    head = ('<script type="application/ld+json">'
+    head = (f'<link rel="alternate" type="application/atom+xml" '
+            f'title="制图经验 · 更新订阅" href="{SITE_URL}/guide/atom.xml">'
+            '<script type="application/ld+json">'
             + json.dumps(col_ld, ensure_ascii=False).replace("<", "\\u003c") + "</script>")
+    # 列表面包屑：首页 → 制图经验。详情页有三层面包屑，列表页此前缺失
+    bc = {
+        "@context": "https://schema.org", "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "图库首页", "item": SITE_URL + "/"},
+            {"@type": "ListItem", "position": 2, "name": "制图经验",
+             "item": SITE_URL + "/guide/"},
+        ],
+    }
+    head += ('<script type="application/ld+json">'
+             + json.dumps(bc, ensure_ascii=False).replace("<", "\\u003c") + "</script>")
     return page_shell(cfg, f"制图经验 · {cfg['title']}", body, depth=1,
                       meta_desc=f"地学科研制图经验整理，共 {len(posts)} 篇。",
                       og_url=SITE_URL + "/guide/", active_nav="guide", head_extra=head)

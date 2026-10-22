@@ -662,4 +662,37 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
   .wk-pn-to-next .wk-pn-dir{justify-content:flex-start}
   .wk-pn-empty{display:none}
 }
+/* ── 渲染颜色切换（MacroBiodiv 每周速递同款，2026-10-22 移植）：html[data-rstyle]
+   五档 —— plain=系统色无装饰；非 plain 档给正文标题加左竖线着色、重映射
+   .wk-main 的 --accent、strong 着色。绿/紫/橘为核心功能色板（非主题变量），
+   亮色主题换深色变体，口径同 MB。GS 无 .sec-h/.pbody/.back，相关选择器不移植；
+   按钮组挂在文章页 wk-meta 行尾（flex 行，margin-left:auto 顶到右侧） ── */
+html[data-rstyle=accent]{--rs:var(--accent)}
+html[data-rstyle=green]{--rs:#3fb950}
+html[data-rstyle=purple]{--rs:#a371f7}
+html[data-rstyle=orange]{--rs:#f0883e}
+html[data-theme=light][data-rstyle=green]{--rs:#1a7f37}
+html[data-theme=light][data-rstyle=purple]{--rs:#8250df}
+html[data-theme=light][data-rstyle=orange]{--rs:#bc4c00}
+html[data-rstyle]:not([data-rstyle=plain]) .wk-content h2.md-h1,
+html[data-rstyle]:not([data-rstyle=plain]) .wk-content h3.md-h2{padding:2px 0 2px 11px;border-bottom:none;border-left:5px solid var(--rs,var(--accent));color:var(--rs,var(--accent))}
+html[data-rstyle]:not([data-rstyle=plain]) .wk-main{--accent:var(--rs)}
+html[data-rstyle]:not([data-rstyle=plain]) .wk-content strong{color:var(--rs)}
+.rstyle{display:inline-flex;align-items:center;gap:6px;margin-left:auto}
+.rst-btn{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:none;background:none;border-radius:50%;cursor:pointer}
+.rst-btn:hover{background:none}
+.rst-dot{position:relative;display:block;width:15px;height:15px;border-radius:50%;transition:opacity .16s,box-shadow .16s}
+.rst-dot-plain{border:1.5px solid var(--dim)}
+.rst-dot-plain:before{content:"";position:absolute;left:1.5px;right:1.5px;top:50%;height:1.5px;margin-top:-1px;background:var(--dim);transform:rotate(-45deg)}
+.rst-dot-accent{background:#58a6ff;border:1.5px solid #58a6ff}
+html[data-theme=light] .rst-dot-accent{background:#0969da;border-color:#0969da}
+.rst-dot-green{background:#3fb950;border:1.5px solid #3fb950}
+.rst-dot-purple{background:#a371f7;border:1.5px solid #a371f7}
+.rst-dot-orange{background:#f0883e;border:1.5px solid #f0883e}
+html[data-theme=light] .rst-dot-green{background:#1a7f37;border-color:#1a7f37}
+html[data-theme=light] .rst-dot-purple{background:#8250df;border-color:#8250df}
+html[data-theme=light] .rst-dot-orange{background:#bc4c00;border-color:#bc4c00}
+.rst-btn[aria-pressed=true] .rst-dot{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--rs,var(--accent))}
+.rst-btn[aria-pressed=true] .rst-dot-plain{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--dim)}
+.rst-btn[aria-pressed=false] .rst-dot{opacity:.4}
 
