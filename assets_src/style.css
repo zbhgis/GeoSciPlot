@@ -597,11 +597,41 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .wk-content .wk-img img{display:block;max-width:100%;height:auto;border:1px solid var(--line2);border-radius:8px}
 .wk-content blockquote{margin:0 0 16px;padding-left:16px;border-left:4px solid var(--line2);font-style:italic;color:var(--faint)}
 .wk-content hr{border:none;border-top:1px solid var(--line2);margin:32px 0}
-/* 代码块（博客原文有 Python / Plain 片段，周报无此类内容，按本站语言补齐） */
-.md-code{margin:24px 0;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--card)}
-.md-code-lang{padding:6px 12px;border-bottom:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);letter-spacing:.08em;color:var(--faint)}
-.md-code pre{margin:0;padding:12px 14px;overflow-x:auto;font-size:var(--fs-sm);line-height:1.65;color:var(--text)}
-.md-code pre code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:none;border:0;padding:0;white-space:pre}
+/* ── 代码块（移植主站 zbhgis.com 博客详情页，2026-10-22）：header 语言标签 +
+   三按钮（高亮开关/折叠/复制，code-block.js 绑定）+ pygments 构建期高亮 +
+   CSS 行号（.line::before attr(data-line)，.line=table-row 同主站 shiki） ── */
+.code-block{margin:24px 0;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--card)}
+.code-block-header{display:flex;align-items:center;justify-content:space-between;padding:6px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+.code-lang-label{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);letter-spacing:.08em;color:var(--faint);user-select:none}
+.code-block-actions{display:flex;gap:4px;align-items:center}
+.code-block-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--faint);cursor:pointer;font-family:inherit;transition:color .16s,background-color .16s}
+.code-block-btn:hover{background:var(--line);color:var(--dim)}
+.code-block-btn.active{color:var(--accent)}
+.code-block-btn.copied{color:var(--accent)}
+.code-block>pre{margin:0;padding:12px 16px;overflow-x:auto;font-size:var(--fs-sm);line-height:1.65;color:var(--text)}
+.code-block pre code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:none;border:0;padding:0;white-space:pre}
+.code-block pre .line{display:table-row}
+.code-block pre .line::before{display:table-cell;content:attr(data-line);text-align:right;padding-right:16px;min-width:2.5rem;user-select:none;color:var(--faint);opacity:.5;vertical-align:top}
+/* 折叠：收起至 ~3 行，底部渐隐提示可展开 */
+.code-block.collapsed pre{max-height:calc(1.65em*3 + 24px);overflow:hidden;position:relative}
+.code-block.collapsed pre::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2em;background:linear-gradient(to bottom,transparent,var(--card));pointer-events:none}
+/* 高亮开关关闭：token 全部回退正文色 */
+.code-block.highlight-off pre code span{color:inherit;font-style:normal}
+/* pygments token 短类着色：暗色取 github-dark-dimmed、亮色取 github-light 语义色（功能色板） */
+.code-block .c,.code-block .c1,.code-block .ch,.code-block .cm,.code-block .cp,.code-block .cpf,.code-block .cs{color:#768390;font-style:italic}
+.code-block .s,.code-block .s1,.code-block .s2,.code-block .sa,.code-block .sb,.code-block .sc,.code-block .sd,.code-block .se,.code-block .sh,.code-block .si,.code-block .sr,.code-block .ss,.code-block .sx{color:#96d0ff}
+.code-block .il,.code-block .m,.code-block .mb,.code-block .mf,.code-block .mh,.code-block .mi,.code-block .mo{color:#6cb6ff}
+.code-block .k,.code-block .kd,.code-block .kn,.code-block .kp,.code-block .kr,.code-block .kv,.code-block .kt,.code-block .ow{color:#f47067}
+.code-block .bp,.code-block .nb{color:#6cb6ff}
+.code-block .nf{color:#dcbdfb}
+.code-block .nc,.code-block .nd,.code-block .ne,.code-block .nn,.code-block .no{color:#f69d50}
+:root[data-theme=light] .code-block .c,:root[data-theme=light] .code-block .c1,:root[data-theme=light] .code-block .ch,:root[data-theme=light] .code-block .cm,:root[data-theme=light] .code-block .cp,:root[data-theme=light] .code-block .cpf,:root[data-theme=light] .code-block .cs{color:#6e7781}
+:root[data-theme=light] .code-block .s,:root[data-theme=light] .code-block .s1,:root[data-theme=light] .code-block .s2,:root[data-theme=light] .code-block .sa,:root[data-theme=light] .code-block .sb,:root[data-theme=light] .code-block .sc,:root[data-theme=light] .code-block .sd,:root[data-theme=light] .code-block .se,:root[data-theme=light] .code-block .sh,:root[data-theme=light] .code-block .si,:root[data-theme=light] .code-block .sr,:root[data-theme=light] .code-block .ss,:root[data-theme=light] .code-block .sx{color:#0a3069}
+:root[data-theme=light] .code-block .il,:root[data-theme=light] .code-block .m,:root[data-theme=light] .code-block .mb,:root[data-theme=light] .code-block .mf,:root[data-theme=light] .code-block .mh,:root[data-theme=light] .code-block .mi,:root[data-theme=light] .code-block .mo{color:#0550ae}
+:root[data-theme=light] .code-block .k,:root[data-theme=light] .code-block .kd,:root[data-theme=light] .code-block .kn,:root[data-theme=light] .code-block .kp,:root[data-theme=light] .code-block .kr,:root[data-theme=light] .code-block .kv,:root[data-theme=light] .code-block .kt,:root[data-theme=light] .code-block .ow{color:#cf222e}
+:root[data-theme=light] .code-block .bp,:root[data-theme=light] .code-block .nb{color:#0550ae}
+:root[data-theme=light] .code-block .nf{color:#8250df}
+:root[data-theme=light] .code-block .nc,:root[data-theme=light] .code-block .nd,:root[data-theme=light] .code-block .ne,:root[data-theme=light] .code-block .nn,:root[data-theme=light] .code-block .no{color:#953800}
 .wk-content code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em;background:var(--card);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--text)}
 /* 表格（原文的投影对比表） */
 .md-table{margin:24px 0;overflow-x:auto;border:1px solid var(--line2);border-radius:8px}

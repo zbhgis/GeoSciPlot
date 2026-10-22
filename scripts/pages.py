@@ -823,9 +823,7 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
             {"@type": "ListItem", "position": 3, "name": p["title"], "item": url},
         ],
     }
-    head = (f'<link rel="alternate" type="application/atom+xml" '
-            f'title="制图经验 · 更新订阅" href="{SITE_URL}/guide/atom.xml">'
-            f'<meta property="article:published_time" content="{p["date"]}">'
+    head = (f'<meta property="article:published_time" content="{p["date"]}">'
             f'<meta property="article:modified_time" content="{p["date"]}">'
             f'<meta property="article:section" content="制图经验">'
             f'<script type="application/ld+json">'
@@ -836,7 +834,8 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
         cfg, f'{p["title"]} · {cfg["title"]}', body, depth=2,
         meta_desc=p["summary"], og_type="article", og_image=p["og_image"],
         og_url=url, head_extra=head,
-        extra_assets=["article-toc.js"], active_nav="guide", bare=True)
+        extra_assets=["article-toc.js", "code-block.js"],
+        active_nav="guide", bare=True)
 
 
 def render_guide_list(cfg: dict, posts: list[dict]) -> str:
@@ -867,7 +866,7 @@ def render_guide_list(cfg: dict, posts: list[dict]) -> str:
   <p class="lede">个人科研制图过程中的一些经验整理</p>
 </header>
 
-<div class="wk-quicknav">{chips}<a class="wk-btn" href="{SITE_URL}/guide/atom.xml" title="Atom 订阅：把链接贴到 RSS 阅读器即可跟踪更新">Atom 订阅</a></div>
+<div class="wk-quicknav">{chips}</div>
 <div class="wk-groups">{sections}</div>"""
     col_ld = {
         "@context": "https://schema.org", "@type": "CollectionPage",
@@ -885,9 +884,7 @@ def render_guide_list(cfg: dict, posts: list[dict]) -> str:
             ],
         },
     }
-    head = (f'<link rel="alternate" type="application/atom+xml" '
-            f'title="制图经验 · 更新订阅" href="{SITE_URL}/guide/atom.xml">'
-            '<script type="application/ld+json">'
+    head = ('<script type="application/ld+json">'
             + json.dumps(col_ld, ensure_ascii=False).replace("<", "\\u003c") + "</script>")
     # 列表面包屑：首页 → 制图经验。详情页有三层面包屑，列表页此前缺失
     bc = {

@@ -4,9 +4,97 @@
 粗斜体 + 独立图片行 + 裸 DOI URL），因此只实现这个子集；未识别的语法按
 纯文本段落兜底（先 HTML 转义再套内联标记，保证安全）。标题整体降一级
 （`# `→h2.md-h1、`## `→h3.md-h2），与主站 zbhgis.com 的 mdToHtml 行为一致。
+
+围栏代码块为可选增强：装了 pygments 就在构建期做语法高亮（token 短类 +
+拆行号 span，结构与主站博客详情页同构），没装则退回纯文本转义。
 """
 import html
 import re
+
+# ── pygments 可选依赖：构建期代码高亮。缺省（或语言无 lexer）退回纯文本 ──
+try:
+    from pygments import highlight as _pyg_highlight
+    from pygments.formatters import HtmlFormatter
+    from pygments.lexers import get_lexer_by_name
+    _HAS_PYGMENTS = True
+except ImportError:
+    _HAS_PYGMENTS = False
+
+# pygments token span / 换行的单趟扫描（拆行号用）
+_SPAN_RE = re.compile(r"<span [^>]*>|</span>|\n")
+
+# 代码块工具栏图标（主站 buildCodeBlockHtml 原样，14px 铅笔 / 折叠四角 / 复制）
+ICO_EDIT = ('<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+            'stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 '
+            '1-4L16.5 3.5z"/></svg>')
+ICO_COLLAPSE = ('<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+                'stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>'
+                '<line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>')
+ICO_COPY = ('<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+            'stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>'
+            '<path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>')
+
+
+def _split_lines(code_html: str) -> str:
+    """把 pygments 高亮输出按 \\n 拆成行：跨行 token（三引号串/块注释）的
+    span 在每行重开再闭合，产出 <span class="line" data-line="N">…</span>，
+    与主站 shiki 的 .line 行结构同构 —— 行号交给 CSS ::before attr(data-line)。"""
+    lines: list[str] = []
+    stack: list[str] = []   # 已打开尚未闭合的 <span ...>（跨行延续，每行重开）
+    buf: list[str] = []
+    pos = 0
+
+    def emit() -> None:
+        lines.append(f'<span class="line" data-line="{len(lines) + 1}">'
+                     + "".join(stack) + "".join(buf)
+                     + "</span>" * len(stack) + "</span>")
+        buf.clear()
+
+    for m in _SPAN_RE.finditer(code_html):
+        buf.append(code_html[pos:m.start()])
+        tok = m.group(0)
+        if tok == "\n":
+            emit()
+        elif tok == "</span>":
+            buf.append(tok)
+            if stack:
+                stack.pop()
+        else:
+            buf.append(tok)
+            stack.append(tok)
+        pos = m.end()
+    buf.append(code_html[pos:])
+    emit()
+    return "".join(lines)
+
+
+def _code_inner(code: str, lang: str) -> str:
+    """code 高亮后的内层 HTML；lexer 缺失或 pygments 未装则纯文本转义。
+    两条路径都过 _split_lines，保证行号结构一致（主站 text 块同样有行号）。"""
+    if _HAS_PYGMENTS:
+        try:
+            raw = _pyg_highlight(code, get_lexer_by_name((lang or "text").lower()),
+                                 HtmlFormatter(nowrap=True)).rstrip("\n")
+            return _split_lines(raw)
+        except Exception:    # ClassNotFound / lexer 内部错误 → 纯文本兜底
+            pass
+    return _split_lines(html.escape(code, quote=False))
+
+
+def _code_block_html(lang: str, code: str) -> str:
+    """围栏 → 主站博客详情页同构代码块：header（语言标签 + 三按钮）+ pre。
+    交互（复制/折叠/高亮开关）由 code-block.js 绑定，CSS 行号看 style.css。"""
+    return (f'<div class="code-block" data-code-block>'
+            f'<div class="code-block-header">'
+            f'<span class="code-lang-label">{html.escape((lang or "TEXT").upper())}</span>'
+            f'<div class="code-block-actions">'
+            f'<button class="code-block-btn active" type="button" title="切换高亮" '
+            f'data-action="highlight">{ICO_EDIT}</button>'
+            f'<button class="code-block-btn" type="button" title="折叠/展开" '
+            f'data-action="collapse">{ICO_COLLAPSE}</button>'
+            f'<button class="code-block-btn" type="button" title="复制" '
+            f'data-action="copy">{ICO_COPY}</button>'
+            f'</div></div><pre><code>{_code_inner(code, lang)}</code></pre></div>')
 
 # front matter：--- 包裹的 key: value / key: ["a", "b"] 极简 YAML 子集。
 # 容忍 BOM 与前导空白行（外部来源的 md 常带），否则 front matter 会漏进正文渲染
@@ -112,16 +200,13 @@ def render(text: str) -> tuple[str, list[tuple[int, str, str]]]:
         m = FENCE_RE.match(line.strip())
         if m:
             flush()
-            lang = (m.group(1) or "TEXT").upper()
             code: list[str] = []
             i += 1
             while i < len(lines) and not FENCE_RE.match(lines[i].rstrip().strip()):
                 code.append(lines[i].rstrip())
                 i += 1
             i += 1
-            out.append(
-                f'<div class="md-code"><div class="md-code-lang">{_esc(lang)}</div>'
-                f'<pre><code>{html.escape(chr(10).join(code), quote=False)}</code></pre></div>')
+            out.append(_code_block_html(m.group(1), "\n".join(code)))
             continue
 
         # 管道表格：首行表头 + 次行分隔线（|---|:--:|）+ 数据行

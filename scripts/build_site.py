@@ -217,36 +217,6 @@ def build_guide(cfg: dict) -> list[dict]:
     (SITE / "guide" / "index.html").write_text(
         render_guide_list(cfg, posts), encoding="utf-8")
 
-    # Atom 订阅（guide 专属 feed）：条目 = 全部制图经验文章，updated = 最新发布。
-    # 此前全站图片 feed 曾被 revert（140ba2a revert ec29776）——本次范围收窄到
-    # /guide/ 一处，alternate link 也只注入 guide 两页，不重蹈全站 head 膨胀
-    def esc_x(s: str) -> str:
-        return html.escape(str(s), quote=False)
-
-    updated = posts[0]["date"] + "T00:00:00Z"   # posts 已按日期降序，[0] 即最新
-    entries = "".join(
-        '<entry>'
-        f'<title>{esc_x(p["title"])}</title>'
-        f'<link rel="alternate" type="text/html" href="{SITE_URL}/guide/{p["slug"]}/"/>'
-        f'<id>{SITE_URL}/guide/{p["slug"]}/</id>'
-        f'<published>{p["date"]}T00:00:00Z</published>'
-        f'<updated>{p["date"]}T00:00:00Z</updated>'
-        f'<summary>{esc_x(p["summary"])}</summary>'
-        '</entry>'
-        for p in posts)
-    feed = (
-        '<?xml version="1.0" encoding="utf-8"?>'
-        '<feed xmlns="http://www.w3.org/2005/Atom">'
-        f'<title>{esc_x(cfg["title"] + " · 制图经验")}</title>'
-        '<subtitle>个人科研制图过程中的一些经验整理</subtitle>'
-        f'<link rel="alternate" type="text/html" href="{SITE_URL}/guide/"/>'
-        f'<link rel="self" type="application/atom+xml" href="{SITE_URL}/guide/atom.xml"/>'
-        f'<id>{SITE_URL}/guide/</id>'
-        f'<updated>{updated}</updated>'
-        '<author><name>zbhgis 浩瀚地学</name><uri>https://github.com/zbhgis</uri></author>'
-        + entries + '</feed>')
-    (SITE / "guide" / "atom.xml").write_text(feed, encoding="utf-8")
-
     # 过期文章目录 → 改名移入 site_trash（与周报/图库同一模式，绝不原地删除）
     trash = ROOT / "site_trash"
     live = {p["slug"] for p in posts}
