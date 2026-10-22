@@ -15,6 +15,10 @@ H_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 IMG_RE = re.compile(r"^!\[([^\]]*)\]\(([^)\s]+)\)\s*$")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 EM_RE = re.compile(r"(?<!\*)\*([^*\n]+?)\*(?!\*)")
+CODE_RE = re.compile(r"`([^`\n]+)`")
+FENCE_RE = re.compile(r"^```([\w+#-]*)\s*$")
+TABLE_ROW_RE = re.compile(r"^\|(.+)\|\s*$")
+TABLE_SEP_RE = re.compile(r"^\|?[\s:|-]+\|?$")
 URL_RE = re.compile(r"https?://[^\s<>\"'）)\]}，。；：！？]+")
 # [文字](URL) 行内链接。与裸 URL 合并为同一 alternation 单趟替换——若分两趟，
 # URL_RE 会把刚生成的 href 属性里的 URL 再包一层 <a>，直接炸掉 HTML
@@ -55,8 +59,15 @@ def _esc(s: str) -> str:
 
 
 def _inline(text: str) -> str:
-    """行内标记：先转义，再链接 / 粗体 / 斜体（链接与裸 URL 单趟替换）。"""
-    s = _esc(text)
+    """行内标记：先转义，再链接 / 粗体 / 斜体 / 行内代码（链接与裸 URL 单趟替换）。
+    行内代码先占位，避免其中的 * _ [ ] 被后续规则误解析。"""
+    codes: list[str] = []
+
+    def _stash(m: re.Match) -> str:
+        codes.append(m.group(1))
+        return f"\x00{len(codes) - 1}\x00"
+
+    s = _esc(CODE_RE.sub(_stash, text))
     s = BOLD_RE.sub(r"<strong>\1</strong>", s)
     s = EM_RE.sub(r"<em>\1</em>", s)
 
@@ -70,6 +81,8 @@ def _inline(text: str) -> str:
         return f'<a href="{url}" target="_blank" rel="noopener">{url}</a>'
 
     s = INLINE_LINK_RE.sub(_link, s)
+    s = re.sub(r"\x00(\d+)\x00",
+               lambda m: "<code>" + html.escape(codes[int(m.group(1))], quote=False) + "</code>", s)
     return s
 
 
@@ -86,16 +99,59 @@ def render(text: str) -> tuple[str, list[tuple[int, str, str]]]:
             out.append(f"<p>{_inline(' '.join(para))}</p>")
             para.clear()
 
-    for raw in text.splitlines():
-        line = raw.rstrip()
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].rstrip()
         if not line.strip():
             flush()
+            i += 1
             continue
+
+        # 围栏代码块（```lang … ```）：整段转义，代码里的 * _ [ ] 不参与行内解析
+        m = FENCE_RE.match(line.strip())
+        if m:
+            flush()
+            lang = (m.group(1) or "TEXT").upper()
+            code: list[str] = []
+            i += 1
+            while i < len(lines) and not FENCE_RE.match(lines[i].rstrip().strip()):
+                code.append(lines[i].rstrip())
+                i += 1
+            i += 1
+            out.append(
+                f'<div class="md-code"><div class="md-code-lang">{_esc(lang)}</div>'
+                f'<pre><code>{html.escape(chr(10).join(code), quote=False)}</code></pre></div>')
+            continue
+
+        # 管道表格：首行表头 + 次行分隔线（|---|:--:|）+ 数据行
+        if (line.strip().startswith("|") and i + 1 < len(lines)
+                and TABLE_SEP_RE.match(lines[i + 1].rstrip().strip())):
+
+            def cells(row: str) -> list[str]:
+                row = row.strip().strip("|")
+                return [c.strip() for c in row.split("|")]
+
+            flush()
+            headers = cells(line)
+            i += 2
+            rows: list[list[str]] = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                rows.append(cells(lines[i]))
+                i += 1
+            thead = "".join(f"<th>{_inline(c)}</th>" for c in headers)
+            tbody = "".join("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in r) + "</tr>"
+                            for r in rows)
+            out.append(f'<div class="md-table"><table><thead><tr>{thead}</tr></thead>'
+                       f'<tbody>{tbody}</tbody></table></div>')
+            continue
+
         m = IMG_RE.match(line.strip())
         if m:
             flush()
             alt, src = _esc(m.group(1)), _esc(m.group(2))
             out.append(f'<p class="wk-img"><img src="{src}" alt="{alt}" loading="lazy"></p>')
+            i += 1
             continue
         m = H_RE.match(line)
         if m:
@@ -115,8 +171,10 @@ def render(text: str) -> tuple[str, list[tuple[int, str, str]]]:
                 out.append(f'<h3 id="{hid}" class="md-h2">{_inline(txt)}</h3>')
             else:  # 更深层级本栏目不出现，兜底降级渲染
                 out.append(f"<h4>{_inline(txt)}</h4>")
+            i += 1
             continue
         para.append(line.strip())
+        i += 1
     flush()
     return "\n".join(out), toc
 
