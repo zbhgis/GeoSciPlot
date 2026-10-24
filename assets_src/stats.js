@@ -476,8 +476,10 @@
           .map((x) => {
             const id = x.path.replace(/^\/geosciplot\//, "").replace(/\/$/, "");
             const meta = DATA.find((m) => m.id === id);
-            return { id, ok: !!meta, n: x.views || 0,
-              sub: ((meta && meta.tg) || []).join(" · "), rnd: Math.random() };
+            /* 双轨标签（scope+style）作副行，无标签回落上传日期 */
+            const tags = meta ? (meta.sc || []).concat(meta.st || []) : [];
+            const sub = tags.join(" · ") || (meta && meta.ad) || "";
+            return { id, ok: !!meta, n: x.views || 0, sub, rnd: Math.random() };
           })
           .filter((r) => r.ok);
         countUp(viewsEl, rows.reduce((s, r) => s + r.n, 0));
