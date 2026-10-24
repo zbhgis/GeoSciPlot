@@ -182,11 +182,11 @@ PINNED_TAGS = ["全球陆地", "全球海洋", "北极", "南极", "美国", "�
 
 def chips(values: Counter, key: str, pinned: list[str] | None = None) -> str:
     """多选标签 chips（正向选择语义，2026-10-14 与 MacroBiodiv 统一）：默认全不选，
-    点击=选中该标签（选中值之间 OR），行尾提供 全选/反选/严格。
+    点击=选中该标签（选中值之间 OR）；全选/反选/严格 单独一排收尾。
     严格=图片携带的每个标签都必须被选中（带任一未选中标签的图排除）。
-    pinned 给定时分两排：固定组一排（按给定顺序），其余标签一排（按数量降序）。
-    两排同在 .chips[data-key] 容器内 —— gallery.js 的容器级事件委托与
-    querySelectorAll 均不受分组影响。"""
+    pinned 给定时分组：固定组一排（按给定顺序）、其余标签一排（数量降序）、
+    操作按钮一排。三排同在 .chips[data-key] 容器内 —— gallery.js 的容器级
+    事件委托与 querySelectorAll 均不受分组影响。"""
     def chip_btn(name: str, n: int) -> str:
         return (f'<button type="button" class="chip" data-v="{esc(name)}" aria-pressed="false">'
                 f'{esc(name)}<i class="n">{n}</i></button>')
@@ -203,10 +203,10 @@ def chips(values: Counter, key: str, pinned: list[str] | None = None) -> str:
         row2 = [chip_btn(name, cnt) for name, cnt in
                 sorted(((k, v) for k, v in values.items() if k not in pinned_set),
                        key=lambda kv: (-kv[1], str(kv[0])))]
-        row2 += act_btns()
         return (f'<div class="chips" data-key="{key}">\n'
                 f'  <div class="chips-row">\n    ' + "\n    ".join(row1) + '\n  </div>\n'
                 f'  <div class="chips-row">\n    ' + "\n    ".join(row2) + '\n  </div>\n'
+                f'  <div class="chips-row chips-act-row">\n    ' + "\n    ".join(act_btns()) + '\n  </div>\n'
                 f'</div>')
 
     items = [chip_btn(name, n) for name, n in
