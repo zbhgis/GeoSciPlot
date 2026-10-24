@@ -152,7 +152,12 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .chips .chip-act[data-on=true]{color:var(--accent);border-color:var(--accent);background:var(--accent-soft);border-style:solid;font-weight:500}
 /* ── 颜色筛选：取色器 + hex 输入 + 容差滑块（首页筛选区第一行） ── */
 .colorbox{display:inline-flex;align-items:center;gap:6px}
-.colorbox input[type=color]{width:38px;height:30px;padding:1px 2px;border:1px solid var(--line2);border-radius:999px;background:var(--bg);cursor:pointer;color-scheme:dark light}
+/* 取色器 = 一个填满的圆形色块：去掉原生内衬（原生样式是圆角框里套矩形），
+   swatch 撑满输入框本体并转圆；描边留给色块自身——默认白色在亮色主题下才有边界 */
+.colorbox input[type=color]{width:30px;height:30px;padding:0;border:none;border-radius:50%;background:none;cursor:pointer;color-scheme:dark light}
+.colorbox input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+.colorbox input[type=color]::-webkit-color-swatch{border:1px solid var(--line2);border-radius:50%}
+.colorbox input[type=color]::-moz-color-swatch{border:1px solid var(--line2);border-radius:50%}
 .hexinp{width:150px;padding:6px 12px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color-scheme:dark light}
 .hexinp:focus{outline:none;border-color:var(--accent)}
 .hexinp.bad{border-color:#f85149}
@@ -347,7 +352,13 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .cl-row{display:flex;align-items:center;gap:10px;margin-top:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--text)}
 .cl-row>label{flex:none;min-width:48px;font-size:var(--fs-xs);color:var(--faint);letter-spacing:.06em}
 .cl-row input[type=range]{flex:1;min-width:0}
-.cl-row input[type=color]{width:46px;height:28px;padding:1px;border:1px solid var(--line2);border-radius:999px;background:var(--bg);cursor:pointer}
+/* 取色器 = 一个填满的圆形色块（首页 .colorbox 同款）：去原生矩形内衬，
+   swatch 撑满本体转圆；描边留在色块上，亮色主题下的浅色才有边界 */
+.cl-row input[type=color],.cl-check input[type=color]{width:28px;height:28px;padding:0;border:none;border-radius:50%;background:none;cursor:pointer;vertical-align:middle}
+.cl-check input[type=color]{width:24px;height:24px}
+.cl-row input[type=color]::-webkit-color-swatch-wrapper,.cl-check input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+.cl-row input[type=color]::-webkit-color-swatch,.cl-check input[type=color]::-webkit-color-swatch{border:1px solid var(--line2);border-radius:50%}
+.cl-row input[type=color]::-moz-color-swatch,.cl-check input[type=color]::-moz-color-swatch{border:1px solid var(--line2);border-radius:50%}
 /* 滑块统一：4px 胶囊轨道 + accent 圆头（首页容差/占比、色彩实验页数量） */
 .tolrange,.cl-row input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:999px;background:var(--line2);outline:none}
 .tolrange::-webkit-slider-thumb,.cl-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;transition:transform .12s}
@@ -362,7 +373,8 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 }
 /* 舞台条上的「显示大小」滑杆：调 .cl-stage 宽度百分比（40–100%），localStorage 记忆 */
 /* 高亮色拾取器（小号，随 checkbox 同行） */
-.cl-stagebar input[type=color]{width:26px;height:20px;padding:1px;border:1px solid var(--line2);border-radius:6px;background:var(--bg);cursor:pointer}
+/* 高亮遮罩取色器的圆形样式统一走上方 .cl-check input[type=color] 规则
+   （此处曾有一份 26×20 圆角矩形旧规则，与其冲突被覆盖成方的，已删） */
 /* 色觉模拟控件（与高亮色同属「查看辅助」，挂在舞台条上）：类型下拉 + 强度滑杆。
    紧跟「高亮色」连排（gap 14px 同一行距），灰色小字 label 天然分组。
    不用 margin-left:auto 顶行尾 —— 第一行被 selinfo 长文案挤满时它折到第二行，
