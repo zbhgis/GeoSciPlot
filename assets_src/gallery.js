@@ -60,24 +60,37 @@
     } catch (e) {}
   }
 
-  /* ── 每图浏览量（来自统计服务的按 path 计数） ── */
+  /* ── 每图浏览量（来自统计服务的按 path 计数）。
+     映射带 10 分钟会话缓存：详情页只显示一个数字，却要拉全站 350+ 条计数，
+     连续「下一张」浏览时每次都白发一份全量 ── */
   var viewsEl = document.getElementById("views");
   if (viewsEl) {
-    fetch((CFG.api || "") + "/api/v1/stats/views?prefix=/geosciplot/")
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
-        if (!d || !d.items) throw 0;
-        var map = {};
-        d.items.forEach(function (x) { map[x.path.replace(/\/$/, "")] = x.views; });
-        var n = map["/geosciplot" + location.pathname.replace(/\/$/, "")] || 0;
-        viewsEl.textContent = n ? n + " 次" : "首次";
-        viewsEl.style.color = "var(--text)";
-      }).catch(function () { viewsEl.textContent = "—"; });
+    var VKEY = "gsp-views", VTTL = 600000;
+    var vCached = null;
+    try { vCached = JSON.parse(sessionStorage.getItem(VKEY) || "null"); } catch (e) {}
+    var vShow = function (map) {
+      var n = map["/geosciplot" + location.pathname.replace(/\/$/, "")] || 0;
+      viewsEl.textContent = n ? n + " 次" : "首次";
+      viewsEl.style.color = "var(--text)";
+    };
+    if (vCached && vCached.items && Date.now() - (vCached.t || 0) < VTTL) {
+      vShow(vCached.items);
+    } else {
+      fetch((CFG.api || "") + "/api/v1/stats/views?prefix=/geosciplot/")
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.items) throw 0;
+          var map = {};
+          d.items.forEach(function (x) { map[x.path.replace(/\/$/, "")] = x.views; });
+          try { sessionStorage.setItem(VKEY, JSON.stringify({ t: Date.now(), items: map })); } catch (e) {}
+          vShow(map);
+        }).catch(function () { viewsEl.textContent = "—"; });
+    }
   }
 
   var themeBtn = document.getElementById("themeBtn");
   if (themeBtn) {
-    // 按钮文案同主站：指向点击后将切换到的主题（默认暗色 → 切换为浅色模式）
+    // 按钮文案同主站：指向点击后将切换到的主题；未手动切过的访客跟随系统偏好
     var syncTheme = function () {
       var dark = document.documentElement.getAttribute("data-theme") !== "light";
       themeBtn.title = dark ? "切换为浅色模式" : "切换为深色模式";
@@ -86,12 +99,21 @@
     syncTheme();
     themeBtn.addEventListener("click", function () {
       var root = document.documentElement;
-      // 默认暗色（不跟随系统偏好）；仅当访客手动切过才用其选择
+      // 手动点击即写入偏好（此后不再跟随系统）；默认值由 head 内联脚本按系统定
       var light = root.getAttribute("data-theme") === "light";
       var t = light ? "dark" : "light";
       root.setAttribute("data-theme", t);
       try { localStorage.setItem("gsp-theme", t); } catch (e) {}
       syncTheme();
+    });
+  }
+
+  /* 移动端汉堡菜单（details/summary 展开式）：点击页面其他区域自动收起，
+     details 原生行为必须再点一次菜单图标 */
+  var mnavM = document.querySelector("details.mnav-m");
+  if (mnavM) {
+    document.addEventListener("click", function (e) {
+      if (mnavM.open && !mnavM.contains(e.target)) mnavM.removeAttribute("open");
     });
   }
 
@@ -194,7 +216,7 @@
         if (it.doi) meta.push(hl(String(it.doi).replace(/^https?:\/\/doi\.org\//i, ""), tokens));
         if (it.ad) meta.push(escHtml(it.ad));
         var media = it.rel
-          ? '<span class="sres-media"><img data-rel="' + escHtml(it.rel) + '" alt="图 ' + escHtml(it.id) + '"></span>'
+          ? '<span class="sres-media"><img data-rel="' + escHtml(it.rel) + '" loading="lazy" decoding="async" alt="图 ' + escHtml(it.id) + '"></span>'
           : '<span class="sres-media sres-noimg">无图</span>';
         return '<a class="sres" href="' + sUp + escHtml(it.id) + '/">' + media
           + '<span class="sres-body"><span class="sres-id">' + hl("图 " + it.id, tokens) + '</span>'
@@ -210,13 +232,20 @@
     renderSearch(sq);
     /* 记录搜索页当前地址（含 ?q=），详情页「返回全部」据此跳回搜索结果 */
     try { sessionStorage.setItem("gsp-back", location.pathname + location.search); } catch (e) {}
+    /* 输入防抖 160ms：每击键全量重渲染 + 重绑全部缩略图，宽词命中数百行时
+       连续打字会明显卡顿；URL 与 gsp-back 同步一并放进防抖窗口 */
+    var sDeb = null;
     spageQ.addEventListener("input", function () {
-      renderSearch(spageQ.value);
-      try {
-        var v = spageQ.value.trim();
-        history.replaceState(null, "", v ? "?q=" + encodeURIComponent(v) : location.pathname);
-        sessionStorage.setItem("gsp-back", location.pathname + location.search);
-      } catch (e) {}
+      if (sDeb) clearTimeout(sDeb);
+      sDeb = setTimeout(function () {
+        sDeb = null;
+        renderSearch(spageQ.value);
+        try {
+          var v = spageQ.value.trim();
+          history.replaceState(null, "", v ? "?q=" + encodeURIComponent(v) : location.pathname);
+          sessionStorage.setItem("gsp-back", location.pathname + location.search);
+        } catch (e) {}
+      }, 160);
     });
   }
 

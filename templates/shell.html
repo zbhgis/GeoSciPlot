@@ -11,9 +11,11 @@
 <meta property="og:description" content="[[OG_DESC]]">
 <meta property="og:type" content="[[OG_TYPE]]">
 <meta property="og:url" content="[[OG_URL]]">[[OG_EXTRA]]
-[[HEAD_EXTRA]]<link rel="stylesheet" href="[[UP]]assets/style.css?v=[[BUILD_VER]]">
-<link rel="icon" type="image/png" href="[[UP]]assets/favicon.png?v=[[BUILD_VER]]">
-<script>try{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t);var f=localStorage.getItem("gsp-fs");if(f)document.documentElement.setAttribute("data-fs",f);var r=localStorage.getItem("gsp-rstyle");document.documentElement.setAttribute("data-rstyle",r||"plain")}catch(e){}</script>
+[[HEAD_EXTRA]]<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://raw.githubusercontent.com">
+<link rel="stylesheet" href="[[UP]]assets/style.css?v=[[V_CSS]]">
+<link rel="icon" type="image/png" href="[[UP]]assets/favicon.png?v=[[V_FAV]]">
+<script>try{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t);else if(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)document.documentElement.setAttribute("data-theme","light");var f=localStorage.getItem("gsp-fs");if(f)document.documentElement.setAttribute("data-fs",f);var r=localStorage.getItem("gsp-rstyle");document.documentElement.setAttribute("data-rstyle",r||"plain")}catch(e){}</script>
 </head>
 <body>
 [[NAV]]
@@ -28,10 +30,11 @@
 </div>
 <!-- 图片灯箱（编译自 lib/image-lightbox.ts）：挂到 body 统一接管，
      链接内的图（首页卡片/搜索行/菜单品牌）默认不劫持、维持跳转，
-     只有详情页 .shot 大图等无链接图片参与；h1 的 logo 装饰图排除 -->
-[[EXTRA_SCRIPTS]]<script src="[[UP]]assets/image-lightbox.js?v=[[BUILD_VER]]"></script>
-<script src="[[UP]]assets/gallery-data.js?v=[[BUILD_VER]]"></script>
-<script src="[[UP]]assets/gallery.js?v=[[BUILD_VER]]"></script>
+     只有详情页 .shot 大图等无链接图片参与；h1 的 logo 装饰图排除。
+     gallery-data.js（全量图元数据）与灯箱脚本只在实际消费它们的页面
+     经 extra_assets 注入（首页/搜索/色彩实验；详情页/guide 文章页），
+     其余页面不再白下载 297KB 数据 + 27KB 灯箱 -->
+[[EXTRA_SCRIPTS]]<script src="[[UP]]assets/gallery.js?v=[[V_JS]]"></script>
 <script>try{if(window.ImageLightbox)window.ImageLightbox.attachImageLightbox(document.body,{exclude:".logo"})}catch(e){}</script>
 </body>
 </html>

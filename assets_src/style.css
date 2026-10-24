@@ -378,6 +378,11 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .cl-go{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border:1px solid var(--accent);border-radius:999px;background:var(--accent);color:var(--bg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-md);font-weight:600;letter-spacing:.01em;box-shadow:0 2px 12px color-mix(in srgb,var(--accent) 35%,transparent);transition:color .16s,transform .16s,box-shadow .16s,filter .16s}
 .cl-go:hover{color:var(--bg);filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 4px 16px color-mix(in srgb,var(--accent) 48%,transparent)}
 .cl-go .mnav-ico{width:15px;height:15px}
+/* ── 详情页原图信息行：正文图换展示档后，原图大小与直达链接放在图下，
+   访客对「要下多大的图」有预期（弱化样式，别抢主 CTA） ── */
+.full-row{margin:10px 0 0;font-size:var(--fs-sm);color:var(--faint)}
+.full-row a{color:var(--accent);text-decoration:none;border-bottom:1px dashed color-mix(in srgb,var(--accent) 45%,transparent)}
+.full-row a:hover{border-bottom-style:solid}
 
 /* ── 全站统计页（/statistics/）：访客向数据面板 —— hero 总览 tile + 点击量榜 +
    SVG 环形图/上传动态面积图 + 条形图 + 标签词云。筛选（标签/画幅/上传日期）

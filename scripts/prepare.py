@@ -10,6 +10,8 @@
 输入：raw/**               任意文件名、任意尺寸、png/jpg/jpeg/webp/bmp/tiff（扁平投放，不看子目录）
 
 输出：images/thumb/{日期}/{id}.webp   列表缩略图（长边 ≤480，质量 78）
+      images/disp/{日期}/{id}.webp   详情页展示档（长边 ≤1600，质量 82；
+                                     原图 ≤1600px 且 <512KB 时不生成，详情页直用原图）
       images/full/{日期}/{id}.{ext}   原图副本（**原始字节，不做任何压缩**）
       meta/refs.json                  索引（前端唯一数据源）
 
@@ -52,6 +54,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "raw"
 IMG_DIR = ROOT / "images"
 THUMB_DIR = IMG_DIR / "thumb"
+DISP_DIR = IMG_DIR / "disp"
 FULL_DIR = IMG_DIR / "full"
 META_DIR = ROOT / "meta"
 REFS_JSON = META_DIR / "refs.json"
@@ -59,6 +62,12 @@ TITLES_CSV = META_DIR / "titles.csv"
 
 THUMB_MAX = 480         # 缩略图长边上限
 THUMB_Q = 78            # 缩略图 WebP 质量
+DISP_MAX = 1600         # 展示档长边上限（详情页正文宽度 677px，2.5x 屏留足余量）
+DISP_Q = 82             # 展示档 WebP 质量
+# 只有「大图」才需要展示档：长边 >1600 或文件 >512KB（1400px 的 8MB 线稿 PNG
+# 同样命中）。小图直用原图，避免无谓的重编码与再入库
+DISP_EDGE = 1600
+DISP_BYTES = 512 * 1024
 
 SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
 
@@ -140,7 +149,8 @@ def collect_sources() -> list[Path]:
 
 
 def make_assets(src: Path, fid: str, day: str) -> tuple[int, int, str, int]:
-    """生成缩略图（压缩）+ 原图副本（不压缩）到 images/{thumb,full}/{日期}/。"""
+    """生成缩略图（压缩）+ 原图副本（不压缩）到 images/{thumb,full}/{日期}/。
+    展示档不在这里做 —— 由 ensure_disp 统一处理（新图与历史回填同一入口）。"""
     ext = src.suffix.lower().lstrip(".")
     if ext == "jpeg":
         ext = "jpg"
@@ -169,6 +179,53 @@ def make_assets(src: Path, fid: str, day: str) -> tuple[int, int, str, int]:
         thumb.save(thumb_day / f"{fid}.webp", "WEBP", quality=THUMB_Q, method=6)
 
     return w, h, ext, full_bytes
+
+
+def needs_disp(w: int, h: int, full_bytes: int) -> bool:
+    """是否需要展示档：大尺寸或大文件的原图才值得再压一档，
+    小图直接用原图，避免重编码造成的质量损失与多余产物。"""
+    return max(int(w or 0), int(h or 0)) > DISP_EDGE or int(full_bytes or 0) > DISP_BYTES
+
+
+def ensure_disp(item: dict, full_path: Path, keep: set, dry_run: bool = False) -> int:
+    """详情页展示档的统一入口：新图入库与历史回填（--force 或规则变化后重跑）都走这里。
+    需要而生成的写 item["disp"]；不需要或生成失败的一律移除该键（详情页回退原图）。
+    返回 disp 文件字节数（未生成/跳过 = 0）。"""
+    day = item.get("added") or ""
+    fid = item.get("id") or ""
+    if not (needs_disp(item.get("width"), item.get("height"), item.get("bytes")) and day and fid
+            and full_path.is_file()):
+        item.pop("disp", None)
+        return 0
+    disp_path = DISP_DIR / day / f"{fid}.webp"
+    if disp_path.exists():
+        item["disp"] = f"disp/{day}/{fid}.webp"
+        keep.add(disp_path)
+        return disp_path.stat().st_size
+    if dry_run:
+        item["disp"] = f"disp/{day}/{fid}.webp"   # 只报告路径，不落盘
+        return 0
+    try:
+        with Image.open(full_path) as im:
+            im = ImageOps.exif_transpose(im)
+            if im.mode in ("RGBA", "LA", "P"):
+                im = im.convert("RGBA")
+                bg = Image.new("RGB", im.size, (255, 255, 255))
+                bg.paste(im, mask=im.split()[-1])
+                im = bg
+            elif im.mode != "RGB":
+                im = im.convert("RGB")
+            disp = im.copy()
+            disp.thumbnail((DISP_MAX, DISP_MAX), Image.LANCZOS)
+            disp_path.parent.mkdir(parents=True, exist_ok=True)
+            disp.save(disp_path, "WEBP", quality=DISP_Q, method=6)
+    except Exception as e:
+        print(f"  ! 展示档生成失败（详情页回退原图）：{fid} — {e}")
+        item.pop("disp", None)
+        return 0
+    item["disp"] = f"disp/{day}/{fid}.webp"
+    keep.add(disp_path)
+    return disp_path.stat().st_size
 
 
 def prune_unused(keep: set[Path]) -> int:
@@ -200,9 +257,12 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="重新生成全部产物")
     ap.add_argument("--dry-run", action="store_true", help="只报告，不写文件")
     ap.add_argument("--export-csv", action="store_true", help="导出 meta/titles.csv 供编辑")
+    ap.add_argument("--backfill-disp", action="store_true",
+                    help="只补详情页展示档（raw/ 为空的存量库专用）：不重跑缩略图、"
+                         "不清理任何文件，refs.json 仅新增 disp 字段")
     args = ap.parse_args()
 
-    for d in (THUMB_DIR, FULL_DIR, META_DIR):
+    for d in (THUMB_DIR, DISP_DIR, FULL_DIR, META_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
     existing = load_existing()
@@ -215,6 +275,37 @@ def main() -> int:
     # raw/ 为空但索引里有数据 = 投放目录被清空/移动过。
     # 此时继续跑会触发 prune_unused 把 images/ 里的全部产物删光（历史事故）。
     if not sources and existing:
+        if args.backfill_disp:
+            # 存量库补展示档的专用通道：只对索引里每条记录生成缺失的 disp，
+            # 不重跑缩略图/颜色、不清理文件；refs.json 只会新增 disp 键
+            keep: set[Path] = set()
+            n_new = n_have = 0
+            for it in existing.values():
+                day = it.get("added") or ""
+                fp = FULL_DIR / day / f"{it['id']}.{it.get('ext', 'png')}"
+                before = bool(it.get("disp"))
+                ensure_disp(it, fp, keep, args.dry_run)
+                if it.get("disp"):
+                    n_have += 1
+                    if not before:
+                        n_new += 1
+            print(f"· 展示档回填：新生成 {n_new} 张，共 {n_have}/{len(existing)} 张需要展示档")
+            dpath = IMG_DIR / "disp"
+            if dpath.is_dir():
+                tot = sum(1 for _ in dpath.rglob("*.webp"))
+                sz = sum(f.stat().st_size for f in dpath.rglob("*.webp"))
+                print(f"· images/disp/ 合计 {tot} 张 / {sz/1048576:.1f}MB")
+            if not args.dry_run:
+                items_sorted = sorted(existing.values(),
+                                       key=lambda x: (x.get("added", ""), x["id"]), reverse=True)
+                payload = {"generated": date.today().isoformat(), "count": len(items_sorted),
+                           "thumbMax": THUMB_MAX, "items": items_sorted}
+                tmp = REFS_JSON.parent / (REFS_JSON.name + ".tmp")
+                tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                               encoding="utf-8")
+                tmp.replace(REFS_JSON)
+                print(f"写入 {REFS_JSON.relative_to(ROOT)}（仅新增 disp 字段）")
+            return 0
         print(f"! raw/ 为空，但索引里有 {len(existing)} 条数据 —— 跳过处理（防止误清空图库）。")
         print("  如果确实要清空图库：手动删除 images/、meta/refs.json、meta/titles.csv。")
         return 0
@@ -225,7 +316,7 @@ def main() -> int:
     seen_ids: set[str] = set()
     keep_paths: set[Path] = set()
     n_new = n_skip = n_dup = 0
-    bytes_orig = bytes_full = bytes_thumb = 0
+    bytes_orig = bytes_full = bytes_thumb = bytes_disp = 0
     today = date.today().isoformat()
 
     for src in sources:
@@ -286,6 +377,8 @@ def main() -> int:
         }
         if colors:
             item["colors"] = colors
+        # 展示档：增量跳过的老图若缺 disp 会在这里补生成（规则变化/首次升级的回填）
+        bytes_disp += ensure_disp(item, full_path, keep_paths, args.dry_run)
         items.append(item)
 
         tsize = thumb_path.stat().st_size if thumb_path.exists() else 0
@@ -295,12 +388,14 @@ def main() -> int:
         print(f"  {flag}  {fid}  {w}x{h}  {day}  原图 {full_bytes/1024:7.1f}KB + "
               f"缩略图 {tsize/1024:5.1f}KB  {src.name}")
 
-    # raw/ 里已无原图、但产物还在的条目：保留（不删历史）
+    # raw/ 里已无原图、但产物还在的条目：保留（不删历史）；展示档同样补齐
     for fid, old in existing.items():
         if fid not in seen_ids:
             day = old.get("added") or today
             t = THUMB_DIR / day / f"{fid}.webp"
             if t.exists():
+                bytes_disp += ensure_disp(
+                    old, FULL_DIR / day / f"{fid}.{old.get('ext', 'png')}", keep_paths, args.dry_run)
                 items.append(old)
                 keep_paths.add(t)
                 keep_paths.add(FULL_DIR / day / f"{fid}.{old.get('ext', 'png')}")
@@ -334,7 +429,9 @@ def main() -> int:
     days = len({i.get("added") for i in items})
     print(f"\n新增 {n_new} · 跳过 {n_skip} · 内容重复 {n_dup} · 索引共 {len(items)} 条（{days} 个日期目录）")
     print(f"原图 {bytes_orig/1048576:.2f}MB → full/ {bytes_full/1048576:.2f}MB（不压缩）+ "
-          f"thumb/ {bytes_thumb/1048576:.2f}MB = {(bytes_full+bytes_thumb)/1048576:.2f}MB")
+          f"thumb/ {bytes_thumb/1048576:.2f}MB + disp/ {bytes_disp/1048576:.2f}MB")
+    n_disp = sum(1 for i in items if i.get("disp"))
+    print(f"展示档：{n_disp}/{len(items)} 张（其余原图 ≤1600px 且 <512KB，详情页直用原图）")
     repo_bytes = sum(f.stat().st_size for f in IMG_DIR.rglob("*") if f.is_file())
     print(f"images/ 合计 {repo_bytes/1048576:.2f}MB")
     return 0

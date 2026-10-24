@@ -11,7 +11,7 @@ import re
 from collections import Counter
 from urllib.parse import quote
 
-from site_common import BUILD_VER, PAGE_SIZE, ROOT, SITE_URL, doi_bare, esc
+from site_common import PAGE_SIZE, ROOT, SITE_URL, asset_ver, doi_bare, esc
 
 # 作者实体：与主站 /about 的 Person 共用同一 URL 与 sameAs，把子域内容归因到
 # 同一作者（E-E-A-T / GEO）。站点是品牌，publisher 仍用 Organization。
@@ -93,7 +93,7 @@ def nav_html(cfg: dict, up: str = "", active: str = "") -> str:
                else 'data-active="false"')
     return _render(
         "nav.html",
-        UP=up, BRAND=brand, BRAND_HREF=brand_href, BUILD_VER=BUILD_VER,
+        UP=up, BRAND=brand, BRAND_HREF=brand_href, V_FAV=asset_ver("favicon.png"),
         ST_ATTR=st_attr, AB_ATTR=ab_attr, GD_ATTR=gd_attr,
         ICO_PALETTE=ICO_PALETTE, ICO_GUIDE=ICO_GUIDE, ICO_STAT=ico_stat,
         ICO_ABOUT=ico_about, ICO_CARET=ico_caret, ICO_GLOBE=ico_globe,
@@ -128,7 +128,7 @@ def page_shell(
     # 无图页（首页/工具页）的 og:image 用站点 logo 兜底：分享卡片无图就是灰底块。
     # 详情页的 og:image 在 head_extra 里（带尺寸），此处不注入避免重复
     if not og_image and "og:image" not in head_extra:
-        og_image = SITE_URL + "/assets/logo.png?v=" + BUILD_VER
+        og_image = SITE_URL + "/assets/logo.png?v=" + asset_ver("logo.png")
     og_img = f'\n<meta property="og:image" content="{esc(og_image)}">' if og_image else ""
     # Twitter/X 卡片：详情页的 og:image 在 head_extra 里（含尺寸与完整 twitter 组），
     # 这里让位避免 twitter:card 重复输出；其余页面按有无 og_image 出大图/摘要卡
@@ -144,7 +144,7 @@ def page_shell(
     body_outer = body if bare else ""
     body_inner = "" if bare else body
     extra_scripts = "".join(
-        f'<script src="{up}assets/{a}?v={BUILD_VER}"></script>' for a in (extra_assets or []))
+        f'<script src="{up}assets/{a}?v={asset_ver(a)}"></script>' for a in (extra_assets or []))
     # GEO：每页 head 声明 llms.txt / llms-full.txt，AI 引擎从任意落地页都能发现
     # 语义索引；llms.txt 内部再指向全文（两层结构与 MacroBiodiv 对齐）
     llms_links = (f'<link rel="alternate" type="text/plain" href="{SITE_URL}/llms.txt" title="llms.txt">'
@@ -158,7 +158,9 @@ def page_shell(
         TITLE=esc(title), DESC=esc(desc), OG_URL=og_url,
         OG_TITLE=esc(title), OG_DESC=esc(desc), OG_TYPE=og_type,
         OG_EXTRA=og_img + tw, HEAD_EXTRA=llms_links + robots_meta + head_extra,
-        UP=up, BUILD_VER=BUILD_VER,
+        UP=up,
+        V_CSS=asset_ver("style.css"), V_FAV=asset_ver("favicon.png"),
+        V_JS=asset_ver("gallery.js"),
         NAV=nav_html(cfg, up, active_nav),
         BODY_OUTER=body_outer, BODY_INNER=body_inner, GH=gh,
         FOOTER_TITLE=esc(cfg["title"]), FOOTER_SUBTITLE=esc(cfg["subtitle"]),
@@ -275,7 +277,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
                 'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
                 '<path d="M6 3l5 5-5 5"/></svg>')
     body = f"""<header class="site">
-  <h1><img class="logo" src="assets/logo.png?v={BUILD_VER}" alt="GeoSciPlot logo">{esc(cfg['title'])}</h1>
+  <h1><img class="logo" src="assets/logo.png?v={asset_ver('logo.png')}" alt="GeoSciPlot logo">{esc(cfg['title'])}</h1>
   <a class="gh-note" href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener" target="_blank" title="在 GitHub 查看图片源文件">{ghsvg}<span>图片存储于 <b>GitHub</b>，访问需具备 GitHub 访问能力（点此查看仓库）</span></a>
   <p class="lede">{esc(cfg['lede'])}</p>
 </header>
@@ -375,7 +377,8 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
             f'<script type="application/ld+json">{col_ld}</script>')
     return page_shell(cfg, cfg["subtitle"], body,
                       meta_desc=f"{cfg['lede']}（{len(items)} 张图，可搜索、可筛选、按上传日期浏览）",
-                      head_extra=head)
+                      head_extra=head,
+                      extra_assets=["gallery-data.js"])
 
 
 def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
@@ -454,14 +457,27 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     main_alt = sem if sem else f"图 {it['id']}"
     full_url = f"{abs_base}/{it.get('full', '')}"
     thumb_url = f"{abs_base}/{it.get('thumb', '')}"
+    # 展示档：大图（>1600px 或 >512KB）有 1600px WebP 中间档，详情页 <img> 与
+    # og:image 用它（LCP 从原图均值 ~2MB/极值 14MB 降到 ~200KB 级）；灯箱
+    # （data-lightbox-src）与「查看原图」链接仍走原图。小图无 disp 直用原图
+    disp_rel = it.get("disp") or it.get("full", "")
+    disp_url = f"{abs_base}/{disp_rel}"
+    dw, dh = w, h
+    if it.get("disp") and w and h:
+        _s = min(1.0, 1600 / max(w, h))
+        dw, dh = max(1, round(w * _s)), max(1, round(h * _s))
+    raw_bytes = it.get("bytes") or 0
+    size_txt = (f"{raw_bytes/1048576:.1f}MB" if raw_bytes >= 1048576
+                else (f"{raw_bytes/1024:.0f}KB" if raw_bytes >= 1024 else ""))
     # h1 语义优先（与 <title> 同一口径），哈希 id 仍留在标题里供人核对；
     # 之前这里是个 <h2>图 {id}</h2>——页面没有 h1，且 id 对搜索/AI 零信息量
     h1_text = f"{sem} · 图 {it['id']}" if sem else f"图 {it['id']}"
     body = f"""<a class="back" id="backLink" href="../">{back_ico}返回全部</a>
 <h1 class="id-title">{esc(h1_text)}</h1>
 <figure class="shot">
-  <img src="{esc(full_url)}" data-rel="{esc(it.get('full'))}" alt="{esc(main_alt)}" width="{w}" height="{h}" fetchpriority="high">
+  <img src="{esc(disp_url)}" data-rel="{esc(disp_rel)}" data-lightbox-src="{esc(full_url)}" alt="{esc(main_alt)}" width="{w}" height="{h}" fetchpriority="high">
 </figure>
+<p class="full-row">{'原图 ' + size_txt + ' · ' if size_txt else ''}<a href="{esc(full_url)}" target="_blank" rel="noopener">查看原图</a>（灯箱放大同为原图）</p>
 <p class="cl-go-row"><a class="cl-go" href="../color-lab/?id={esc(it['id'])}">{ICO_PALETTE}转到色彩实验 · 取色 / 调色</a></p>
 <dl class="meta">
   <dt>ID</dt><dd class="hl">{esc(it['id'])}</dd>
@@ -480,6 +496,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     image_ld = json.dumps({
         "@context": "https://schema.org",
         "@type": "ImageObject",
+        "@id": f"{SITE_URL}/{it['id']}/#image",
         "name": (f"{sem}（图 {it['id']}）" if sem else f"图 {it['id']}"),
         "description": detail_desc,
         "contentUrl": full_url,
@@ -494,14 +511,15 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     # 仅用标签会大量撞标题（同主题同类型的图很多），id 让每条 title 唯一。
     title_text = (f"{sem} · 图 {it['id']} · 地学科研绘图参考" if sem
                   else f"图 {it['id']} · 地学科研绘图参考")
-    og_meta = (f'<meta property="og:image" content="{esc(full_url)}">'
-               f'<meta property="og:image:width" content="{it.get("width", 0)}">'
-               f'<meta property="og:image:height" content="{it.get("height", 0)}">'
-               # Twitter/X 大图卡与 og:image 同源（构建期写死绝对地址）
+    og_meta = (f'<meta property="og:image" content="{esc(disp_url)}">'
+               f'<meta property="og:image:width" content="{dw}">'
+               f'<meta property="og:image:height" content="{dh}">'
+               # Twitter/X 大图卡与 og:image 同源（构建期写死绝对地址）；
+               # 用展示档：部分平台拒收 >8MB 原图，webp 各家均支持
                f'<meta name="twitter:card" content="summary_large_image">'
                f'<meta name="twitter:title" content="{esc(title_text)}">'
                f'<meta name="twitter:description" content="{esc(detail_desc[:200])}">'
-               f'<meta name="twitter:image" content="{esc(full_url)}">')
+               f'<meta name="twitter:image" content="{esc(disp_url)}">')
     # 面包屑（图库首页 → 图详情）：与主站文章页同构，帮引擎把图片实体挂到站内层级
     breadcrumb_ld = json.dumps({
         "@context": "https://schema.org", "@type": "BreadcrumbList",
@@ -510,14 +528,36 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
             {"@type": "ListItem", "position": 2, "name": h1_text, "item": f"{SITE_URL}/{it['id']}/"},
         ],
     }, ensure_ascii=False)
+    # AEO/GEO：图库详情页此前只有 ImageObject + BreadcrumbList，缺少「页面」实体，
+    # AI 引擎无法把图片挂到带发布时间的页面上。补 WebPage 节点（uploadDate 仍留在
+    # ImageObject，语义不混用），mainEntity 用 @id 关联同一张图。
+    webpage = {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "@id": f"{SITE_URL}/{it['id']}/",
+        "url": f"{SITE_URL}/{it['id']}/",
+        "name": h1_text,
+        "description": detail_desc,
+        "inLanguage": "zh-CN",
+        "isPartOf": {"@type": "WebSite", "name": cfg.get("title", "GeoSciPlot"),
+                     "url": SITE_URL + "/"},
+        "mainEntity": {"@type": "ImageObject", "@id": f"{SITE_URL}/{it['id']}/#image"},
+        "publisher": {"@type": "Organization", "name": cfg.get("title", "GeoSciPlot"),
+                      "url": SITE_URL},
+    }
+    if added:
+        webpage["datePublished"] = added
+    webpage_ld = json.dumps(webpage, ensure_ascii=False)
     head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>'
+            f'<script type="application/ld+json">{webpage_ld}</script>'
             f'<script type="application/ld+json">{breadcrumb_ld}</script>')
     # og:image 经 head_extra 输出（比 page_shell 版多 width/height，爬虫建图更省事）；
     # og_image 参数留空避免同一 meta 输出两遍
     return page_shell(cfg, title_text, body, depth=1, gh_url=gh_img,
                       meta_desc=detail_desc, head_extra=head,
                       og_type="article",
-                      og_url=f"{SITE_URL}/{it['id']}/")
+                      og_url=f"{SITE_URL}/{it['id']}/",
+                      extra_assets=["image-lightbox.js"])
 
 
 def build_search_page(cfg: dict, items: list[dict]) -> str:
@@ -533,9 +573,12 @@ def build_search_page(cfg: dict, items: list[dict]) -> str:
 <input id="spage-q" class="spage-q" type="search" placeholder="输入关键词搜索 id / DOI / 标签…" autocomplete="off" autofocus>
 <div class="spage-count" id="spage-count"></div>
 <div class="spage-list" id="spage-list" data-up="../"></div>"""
+    # 搜索页是薄内容且查询参数无限，不让搜索引擎收录（与主站 /search 策略一致）
     return page_shell(cfg, "全站搜索", body, depth=1,
                       meta_desc="搜索图库全部图片：按 id / DOI / 标签关键词检索，支持筛选与排序",
-                      og_url=f"{SITE_URL}/search/")
+                      og_url=f"{SITE_URL}/search/",
+                      head_extra='<meta name="robots" content="noindex, follow">',
+                      extra_assets=["gallery-data.js"])
 
 
 def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
@@ -619,11 +662,12 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
   </div>
   <div class="cl-zoom-view" id="cl-zoom-view"><canvas id="cl-zoom-canvas" width="0" height="0"></canvas></div>
 </div>"""
-    head = f'<script defer src="../assets/color-lab.js?v={BUILD_VER}"></script>'
+    head = f'<script defer src="../assets/color-lab.js?v={asset_ver("color-lab.js")}"></script>'
     return page_shell(cfg, "色彩实验", body, depth=1,
                       meta_desc="框选图片区域统计主要颜色（色块 + HEX/RGB 色号），可将指定颜色替换为新颜色，并叠加红盲/绿盲/蓝盲色觉模拟检查配色；浏览器本地完成，支持下载结果图",
                       og_url=f"{SITE_URL}/color-lab/",
-                      head_extra=head)
+                      head_extra=head,
+                      extra_assets=["gallery-data.js"])
 
 
 def build_stats_page(cfg: dict, items: list[dict]) -> str:
@@ -834,7 +878,7 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
         cfg, f'{p["title"]} · {cfg["title"]}', body, depth=2,
         meta_desc=p["summary"], og_type="article", og_image=p["og_image"],
         og_url=url, head_extra=head,
-        extra_assets=["article-toc.js", "code-block.js"],
+        extra_assets=["article-toc.js", "code-block.js", "image-lightbox.js"],
         active_nav="guide", bare=True)
 
 

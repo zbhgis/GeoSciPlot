@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import gzip
 import re
 import shutil
 import sys
@@ -36,7 +37,7 @@ from pathlib import Path
 from pages import (build_colorlab_page, build_detail, build_index,
                    build_search_page, build_stats_page, render_404,
                    render_about_page, render_guide_article, render_guide_list)
-from site_common import BUILD_VER, PAGE_SIZE, ROOT, SITE_URL, doi_bare, esc
+from site_common import PAGE_SIZE, ROOT, SITE_URL, doi_bare, esc
 
 CFG_PATH = ROOT / "gallery.config.json"
 REFS_JSON = ROOT / "meta" / "refs.json"
@@ -63,7 +64,7 @@ def load_cfg() -> dict:
     return cfg
 
 
-def build_sources(cfg: dict, preview: bool = False) -> list[dict]:
+def build_sources(cfg: dict, preview: bool = False, origin: bool = False) -> list[dict]:
     owner = cfg.get("owner") or "OWNER"
     repo = cfg["repo"]
     branch = cfg.get("branch", "main")
@@ -76,6 +77,11 @@ def build_sources(cfg: dict, preview: bool = False) -> list[dict]:
     if preview:
         # 本地预览：图片副本就在 site/images/，同源加载即可
         sources.insert(0, {"id": "local", "label": "本地（仅预览）", "base": "/images"})
+    elif origin:
+        # 源站图片（--origin-images）：缩略图/展示档已同步到服务器 /var/www/geosciplot-images/
+        # （nginx /images/ 别名），国内访客列表页不再依赖 GitHub 系可达性；缺的档位
+        # 沿降级链在线取 jsDelivr → raw
+        sources.insert(0, {"id": "origin", "label": "本站源站", "base": "/images"})
     return sources
 
 
@@ -286,8 +292,8 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
         return "<url><loc>" + loc + "</loc>" + lm + "</url>"
 
     urls = [url_entry(SITE_URL + "/", item_lastmod),
-            # /search/ 与 /color-lab/ 是交互工具页，内容不随数据变化，不给假 lastmod
-            url_entry(SITE_URL + "/search/"),
+            # /search/ 为 noindex 薄内容页，不进 sitemap；/color-lab/ 是交互工具页，
+            # 内容不随数据变化，不给假 lastmod
             url_entry(SITE_URL + "/color-lab/"),
             url_entry(SITE_URL + "/guide/", guide_lastmod),
             # 统计页随收录量变化，与首页同源
@@ -406,10 +412,34 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
     print("· SEO/GEO 三件套已生成：robots.txt / sitemap.xml / llms.txt（" + str(len(items)) + " 张图）")
 
 
+def precompress(site: Path) -> None:
+    """为文本产物预生成同名 .gz（nginx gzip_static 直出，动态压缩的 CPU 全免）。
+    只处理 assets/ 与根目录数据/入口文件，不碰 HTML（HTML 走 no-cache + 304，
+    全量传输只在发布后第一次发生）与 site/images/（预览模式的图片副本）。
+    mtime=0 保证同样内容产出字节级相同的 .gz，rsync/未变化文件可跳过上传。"""
+    targets = [p for p in (site / "assets").glob("*")
+               if p.is_file() and p.suffix in {".js", ".css"}]
+    targets += [p for p in site.glob("*")
+                if p.is_file() and p.suffix in {".txt", ".xml", ".json"}]
+    n = 0
+    for p in targets:
+        raw = p.read_bytes()
+        gz_path = p.with_name(p.name + ".gz")
+        with open(gz_path, "wb") as fh:
+            with gzip.GzipFile(fileobj=fh, mode="wb", compresslevel=6, mtime=0) as gz:
+                gz.write(raw)
+        n += 1
+    print(f"· 预压缩 {n} 个文本文件 → 同名 .gz（nginx gzip_static 直出）")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="GeoSciPlot 静态站生成")
     ap.add_argument("--preview", action="store_true",
                     help="本地预览构建：把 images/ 复制进 site/，图片源切到本地")
+    ap.add_argument("--origin-images", action="store_true",
+                    help="生产模式启用同源源站图片（需先把 images/thumb 与 images/disp "
+                         "同步到服务器 /var/www/geosciplot-images/，见 usage.md「源站图片」）："
+                         "sources 首位插入 /images，jsDelivr/raw 仍作在线降级")
     args = ap.parse_args()
 
     cfg = load_cfg()
@@ -421,8 +451,11 @@ def main() -> int:
         print("! 索引为空")
         return 1
 
-    sources = build_sources(cfg, preview=args.preview)
+    origin_images = args.origin_images and not args.preview
+    sources = build_sources(cfg, preview=args.preview, origin=origin_images)
     active = 0 if args.preview else int(cfg.get("activeSource", 1))
+    if origin_images:
+        active += 1          # 源站源插在首位，原配置的选择顺延一位
     active = max(0, min(active, len(sources) - 1))
 
     # 过期的详情页目录 → 改名移入 site_trash/（绝不原地删除）。
@@ -453,13 +486,27 @@ def main() -> int:
         if f.is_file() and f.name not in GENERATED:
             shutil.copyfile(f, SITE / "assets" / f.name)
     if args.preview:
-        # 仅预览构建复制图片副本（生产走 GitHub 链接，本站不分发图片）
+        # 仅预览构建复制图片副本（生产走 GitHub 链接，本站不分发图片）。
+        # 只带「预览真正直载的档位」：缩略图 + 展示档 + 无展示档条目的小图原图
+        # ≈60MB——此前整树复制 670MB（含全部原图），Windows 本地预览每次等分钟级。
+        # 大图的原图不复制：预览时本地 404 会沿 bind() 降级链在线取（jsDelivr → raw），
+        # 色彩实验取色同样在线取原图，功能不受影响
         dst = SITE / "images"
         if dst.exists():
             shutil.rmtree(dst)
-        shutil.copytree(IMAGES, dst)
-        n = sum(1 for p in dst.rglob("*") if p.is_file())
-        print(f"· 预览模式：images/ → site/images/（{n} 个文件）")
+        n = 0
+        for it in items:
+            rels = [it.get("thumb")]
+            rels.append(it.get("disp") or it.get("full"))
+            for rel in filter(None, rels):
+                src = IMAGES / rel
+                if src.is_file():
+                    d = dst / rel
+                    d.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(src, d)
+                    n += 1
+        print(f"· 预览模式：{n} 个图片副本 → site/images/（缩略图 + 展示档 + 小图原图；"
+              "大图原图走在线降级）")
     else:
         # 生产构建：把预览模式遗留的 site/images/ 挪进 site_trash/。
         # 它有几十 MB（原图 + 缩略图副本），而生产站点图片全部走 jsDelivr/GitHub raw，
@@ -541,6 +588,8 @@ def main() -> int:
 
     # 404 页：noindex + 回首页/搜索入口（nginx 需 error_page 404 /404.html 配合）
     (SITE / "404.html").write_text(render_404(cfg), encoding="utf-8")
+
+    precompress(SITE)
 
     pages = max(1, -(-len(items) // PAGE_SIZE))
     index_kb = len((SITE / "index.html").read_bytes()) / 1024

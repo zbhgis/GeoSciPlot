@@ -20,16 +20,51 @@ python scripts/admin.py        # 本地管理界面（仅本机可访问，自�
 
 ### 发布前必查（踩坑清单）
 
-- **占位数据**：`meta/titles.csv` 里的 journal / published 是占位模拟数据（按图面推断），
-  发布前核对（详见 `deploy/部署操作手册.md` 步骤⑦）。
+- **DOI/标签是人工字段**：`meta/titles.csv` 只有 id / doi / tags 三列（journal /
+  published 占位列已随字段裁撤移除），发布前核对 DOI 与标签即可
+  （详见 `deploy/部署操作手册.md` 步骤⑦）。
 - **`git add -A` 会收编工作区全部改动**：发布提交是全量的——动手发布前先
   `git status` 确认没有无关的半成品文件，或先把它们单独提交/清理。
+  （2026-10 起图库多了 `images/disp/` 展示档产物，约 45MB，属正常入库内容。）
 - **发布失败不影响线上**：build 失败 → 未提交未同步；scp 失败 → 线上保持旧版本且
   残局自动清理。日志区每步状态可见：push 失败多半是网络，稍后手动 `git push`；
   同步失败检查本机公钥是否在服务器 `authorized_keys`。
 - **nginx 配对关系**：构建产出的 `404.html` 依赖服务器 nginx 的
   `error_page 404 /404.html` + `try_files ... =404`（留档在 `deploy/nginx-geosciplot.conf`，
   与服务器现行版一致）——别改回 `/index.html` 兜底，那会把坏链变成 200 首页（软 404）。
+
+### 图片档位与版本号（2026-10 优化）
+
+- **三档图片**：`thumb/`（≤480px，列表页）、`disp/`（≤1600px WebP，详情页正文与
+  og:image——仅原图 >1600px 或 >512KB 才生成，其余小图详情页直用原图）、`full/`
+  （逐字节原图，灯箱放大与「查看原图」链接专用）。入库新图由 `prepare.py` 自动产出
+  disp；存量库补齐用 `python scripts/prepare.py --backfill-disp`
+  （2026-10-24 已执行：293/352 张、45.4MB）。
+- **资源版本号按内容 hash**：`?v=` 不再是构建时间戳——没改的 CSS/JS 跨发布缓存
+  继续命中（配合 nginx `/assets/` 的 immutable 年缓存），发布后访客只重新下载
+  真正变过的文件。
+- **`--preview` 不再整树拷图**：只复制缩略图 + 展示档 + 小图原图（约 60MB，此前是
+  670MB 全量拷贝）；大图原图本地 404 时沿降级链在线取，预览功能不受影响。
+- **构建期预生成 .gz**：assets 与 llms/sitemap 等文本产物带同名 `.gz`，服务器 nginx
+  `gzip_static` 直出（配置已更新，需同步一次服务器 nginx 并 reload）。
+
+### 源站图片（可选：国内列表页提速）
+
+jsDelivr 与 GitHub raw 在国内都不稳定（README 一直声明「访问需具备 GitHub 访问能力」）。
+缩略图 + 展示档共约 53MB，可随服务器分发，国内访客列表页/详情页秒开：
+
+```bash
+# 1) 服务器建独立持久目录（站点发布是整目录换台，图片目录不随之反复上传）
+ssh root@47.98.133.104 "mkdir -p /var/www/geosciplot-images"
+# 2) 上传两个档位（内容寻址、immutable，只在有新图后重传）
+scp -r images/thumb images/disp root@47.98.133.104:/var/www/geosciplot-images/
+# 3) nginx /images/ 别名已配好（deploy/nginx-geosciplot.conf），同步配置并 reload
+# 4) 构建加开关：sources 首位插入同源 /images，未命中的档位沿 jsDelivr→raw 在线降级
+python scripts/build_site.py --origin-images
+```
+
+启用后流程变为「加新图 → 重传 thumb+disp → 带 `--origin-images` 发布」；
+不启用则一切照旧。
 
 ### 手工部署（应急/全量重传）
 
@@ -69,11 +104,12 @@ python scripts/admin.py                          # 打开 http://127.0.0.1:5199
 assets_src/           logo 源文件（构建时拷入 site/assets/）
 raw/                  原图投放区（本地收件箱，已 gitignore）
 images/thumb/{日期}/  缩略图（≤480px WebP）
+images/disp/{日期}/   详情页展示档（≤1600px WebP，仅大图生成）
 images/full/{日期}/   原图逐字节副本（不压缩）
 meta/refs.json        索引（前端唯一数据源，自动生成）
 meta/titles.csv       人工编辑表
 scripts/admin.py      本地管理界面
-scripts/prepare.py    图片规范化 + 索引
+scripts/prepare.py    图片规范化 + 索引（含展示档）
 scripts/build_site.py 静态站生成
 scripts/compile_lightbox.mjs  图片灯箱 TS→JS 编译（node，零 npm 依赖）
 lib/image-lightbox.ts 图片灯箱源码（自 mystation 拷入；改后跑编译脚本再构建）
@@ -84,8 +120,9 @@ site_trash/           过期详情页的暂存区（已 gitignore，可随时手
 
 ## 图片源与降级
 
-图片不打包进站点，全部由 GitHub 分发，逐图自动降级（顺序在 `gallery.config.json` 的
-`activeSource`）：jsDelivr（CDN，默认首选）→ GitHub raw。
+图片不打包进站点，默认全部由 GitHub 分发，逐图自动降级（顺序在 `gallery.config.json` 的
+`activeSource`）：jsDelivr（CDN，默认首选）→ GitHub raw。启用源站图片
+（`--origin-images`）后同源 `/images` 排在最前，jsDelivr/raw 仍作在线降级。
 
 **加载占位**：卡片 / 搜索结果行 / 详情页大图在图片加载前显示「加载中」占位层——
 `<img>` 带缩略图真实 `width/height`（refs.json 提供），浏览器提前预留同比例空间

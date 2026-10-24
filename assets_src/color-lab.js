@@ -128,9 +128,11 @@
   }
   function displaySrc() { return simOk ? sim : work; }
 
-  /* ── 载入：分层竞速。candidateTiers 返回 [原图×各源, 缩略图×各源]，
-     层内并行请求、最先通过可读性测试（1×1 getImageData，CORS）者胜出；
-     整层全败才降下一层。单源 20s 兜底超时，防止被墙源把整层挂死 ── */
+  /* ── 载入：分层 + 层内错峰。candidateTiers 返回 [原图×各源, 缩略图×各源]，
+     整层全败才降下一层；层内先打主源，4s 未决再启备源——此前层内全员并行
+     竞速，原图层等于每次双倍下载 2MB 级流量，输家流量全废。当前源快速失败
+     （error / CORS 不可读）时跳过错峰窗口直接上备源，被墙场景不比竞速慢；
+     单源 20s 兜底超时，防止挂死源把整层拖死 ── */
   function candidateTiers(id) {
     for (var i = 0; i < ITEMS.length; i++) {
       if (ITEMS[i].id !== id) continue;
@@ -144,20 +146,40 @@
     }
     return null;
   }
-  var LOAD_TIMEOUT = 20000;
-  function raceLoad(urls, ok, fail) {
-    var pending = urls.length;
-    if (!pending) { fail(); return; }
-    var settled = false;
-    urls.forEach(function (url) {
+  var LOAD_TIMEOUT = 20000, STAGGER_MS = 4000;
+  function staggerLoad(urls, ok, fail) {
+    if (!urls.length) { fail(); return; }
+    var settled = false, launched = 0, dead = 0, pumpT = null;
+    var live = [];
+    function settleAbortExcept(win) {
+      live.forEach(function (im) { if (im !== win) im.src = ""; });   // 中止输家下载
+    }
+    function maybeFail() {
+      if (!settled && dead >= urls.length) fail();
+    }
+    function pump() {
+      if (settled || launched >= urls.length) return;
+      launch(urls[launched]);
+      if (launched < urls.length) {
+        if (pumpT) clearTimeout(pumpT);
+        pumpT = setTimeout(function () { pumpT = null; pump(); }, STAGGER_MS);
+      }
+    }
+    function pumpNow() {           // 当前源快速失败：不等错峰窗口，直接上备源
+      if (pumpT) { clearTimeout(pumpT); pumpT = null; }
+      pump();
+    }
+    function launch(url) {
+      launched++;
       var img = new Image();
       img.crossOrigin = "anonymous";
+      live.push(img);
       var done = false;
       var timer = setTimeout(function () {
         if (done || settled) return;
-        done = true;
+        done = true; dead++;
         img.src = "";   // 中止挂死的下载
-        if (--pending === 0) fail();
+        pumpNow(); maybeFail();
       }, LOAD_TIMEOUT);
       img.onload = function () {
         if (done || settled) return;
@@ -168,21 +190,22 @@
           var tc = t.getContext("2d");
           tc.drawImage(img, 0, 0, 1, 1);
           tc.getImageData(0, 0, 1, 1);
-        } catch (e) {
-          if (--pending === 0) fail();
-          return;
-        }
+        } catch (e) { dead++; pumpNow(); maybeFail(); return; }
         settled = true;
+        if (pumpT) { clearTimeout(pumpT); pumpT = null; }
+        settleAbortExcept(img);
         img.setAttribute("data-src", url);
         ok(img);
       };
       img.onerror = function () {
         if (done || settled) return;
         done = true; clearTimeout(timer);
-        if (--pending === 0) fail();
+        dead++;
+        pumpNow(); maybeFail();
       };
       img.src = url;
-    });
+    }
+    pump();
   }
   function loadById(rawId) {
     if (loadBusy) return;
@@ -197,7 +220,7 @@
     var ti = 0;
     (function nextTier() {
       if (ti >= tiers.length) { endLoad(false, id, null); return; }
-      raceLoad(tiers[ti++], function (img) { endLoad(true, id, img); }, nextTier);
+      staggerLoad(tiers[ti++], function (img) { endLoad(true, id, img); }, nextTier);
     })();
   }
   function endLoad(got, id, img) {
