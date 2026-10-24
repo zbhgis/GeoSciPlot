@@ -187,8 +187,9 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .card .cap{display:block;padding:8px 10px 10px}
 .card .cap .tags{display:flex;flex-wrap:wrap;gap:5px}
 .card .cap .tags i{font-style:normal;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);line-height:1.7;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:999px;padding:0 8px;white-space:nowrap;max-width:12em;overflow:hidden;text-overflow:ellipsis;min-width:0}
-/* 范围徽章（.sc）：accent 实底 tint，与样式徽章（描边）区分双轨两类 */
-.card .cap .tags i.sc{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+/* 范围徽章（.sc）：MacroBiodiv 体裁徽章（.c-ty）同款灰色——灰字灰描边，与
+   样式徽章（accent 蓝描边，.c-j 同款）构成双轨视觉区分 */
+.card .cap .tags i.sc{color:var(--dim);border-color:var(--line2)}
 .card .cap .tags i.none{color:var(--faint);border:none;padding:0}
 .ph{display:flex;align-items:center;justify-content:center;min-height:120px;padding:18px;font-family:ui-monospace,monospace;font-size:var(--fs-xs);color:var(--faint);text-align:center}
 .pgbar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;margin:44px 0 0;padding-top:24px;border-top:1px solid var(--line)}
