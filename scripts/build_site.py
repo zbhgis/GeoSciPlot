@@ -412,6 +412,155 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
     print("· SEO/GEO 三件套已生成：robots.txt / sitemap.xml / llms.txt（" + str(len(items)) + " 张图）")
 
 
+def minify_js(src: str) -> str:
+    """构建期注释剥离（保留一行一语句、不合并压缩）：本仓库前端注释是中文大段
+    （UTF-8 每字 3 字节），实测省 30%+ 传输。带字面量状态机——单/双引号串、
+    模板串、正则字面量里的 "//" 与 "/*" 绝不误删（img 的正则含斜杠对、灯箱模板里
+    有 /* CSS 注释 */）。产物每次构建后过 node --check 校验（见 build 输出）。"""
+    SQ, DQ, TPL, BCOM, REGEX, RCLS = range(6)
+    state = None
+    prev = ""            # NORMAL 态最近非空白字符（正则起始 vs 除法判定）
+    out: list[str] = []
+    cur: list[str] = []
+
+    def flush() -> None:
+        nonlocal cur
+        line = "".join(cur).rstrip()
+        if line.strip():
+            out.append(line)
+        cur = []
+
+    for line in src.splitlines():
+        i, L = 0, len(line)
+        while i < L:
+            c = line[i]
+            nxt = line[i + 1] if i + 1 < L else ""
+            if state is None:
+                if c == "/" and nxt == "/":
+                    break                        # 行注释丢弃到行尾
+                if c == "/" and nxt == "*":
+                    state = BCOM
+                    i += 2
+                    continue
+                if c == "'":
+                    state = SQ
+                elif c == '"':
+                    state = DQ
+                elif c == "`":
+                    state = TPL
+                elif c == "/" and (prev == "" or prev in "(,=:[!&|?{};+-*%<>~^"):
+                    state = REGEX
+                cur.append(c)
+                if not c.isspace():
+                    prev = c
+                i += 1
+                continue
+            if state in (SQ, DQ, TPL):
+                if c == "\\":
+                    cur.append(c)
+                    if nxt:
+                        cur.append(nxt)
+                    i += 2
+                    continue
+                if (state == SQ and c == "'") or (state == DQ and c == '"') \
+                        or (state == TPL and c == "`"):
+                    state = None
+                    prev = c
+                cur.append(c)
+                i += 1
+                continue
+            if state in (REGEX, RCLS):
+                if c == "\\":
+                    cur.append(c)
+                    if nxt:
+                        cur.append(nxt)
+                    i += 2
+                    continue
+                if state == REGEX and c == "[":
+                    state = RCLS
+                elif state == RCLS and c == "]":
+                    state = REGEX
+                elif state == REGEX and c == "/":
+                    state = None
+                    prev = c
+                cur.append(c)
+                i += 1
+                continue
+            if state == BCOM:
+                if c == "*" and nxt == "/":
+                    state = None
+                    i += 2
+                    continue
+                i += 1
+                continue
+        if state == TPL:
+            cur.append("\n")          # 模板串跨行：换行是内容，整段并作一行输出
+            continue
+        flush()
+    flush()
+    return "\n".join(out) + "\n"
+
+
+def minify_css(src: str) -> str:
+    """CSS 注释剥离：只剥 /* … */ 与空行——"//" 不是 CSS 注释，url() 里的
+    https:// 与 data: 内容不受影响。引号内（content:"…"）不剥。"""
+    SQ, DQ, BCOM = range(3)
+    state = None
+    out: list[str] = []
+    cur: list[str] = []
+    for line in src.splitlines():
+        i, L = 0, len(line)
+        while i < L:
+            c = line[i]
+            nxt = line[i + 1] if i + 1 < L else ""
+            if state is None:
+                if c == "/" and nxt == "*":
+                    state = BCOM
+                    i += 2
+                    continue
+                if c == '"':
+                    state = DQ
+                elif c == "'":
+                    state = SQ
+                cur.append(c)
+                i += 1
+                continue
+            if state in (SQ, DQ):
+                if c == "\\":
+                    cur.append(c)
+                    if nxt:
+                        cur.append(nxt)
+                    i += 2
+                    continue
+                if (state == SQ and c == "'") or (state == DQ and c == '"'):
+                    state = None
+                cur.append(c)
+                i += 1
+                continue
+            if state == BCOM:
+                if c == "*" and nxt == "/":
+                    state = None
+                    i += 2
+                    continue
+                i += 1
+                continue
+        line_out = "".join(cur).rstrip()
+        if line_out.strip():
+            out.append(line_out)
+        cur = []
+    return "\n".join(out) + "\n"
+
+
+def minify_asset(src: Path, dst: Path) -> None:
+    """按扩展名走对应压缩器写盘；非 js/css 直接拷贝。"""
+    if src.suffix == ".js":
+        dst.write_text(minify_js(src.read_text(encoding="utf-8")), encoding="utf-8", newline="")
+    elif src.suffix == ".css":
+        dst.write_text(minify_css(src.read_text(encoding="utf-8")), encoding="utf-8", newline="")
+    else:
+        shutil.copyfile(src, dst)
+
+
 def precompress(site: Path) -> None:
     """为文本产物预生成同名 .gz（nginx gzip_static 直出，动态压缩的 CPU 全免）。
     只处理 assets/ 与根目录数据/入口文件，不碰 HTML（HTML 走 no-cache + 304，
@@ -484,7 +633,19 @@ def main() -> int:
     GENERATED = {"style.css", "gallery.js", "gallery-data.js", "stats-data.js"}  # 由下方 write_text 生成，不做裸拷贝
     for f in (ROOT / "assets_src").glob("*"):
         if f.is_file() and f.name not in GENERATED:
-            shutil.copyfile(f, SITE / "assets" / f.name)
+            minify_asset(f, SITE / "assets" / f.name)   # js/css 构建期注释剥离，其余原样拷贝
+    # logo-sm.png：首页 h1 用的 2 倍高分小图（高 ≤116px + 256 色量化，~10KB）。
+    # 250KB 的 logo.png 只留给 og:image 兜底（爬虫侧偶尔取），页面首载不再付全尺寸
+    logo_src = ASSETS_SRC / "logo.png"
+    try:
+        from PIL import Image
+        with Image.open(logo_src) as im:
+            im = im.copy()
+            im.thumbnail((400, 116), Image.LANCZOS)
+            im.quantize(colors=256, method=Image.FASTOCTREE).save(
+                SITE / "assets" / "logo-sm.png", "PNG", optimize=True)
+    except Exception:
+        shutil.copyfile(logo_src, SITE / "assets" / "logo-sm.png")
     if args.preview:
         # 仅预览构建复制图片副本（生产走 GitHub 链接，本站不分发图片）。
         # 只带「预览真正直载的档位」：缩略图 + 展示档 + 无展示档条目的小图原图
@@ -522,7 +683,7 @@ def main() -> int:
             except OSError:
                 pass
 
-    (SITE / "assets" / "style.css").write_text(CSS, encoding="utf-8")
+    (SITE / "assets" / "style.css").write_text(minify_css(CSS), encoding="utf-8")
     inline = {
         "sources": [s["base"] for s in sources],
         "active": active,
@@ -531,7 +692,8 @@ def main() -> int:
         "api": cfg.get("api", ""),
     }
     (SITE / "assets" / "gallery.js").write_text(
-        "window.GALLERY = " + json.dumps(inline, ensure_ascii=False) + ";\n" + JS, encoding="utf-8")
+        "window.GALLERY = " + json.dumps(inline, ensure_ascii=False) + ";\n" + minify_js(JS),
+        encoding="utf-8")
 
     # 全量元数据：首页网格与全站搜索浮层共用这一份数据（详情页没有内嵌数据，
     # 靠它实现跨页搜索）。se = 检索 haystack，构建期算好免去 JS 重复拼接。

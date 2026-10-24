@@ -255,6 +255,10 @@ if(ok.indexOf(v)<0){v=null;try{v=localStorage.getItem("gsp-sort2")}catch(e){}
 if(ok.indexOf(v)<0)v=null}
 if(v)document.querySelectorAll("#sortseg button").forEach(function(b){
 b.setAttribute("aria-pressed",String(b.getAttribute("data-sort")===v))})
+/* 每页数量：首帧把 select 预置成访客偏好（网格仍由 JS 重建，但控件不再跳变） */
+var pp=parseInt(localStorage.getItem("gsp-per"),10);
+if([20,30,50].indexOf(pp)>-1){var pSel=document.getElementById("perpage");
+if(pSel)pSel.value=String(pp)}
 }catch(e){}})();</script>"""
 
 
@@ -277,7 +281,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
                 'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
                 '<path d="M6 3l5 5-5 5"/></svg>')
     body = f"""<header class="site">
-  <h1><img class="logo" src="assets/logo.png?v={asset_ver('logo.png')}" alt="GeoSciPlot logo">{esc(cfg['title'])}</h1>
+  <h1><img class="logo" src="assets/logo-sm.png?v={asset_ver('logo-sm.png')}" alt="GeoSciPlot logo">{esc(cfg['title'])}</h1>
   <a class="gh-note" href="https://github.com/{esc(cfg.get('owner') or 'OWNER')}/{esc(cfg['repo'])}" rel="noopener" target="_blank" title="在 GitHub 查看图片源文件">{ghsvg}<span>图片存储于 <b>GitHub</b>，访问需具备 GitHub 访问能力（点此查看仓库）</span></a>
   <p class="lede">{esc(cfg['lede'])}</p>
 </header>

@@ -66,6 +66,14 @@ python scripts/build_site.py --origin-images
 启用后流程变为「加新图 → 重传 thumb+disp → 带 `--origin-images` 发布」；
 不启用则一切照旧。
 
+- **JS/CSS 构建期压缩与 logo 小图（2026-10-24 二轮）**：所有 js/css 产物经注释
+  剥离压缩（保留一行一语句，字面量状态机保证字符串/模板/正则安全，产物过
+  node --check 校验）平均省 25-30%；首页 h1 改用构建期派生的 logo-sm.png
+  （≤116px 高，5KB），250KB 原图只留 og:image 兜底。
+- **移动端 ≤430px 网格转单列**（2 列时每列仅 ~165px，480px 缩略图细节全糊）；
+  键盘焦点态统一 accent 轮廓；汉堡菜单展开动画 + 点击外部收起；
+  每页数量 select 首帧按 localStorage 预置（不再跳变）。
+
 ### 手工部署（应急/全量重传）
 
 ```bash
