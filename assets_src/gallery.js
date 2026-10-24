@@ -90,7 +90,8 @@
 
   var themeBtn = document.getElementById("themeBtn");
   if (themeBtn) {
-    // 按钮文案同主站：指向点击后将切换到的主题；未手动切过的访客跟随系统偏好
+    // 按钮文案同主站：指向点击后将切换到的主题；默认暗色（不跟随系统偏好），
+    // 仅当访客手动切过才用其选择
     var syncTheme = function () {
       var dark = document.documentElement.getAttribute("data-theme") !== "light";
       themeBtn.title = dark ? "切换为浅色模式" : "切换为深色模式";
@@ -99,7 +100,6 @@
     syncTheme();
     themeBtn.addEventListener("click", function () {
       var root = document.documentElement;
-      // 手动点击即写入偏好（此后不再跟随系统）；默认值由 head 内联脚本按系统定
       var light = root.getAttribute("data-theme") === "light";
       var t = light ? "dark" : "light";
       root.setAttribute("data-theme", t);

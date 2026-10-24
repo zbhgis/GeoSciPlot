@@ -174,17 +174,44 @@ def flat(values, default: str = "—") -> Counter:
     return Counter([str(v) if v else default for v in values])
 
 
-def chips(values: Counter, key: str) -> str:
+# 标签面板第一排固定为「区域/尺度」组（人工策展顺序：全球 → 大洲 → 中国地图 → 其他），
+# 其余标签按热度进第二排；库里暂不存在的固定项不渲染（点不出结果）
+PINNED_TAGS = ["全球陆地", "全球海洋", "北极", "南极", "美国", "欧洲", "亚洲", "非洲",
+               "横版中国地图", "竖版中国地图", "半球", "沿海"]
+
+
+def chips(values: Counter, key: str, pinned: list[str] | None = None) -> str:
     """多选标签 chips（正向选择语义，2026-10-14 与 MacroBiodiv 统一）：默认全不选，
     点击=选中该标签（选中值之间 OR），行尾提供 全选/反选/严格。
-    严格=图片携带的每个标签都必须被选中（带任一未选中标签的图排除）。"""
-    items = []
-    for name, n in sorted(values.items(), key=lambda kv: (-kv[1], str(kv[0]))):
-        items.append(f'<button type="button" class="chip" data-v="{esc(name)}" aria-pressed="false">{esc(name)}<i class="n">{n}</i></button>')
-    items.append('<button type="button" class="chip chip-act" data-act="all">全选</button>')
-    items.append('<button type="button" class="chip chip-act" data-act="invert">反选</button>')
-    items.append('<button type="button" class="chip chip-act" data-act="strict" data-on="false" aria-pressed="false" '
-                 'title="严格模式：图片携带的每个标签都必须被选中，带任一未选中标签的图会被排除">严格</button>')
+    严格=图片携带的每个标签都必须被选中（带任一未选中标签的图排除）。
+    pinned 给定时分两排：固定组一排（按给定顺序），其余标签一排（按数量降序）。
+    两排同在 .chips[data-key] 容器内 —— gallery.js 的容器级事件委托与
+    querySelectorAll 均不受分组影响。"""
+    def chip_btn(name: str, n: int) -> str:
+        return (f'<button type="button" class="chip" data-v="{esc(name)}" aria-pressed="false">'
+                f'{esc(name)}<i class="n">{n}</i></button>')
+
+    def act_btns() -> list[str]:
+        return ['<button type="button" class="chip chip-act" data-act="all">全选</button>',
+                '<button type="button" class="chip chip-act" data-act="invert">反选</button>',
+                '<button type="button" class="chip chip-act" data-act="strict" data-on="false" aria-pressed="false" '
+                'title="严格模式：图片携带的每个标签都必须被选中，带任一未选中标签的图会被排除">严格</button>']
+
+    if pinned:
+        pinned_set = set(pinned)
+        row1 = [chip_btn(n, values[n]) for n in pinned if n in values]
+        row2 = [chip_btn(name, cnt) for name, cnt in
+                sorted(((k, v) for k, v in values.items() if k not in pinned_set),
+                       key=lambda kv: (-kv[1], str(kv[0])))]
+        row2 += act_btns()
+        return (f'<div class="chips" data-key="{key}">\n'
+                f'  <div class="chips-row">\n    ' + "\n    ".join(row1) + '\n  </div>\n'
+                f'  <div class="chips-row">\n    ' + "\n    ".join(row2) + '\n  </div>\n'
+                f'</div>')
+
+    items = [chip_btn(name, n) for name, n in
+             sorted(values.items(), key=lambda kv: (-kv[1], str(kv[0])))]
+    items += act_btns()
     return f'<div class="chips" data-key="{key}">\n  ' + "\n  ".join(items) + "\n</div>"
 
 
@@ -309,7 +336,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
   + ' <span class="flabel" style="min-width:auto">占比≥</span>'
   + '<input type="range" id="f-minpct" class="tolrange" min="0" max="100" value="0" aria-label="命中主色的最小占比">'
   + '<span id="f-minpctval">0%</span>')}
-{filter_row("标签", chips(tag_counter, "tag"))}
+{filter_row("标签", chips(tag_counter, "tag", pinned=PINNED_TAGS))}
 {filter_row("上传", '<input type="date" id="f-from" class="dateinp">\n'
   + ' <span class="flabel" style="min-width:auto">至</span>\n'
   + '<input type="date" id="f-to" class="dateinp">\n'
