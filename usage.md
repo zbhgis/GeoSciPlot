@@ -44,8 +44,10 @@ python scripts/admin.py        # 本地管理界面（仅本机可访问，自�
 
 ### 发布前必查（踩坑清单）
 
-- **DOI/标签是人工字段**：`meta/titles.csv` 只有 id / doi / tags 三列（journal /
-  published 占位列已随字段裁撤移除），发布前核对 DOI 与标签即可
+- **人工字段**：`meta/titles.csv` 四列 id / scope / style / doi（2026-10-24 起
+  标签双轨化，旧 tags 单列已迁移拆分；journal / published 占位列更早已移除）。
+  scope（范围）与 style（样式）两类并行、组内多值用 `|` 分隔，每张图两类各至少
+  一个——缺类会自动补「范围待定 / 样式待定」，可在管理界面按待定筛出待补图
   （详见 `deploy/部署操作手册.md` 步骤⑦）。
 - **`git add -A` 会收编工作区全部改动**：发布提交是全量的——动手发布前先
   `git status` 确认没有无关的半成品文件，或先把它们单独提交/清理。
@@ -71,6 +73,22 @@ python scripts/admin.py        # 本地管理界面（仅本机可访问，自�
   670MB 全量拷贝）；大图原图本地 404 时沿降级链在线取，预览功能不受影响。
 - **构建期预生成 .gz**：assets 与 llms/sitemap 等文本产物带同名 `.gz`，服务器 nginx
   `gzip_static` 直出（配置已更新，需同步一次服务器 nginx 并 reload）。
+
+### 标签双轨：范围 × 样式（2026-10-24 重构）
+
+- **两类并行**：`scope`（范围，白名单 13 个：全球陆地/全球海洋/北极/南极/美国/美洲/
+  欧洲/亚洲/非洲/横版中国地图/竖版中国地图/半球/沿海，顺序即筛选项顺序）与
+  `style`（样式，自由池）。每张图两类各至少一个，缺类自动补「范围待定 / 样式待定」
+  （可筛选，管理界面按待定筛出待补图）。存量迁移：
+  `python scripts/prepare.py --migrate-tags`（2026-10-24 已执行，352 条，
+  补范围待定 64 张、样式待定 11 张）。
+- **筛选语义**：组内 OR（命中任一选中值）、组间 AND（范围与样式同时满足）；
+  全选/反选/严格 每组独立（严格 = 该组子集语义）。
+- **路由**：`?scope=北极|南极&style=双变量&smode=strict`（smode/tmode 分别开两组
+  严格）；旧 `?tag=…&mode=…` 链接按值归属自动映射，历史分享链接不断。
+- **入口**：筛选面板「范围」「样式」两组 chips；卡片徽章范围实底 tint 在前、样式
+  描边在后；详情页「范围」「样式」两行各自跳转；统计页双下拉 + 范围/样式双词云；
+  管理界面双 picker（新标签归属当前组，留空保存自动兜底待定）。
 
 ### 源站图片（可选：国内列表页提速）
 
@@ -147,7 +165,7 @@ images/thumb/{日期}/  缩略图（≤480px WebP）
 images/disp/{日期}/   详情页展示档（≤1600px WebP，仅大图生成）
 images/full/{日期}/   原图逐字节副本（不压缩）
 meta/refs.json        索引（前端唯一数据源，自动生成）
-meta/titles.csv       人工编辑表
+meta/titles.csv       人工编辑表（id, scope, style, doi 四列）
 scripts/admin.py      本地管理界面
 scripts/prepare.py    图片规范化 + 索引（含展示档）
 scripts/build_site.py 静态站生成

@@ -90,7 +90,7 @@ def haystack(item: dict) -> str:
         item.get("id", ""),
         item.get("doi") or "",
         str(item.get("added") or ""),
-        " ".join(item.get("tags", [])),
+        " ".join(item.get("scope") or []), " ".join(item.get("style") or []),
     ]
     # 主色 hex 也进全文索引：文本框直接输 1F4E79 这类色号也能搜到
     hexes = [str(c.get("hex", "")).lstrip("#") for c in (item.get("colors") or [])]
@@ -121,7 +121,8 @@ def build_stats_data(cfg: dict, items: list[dict]) -> None:
 
     data = [{
         "id": it["id"],
-        "tg": [str(t) for t in (it.get("tags") or [])],
+        "sc": [str(t) for t in (it.get("scope") or [])],
+        "st": [str(t) for t in (it.get("style") or [])],
         "ad": str(it.get("added") or ""),
         "ar": ar(it),
         # cs = 各图前 20 主色的 hex 列表（无 #，按占比降序）：主色构成卡取第一
@@ -251,7 +252,14 @@ TAG_EN = {
     "北极": "Arctic",
     "半球": "hemisphere",
     "半环形": "semi-annular panel layout",
+    "范围待定": "geographic scope TBD",
+    "样式待定": "figure style TBD",
 }
+
+
+def all_tags(it: dict) -> list:
+    """双轨标签的拼接视图（范围在前）：SEO 语义串 / llms / 卡片 tooltip 用。"""
+    return [str(t) for t in (it.get("scope") or [])] + [str(t) for t in (it.get("style") or [])]
 
 
 def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: int,
@@ -307,7 +315,7 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
         # （<img src> 由 JS 赋值的页面，图片爬虫看不到 URL）。license 字段留空——
         # 版权归各原作者，本站无权声明许可
         full = str(it.get("full") or "")
-        sem = " · ".join(str(t) for t in (it.get("tags") or []))
+        sem = " · ".join(all_tags(it))
         img_block = ""
         if full:
             cap = " · ".join(x for x in [sem, str(it.get("added") or ""),
@@ -371,7 +379,7 @@ def build_seo_files(cfg: dict, items: list[dict], sources: list[dict], active: i
               "  Crossref / OpenAlex 元数据、AI 中文摘要、每周速递",
               "", "## 全部图片（共 " + str(len(items)) + " 张）", ""]
     for it in items:
-        raw_tags = [str(t) for t in (it.get("tags") or [])]
+        raw_tags = all_tags(it)
         tags = " · ".join(raw_tags)
         en = " / ".join(TAG_EN[t] for t in raw_tags if t in TAG_EN)
         doi = doi_bare(it.get("doi"))
@@ -705,9 +713,10 @@ def main() -> int:
         "w": it.get("width") or 0,
         "h": it.get("height") or 0,
         "ad": it.get("added") or "",
-        "tg": it.get("tags") or [],
+        "sc": it.get("scope") or [],
+        "st": it.get("style") or [],
         "doi": it.get("doi") or "",
-        "sub": " · ".join(it.get("tags") or []),
+        "sub": " · ".join(all_tags(it)),
         "se": haystack(it),
         # cs = 主色 [[hex无#, 占比], ...]，颜色筛选（容差匹配 + 相近排序）在客户端做；
         # 只收 6 位 hex，脏数据进 JS 会让 parseInt 产出 NaN（静默失效）

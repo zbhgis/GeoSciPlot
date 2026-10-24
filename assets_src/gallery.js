@@ -211,7 +211,8 @@
       }
       sList.innerHTML = hits.map(function (it) {
         var meta = [];
-        if ((it.tg || []).length) meta.push(hl((it.tg || []).join(" · "), tokens));
+        var tgAll = (it.sc || []).concat(it.st || []);
+        if (tgAll.length) meta.push(hl(tgAll.join(" · "), tokens));
         // refs.json 里 DOI 存的是完整 URL，展示时剥掉协议前缀（检索仍按原文匹配）
         if (it.doi) meta.push(hl(String(it.doi).replace(/^https?:\/\/doi\.org\//i, ""), tokens));
         if (it.ad) meta.push(escHtml(it.ad));
@@ -300,11 +301,12 @@
   grid.querySelectorAll("img[data-rel]").forEach(bind);   // 首屏静态卡片也要绑降级
 
   /* ── 分页 + 筛选 + 排序 ── */
-  var state = { q: "", tags: null, tagStrict: false, from: "", to: "", sort: "added", color: "", tol: 60, minpct: 0, page: 1, per: PAGE };
-  /* tags=null = 无选中（不筛选，正向选择语义 2026-10-14）；数组 = 选中的标签。
-     tagStrict=false 普通（OR：命中任一选中标签即保留）；true 严格（图片携带的
-     每个标签都必须被选中，带任一未选中标签的图排除——如带「双变量+美国」的图
-     在只选「双变量」时会被排除）。DOM（chips 的 aria-pressed）是唯一真源。 */
+  /* 标签双轨（2026-10-24）：scope（范围）/style（样式）两组并行——组内 OR
+     （命中任一选中值即保留，strict 时该组子集语义）、组间 AND（两组条件同时
+     满足）。*=null = 该组无选中（不筛选，正向选择语义 2026-10-14）。
+     DOM（chips 的 aria-pressed）是唯一真源。 */
+  var state = { q: "", scope: null, style: null, scopeStrict: false, styleStrict: false,
+                from: "", to: "", sort: "added", color: "", tol: 60, minpct: 0, page: 1, per: PAGE };
   try {
     var savedPer = parseInt(localStorage.getItem("gsp-per"), 10);
     if ([20, 30, 50].indexOf(savedPer) > -1) state.per = savedPer;   // 仅接受合法档位，旧值自动回默认 30
@@ -395,19 +397,24 @@
     return false;
   }
 
-  function pass(it) {
-    if (state.tags) {
-      var tg = it.tg || [], hit = false;
-      if (state.tagStrict) {
-        if (tg.length === 0) return false;   // 严格：无标签的图与选中标签集无关联，隐藏
-        for (var si = 0; si < tg.length; si++) {
-          if (state.tags.indexOf(tg[si]) < 0) return false;   // 携带未选中标签 → 排除（子集语义）
-        }
-      } else {
-        for (var ti = 0; ti < tg.length; ti++) if (state.tags.indexOf(tg[ti]) > -1) { hit = true; break; }
-        if (!hit) return false;   // 普通 OR：至少命中一个选中标签；无标签的图在筛选时隐藏
+  /* 双轨标签过滤：组内 OR / 严格（子集），组间 AND */
+  function tagGroupPass(it, sel, strict, field) {
+    if (!sel) return true;
+    var tg = it[field] || [];
+    if (strict) {
+      if (tg.length === 0) return false;   // 严格：该组无标签的图与选中集无关联，隐藏
+      for (var si = 0; si < tg.length; si++) {
+        if (sel.indexOf(tg[si]) < 0) return false;   // 携带未选中标签 → 排除（子集语义）
       }
+      return true;
     }
+    for (var ti = 0; ti < tg.length; ti++) if (sel.indexOf(tg[ti]) > -1) return true;
+    return false;   // 普通 OR：至少命中一个选中标签；该组无标签的图在筛选时隐藏
+  }
+
+  function pass(it) {
+    if (!tagGroupPass(it, state.scope, state.scopeStrict, "sc")) return false;
+    if (!tagGroupPass(it, state.style, state.styleStrict, "st")) return false;
     if (state.from && (it.ad || "") < state.from) return false;
     if (state.to && (it.ad || "") > state.to) return false;
     if (state.q && (it.se || "").indexOf(state.q) === -1) return false;
@@ -455,11 +462,12 @@
     cap.className = "cap";
     var tagsEl = document.createElement("span");
     tagsEl.className = "tags";
-    /* 标签徽章（与静态首屏 card_html 同构）：每标签一枚 accent 描边胶囊 */
-    var tg = it.tg || [];
+    /* 标签徽章（与静态首屏 card_html 同构）：范围在前 accent tint，样式中性 */
+    var tg = (it.sc || []).concat(it.st || []);
     if (tg.length) {
       for (var bi = 0; bi < tg.length; bi++) {
         var bd = document.createElement("i");
+        if (bi < (it.sc || []).length) bd.className = "sc";
         bd.textContent = tg[bi];
         tagsEl.appendChild(bd);
       }
@@ -483,9 +491,13 @@
       var parts = [];
       var qv = ((q && q.value) ? q.value : state.q).trim();
       if (qv) parts.push("q=" + encodeURIComponent(qv));
-      if (state.tags) {
-        parts.push("tag=" + encodeURIComponent(state.tags.join("|")));
-        if (state.tagStrict) parts.push("mode=strict");
+      if (state.scope) {
+        parts.push("scope=" + encodeURIComponent(state.scope.join("|")));
+        if (state.scopeStrict) parts.push("smode=strict");
+      }
+      if (state.style) {
+        parts.push("style=" + encodeURIComponent(state.style.join("|")));
+        if (state.styleStrict) parts.push("tmode=strict");
       }
       if (state.from) parts.push("from=" + encodeURIComponent(state.from));
       if (state.to) parts.push("to=" + encodeURIComponent(state.to));
@@ -515,10 +527,8 @@
     if (next) next.disabled = state.page >= pages;
     paintNums(state.page, pages);
     if (count) {
-      /* tags=null = 标签全选（不筛选）；空数组同样视为不筛选（与 pass() 一致）。
-         旧代码写的是 state.tag !== "*"——该字段不存在恒为真，导致无筛选时
-         也显示「匹配 N / N 张」而非「共 N 张」 */
-      var filtered = !!(state.q || state.tags || state.from || state.to || state.color);
+      /* 组内全选（null）= 该组不筛选；两组皆无选中且无其他条件 → 「共 N 张」 */
+      var filtered = !!(state.q || state.scope || state.style || state.from || state.to || state.color);
       count.textContent = filtered ? "匹配 " + list.length + " / " + ITEMS.length + " 张"
                                    : "共 " + ITEMS.length + " 张";
     }
@@ -528,49 +538,61 @@
   }
   function resetPage() { state.page = 1; render(); }
 
-  /* ── 标签多选（正向选择，2026-10-14 与 MacroBiodiv RSS 配置页统一）：
-     chips 的 aria-pressed 是真源。默认全不选（构建期即 pressed=false）= 不筛选，
-     点击选中/取消（选中值之间 OR）、全选/反选；全选态等同不过滤，URL 不带 tag 参数 ── */
-  var tagBox = document.querySelector('.chips[data-key="tag"]');
-  function tagChips() { return tagBox ? tagBox.querySelectorAll("button.chip[data-v]") : []; }
-  function readTags() {
-    if (!tagBox) return;
-    var sel = [], c = tagChips();
-    c.forEach(function (b) { if (b.getAttribute("aria-pressed") === "true") sel.push(b.getAttribute("data-v")); });
-    state.tags = (sel.length === 0 || sel.length === c.length) ? null : sel;
-  }
-  function writeTags() {
-    tagChips().forEach(function (b) {
-      b.setAttribute("aria-pressed", String(!!state.tags && state.tags.indexOf(b.getAttribute("data-v")) > -1));
-    });
-  }
-  function writeStrict() {
-    var b = tagBox ? tagBox.querySelector('.chip-act[data-act="strict"]') : null;
-    if (!b) return;
-    b.setAttribute("data-on", String(state.tagStrict));
-    b.setAttribute("aria-pressed", String(state.tagStrict));
-    b.title = state.tagStrict
-      ? "严格模式开：图片携带的每个标签都必须被选中（点击关闭）"
-      : "严格模式：图片携带的每个标签都必须被选中，带任一未选中标签的图会被排除";
-  }
-  if (tagBox) tagBox.addEventListener("click", function (e) {
-    var act = e.target.closest ? e.target.closest(".chip-act") : null;
-    if (act) {
-      var a = act.getAttribute("data-act");
-      if (a === "strict") {
-        state.tagStrict = !state.tagStrict;
-        writeStrict();
+  /* ── 标签双轨多选（正向选择，2026-10-14 与 MacroBiodiv RSS 配置页统一）：
+     范围/样式各一个 .chips[data-key] 容器，行为一致 —— 组内选中值 OR、
+     全选/反选、独立严格开关（严格=图片携带的该组每个标签都必须被选中，
+     带任一未选中标签的图排除）。chips 的 aria-pressed 是唯一真源；
+     全选态等同不过滤，URL 不带该组参数 ── */
+  var TAG_GROUPS = [];
+  ["scope", "style"].forEach(function (gk) {
+    var box = document.querySelector('.chips[data-key="' + gk + '"]');
+    if (!box) return;
+    var strictKey = gk + "Strict";
+    function chips() { return box.querySelectorAll("button.chip[data-v]"); }
+    var group = {
+      key: gk, box: box,
+      read: function () {
+        var sel = [], c = chips();
+        c.forEach(function (b) { if (b.getAttribute("aria-pressed") === "true") sel.push(b.getAttribute("data-v")); });
+        state[gk] = (sel.length === 0 || sel.length === c.length) ? null : sel;
+      },
+      write: function () {
+        chips().forEach(function (b) {
+          b.setAttribute("aria-pressed", String(!!state[gk] && state[gk].indexOf(b.getAttribute("data-v")) > -1));
+        });
+      },
+      writeStrict: function () {
+        var b = box.querySelector('.chip-act[data-act="strict"]');
+        if (!b) return;
+        b.setAttribute("data-on", String(state[strictKey]));
+        b.setAttribute("aria-pressed", String(state[strictKey]));
+        b.title = state[strictKey]
+          ? "严格模式开：图片携带的该组每个标签都必须被选中（点击关闭）"
+          : "严格模式：图片携带的该组每个标签都必须被选中，带任一未选中标签的图会被排除";
+      },
+    };
+    box.addEventListener("click", function (e) {
+      var act = e.target.closest ? e.target.closest(".chip-act") : null;
+      if (act) {
+        var a = act.getAttribute("data-act");
+        if (a === "strict") {
+          state[strictKey] = !state[strictKey];
+          group.writeStrict();
+        } else {
+          var all = a === "all";
+          chips().forEach(function (b) { b.setAttribute("aria-pressed", String(all ? true : b.getAttribute("aria-pressed") !== "true")); });
+        }
       } else {
-        var all = a === "all";
-        tagChips().forEach(function (b) { b.setAttribute("aria-pressed", String(all ? true : b.getAttribute("aria-pressed") !== "true")); });
+        var chip = e.target.closest ? e.target.closest("button.chip[data-v]") : null;
+        if (!chip) return;
+        chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true"));
       }
-    } else {
-      var chip = e.target.closest ? e.target.closest("button.chip[data-v]") : null;
-      if (!chip) return;
-      chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true"));
-    }
-    readTags(); resetPage();
+      group.read(); resetPage();
+    });
+    TAG_GROUPS.push(group);
   });
+  function writeTags() { TAG_GROUPS.forEach(function (g) { g.write(); }); }
+  function writeStrict() { TAG_GROUPS.forEach(function (g) { g.writeStrict(); }); }
 
   if (q) {
     q.addEventListener("input", function () { state.q = q.value.trim().toLowerCase(); resetPage(); });
@@ -614,7 +636,8 @@
 
   var reset = document.getElementById("reset");
   if (reset) reset.addEventListener("click", function () {
-    state = { q: "", tags: null, tagStrict: false, from: "", to: "", sort: state.sort, color: "", tol: 60, minpct: 0, page: 1, per: state.per };
+    state = { q: "", scope: null, style: null, scopeStrict: false, styleStrict: false,
+              from: "", to: "", sort: state.sort, color: "", tol: 60, minpct: 0, page: 1, per: state.per };
     setCrgb(); syncColorUI(); writeTags(); writeStrict();
     var fF = document.getElementById("f-from"), fT = document.getElementById("f-to");
     if (fF) fF.value = "";
@@ -700,11 +723,14 @@
   var filterBox = document.getElementById("filters");
   function activeFilters() {
     var parts = [];
-    if (state.tags) {
-      var selT2 = state.tags;
-      parts.push("标签 " + (state.tagStrict ? "严格 · " : "") + (selT2.length <= 3 ? selT2.join("、")
-        : selT2.slice(0, 3).join("、") + " 等 " + selT2.length + " 项"));
-    }
+    /* 双轨：范围/样式各报各的（严格标注随组） */
+    [["scope", "范围"], ["style", "样式"]].forEach(function (g) {
+      var sel = state[g[0]];
+      if (sel) {
+        parts.push(g[1] + " " + (state[g[0] + "Strict"] ? "严格 · " : "")
+          + (sel.length <= 3 ? sel.join("、") : sel.slice(0, 3).join("、") + " 等 " + sel.length + " 项"));
+      }
+    });
     if (state.from || state.to) parts.push("上传 " + (state.from || "…") + " ~ " + (state.to || "…"));
     if (state.q) parts.push("搜索 " + state.q);
     if (state.color) parts.push("颜色 " + state.color + " ±" + state.tol
@@ -734,11 +760,12 @@
   }
 
   /* 支持带参数的链接（标签跳转 / 分享筛选结果 / 返回恢复）：
-     /?tag=海冰&mode=strict&q=xxx&from=…&to=…&sort=added_asc&color=1F4E79&tol=60&page=3 */
+     /?scope=北极&style=双变量&smode=strict&q=xxx&from=…&to=…&sort=added_asc&color=1F4E79&tol=60&page=3
+     （旧单轨 ?tag=/mode= 链接兼容映射进双轨） */
   var applied = false;
   try {
     var params = new URLSearchParams(location.search);
-    ["q", "tag", "mode", "from", "to", "sort", "color", "tol", "pct", "page"].forEach(function (k) {
+    ["q", "scope", "style", "tag", "smode", "tmode", "mode", "from", "to", "sort", "color", "tol", "pct", "page"].forEach(function (k) {
       var v = params.get(k);
       if (!v) return;
       if (k === "page") {
@@ -770,19 +797,34 @@
         if (pv >= 0 && pv <= 100) { state.minpct = pv; if (state.color) applied = true; }
         return;
       }
-      if (k === "mode") {   // 标签匹配模式：strict=图片所有标签都必须在选中集内
-        if (v === "strict") { state.tagStrict = true; writeStrict(); applied = true; }
+      if (k === "smode" || k === "tmode" || k === "mode") {
+        /* 标签匹配模式：*=strict=该组图片的所有标签都必须在选中集内。
+           旧单轨 mode=strict 链接 → 应用到有选中的组（两组都有则都开） */
+        if (v === "strict") {
+          if (k === "smode" || (k === "mode" && !state.style)) state.scopeStrict = true;
+          if (k === "tmode" || (k === "mode" && (state.style || !state.scope))) state.styleStrict = true;
+          writeStrict(); applied = true;
+        }
         return;
       }
-      if (k === "tag") {   // 多选：tag=A|B|C（兼容旧的单值链接）
-        var names = String(v).split("|"), selT = [], c0 = tagChips();
-        c0.forEach(function (b) {
-          var on = names.indexOf(b.getAttribute("data-v")) > -1;
-          b.setAttribute("aria-pressed", String(on));
-          if (on) selT.push(b.getAttribute("data-v"));
+      if (k === "scope" || k === "style" || k === "tag") {
+        /* 双轨多选：scope=A|B / style=A|B；旧 tag= 按值归属映射进对应组 */
+        var names = String(v).split("|");
+        ["scope", "style"].forEach(function (gk) {
+          if (k !== "tag" && k !== gk) return;
+          var gbox = document.querySelector('.chips[data-key="' + gk + '"]');
+          if (!gbox) return;
+          var cs = gbox.querySelectorAll("button.chip[data-v]"), selG = [];
+          cs.forEach(function (b) {
+            var on = names.indexOf(b.getAttribute("data-v")) > -1;
+            b.setAttribute("aria-pressed", String(on));
+            if (on) selG.push(b.getAttribute("data-v"));
+          });
+          if (k === gk || selG.length) {
+            state[gk] = (selG.length === 0 || selG.length === cs.length) ? null : selG;
+            if (state[gk]) applied = true;
+          }
         });
-        state.tags = (selT.length === 0 || selT.length === c0.length) ? null : selT;
-        if (state.tags) applied = true;
         return;
       }
       applied = true;

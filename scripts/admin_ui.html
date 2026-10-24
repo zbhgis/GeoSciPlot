@@ -204,7 +204,8 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
       <button id="mReset">重置筛选</button>
       <span class="note" id="mCount"></span>
     </div>
-    <div class="mgroup" style="margin:0 0 14px"><span class="mlabel">标签</span><div class="chips" id="mTagChips"></div></div>
+    <div class="mgroup" style="margin:0 0 14px"><span class="mlabel">范围</span><div class="chips" id="mScopeChips"></div></div>
+    <div class="mgroup" style="margin:0 0 14px"><span class="mlabel">样式</span><div class="chips" id="mStyleChips"></div></div>
     <div class="row" style="margin:0 0 16px">
       <button id="btnSync">同步站点到服务器</button>
       <span class="note">把 site/ 推到服务器（需先在服务器 authorized_keys 里加本机公钥，见 README）</span>
@@ -342,18 +343,24 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 var pending = [];
 var status = {};
 var editOpen = null;
-var allTags = [];          // 图库里已有的全部标签（供点选）
-var sessionTags = [];      // 本次会话里新输入的标签——跨所有待发布表单共享为候选
+/* 标签双轨（2026-10-24）：范围/样式两组并行，各有「图库已有池 + 本会话新标签池」 */
+var allScope = [];         // 图库里已有的范围标签（供点选）
+var allStyle = [];         // 图库里已有的样式标签
+var sessionScope = [];     // 本次会话在范围组输入的新标签
+var sessionStyle = [];     // 本次会话在样式组输入的新标签
+var scopeTags = [];        // 范围白名单（/api/status 下发，旧格式 raw 标签归属切分用）
 var tagPickers = [];       // 存活的选择器实例（新标签出现时联动刷新）
 var doiIndex = {};         // 小写 DOI → [已入库的图片 id]（来自 /api/status 的 dois）
 
-/* 标签选择器：点选已有标签 + 输入新标签回车添加。返回 {node, get()} */
-function tagPicker(current, onChange) {
+/* 标签选择器：点选已有标签 + 输入新标签回车添加。返回 {node, get()}。
+   pool = {base: () => 候选基池, addSession: (t) => 记入该组的会话池} —— 双轨下
+   范围/样式各传各的池，新标签只进自己组 */
+function tagPicker(current, onChange, pool) {
   var sel = (current || []).slice();
   var known = [];
-  function rebuildKnown() {              // 图库标签 + 本会话新标签 + 自己已选
+  function rebuildKnown() {              // 组候选池 + 自己已选
     known = [];
-    (allTags || []).concat(sessionTags || []).concat(sel).forEach(function (t) {
+    ((pool && pool.base) ? pool.base() : []).concat(sel).forEach(function (t) {
       if (t && known.indexOf(t) === -1) known.push(t);
     });
   }
@@ -370,7 +377,7 @@ function tagPicker(current, onChange) {
     if (isNew) known.push(v);
     if (sel.indexOf(v) === -1) sel.push(v);
     inp.value = "";
-    if (isNew && sessionTags.indexOf(v) === -1) sessionTags.push(v);
+    if (isNew && pool && pool.addSession) pool.addSession(v);   // 新标签记入该组会话池
     render();
     if (onChange) onChange(sel);           // 持久化 + syncSessionTags（收敛没人用的标签）
     if (isNew) refreshTagPickers(self);    // ⚠️ 新标签必须在这里广播：syncSessionTags 的
@@ -409,20 +416,20 @@ function refreshTagPickers(except) {
     if (p !== except && p.refresh) p.refresh();
   }
 }
-/* 会话标签池收敛：只保留「仍被至少一张待发布图引用」的标签。
+/* 会话标签池收敛：只保留「仍被至少一张待发布图引用」的标签（双轨各组独立）。
    否则清空 raw / 移除图片后，输入过但已经没人用的标签会一直挂在候选里。
-   ⚠️ 必须在 pending 的 tags 变动**之后**调用。 */
+   ⚠️ 必须在 pending 的 scope/style 变动**之后**调用；数组原地收敛，
+   picker 的 base() 闭包引用不失效 */
 function syncSessionTags() {
-  var used = {};
+  var usedS = {}, usedT = {};
   (pending || []).forEach(function (p) {
-    String(p.tags || "").split("|").forEach(function (t) {
-      t = t.trim();
-      if (t) used[t] = 1;
-    });
+    String(p.scope || "").split("|").forEach(function (t) { t = t.trim(); if (t) usedS[t] = 1; });
+    String(p.style || "").split("|").forEach(function (t) { t = t.trim(); if (t) usedT[t] = 1; });
   });
-  var before = sessionTags.join("|");
-  sessionTags = sessionTags.filter(function (t) { return used[t]; });
-  if (sessionTags.join("|") !== before) refreshTagPickers(null);
+  var before = sessionScope.join("|") + "∥" + sessionStyle.join("|");
+  for (var i = sessionScope.length - 1; i >= 0; i--) if (!usedS[sessionScope[i]]) sessionScope.splice(i, 1);
+  for (var j = sessionStyle.length - 1; j >= 0; j--) if (!usedT[sessionStyle[j]]) sessionStyle.splice(j, 1);
+  if (sessionScope.join("|") + "∥" + sessionStyle.join("|") !== before) refreshTagPickers(null);
 }
 
 /* ── 待发布图的标签按内容 id 持久化（localStorage）──
@@ -437,11 +444,25 @@ function rawTagsAll() {
 function rawTagsWrite(obj) {
   try { localStorage.setItem(RAW_TAGS_KEY, JSON.stringify(obj)); } catch (e) {}
 }
-function rawTagsSet(id, tags) {
+/* 双轨读取：新格式 {s: 范围管道串, t: 样式管道串}；旧格式单串按范围白名单切分 */
+function rawTagsGet(id) {
+  var v = rawTagsAll()[id];
+  if (!v) return { s: "", t: "" };
+  if (typeof v === "string") {
+    var sArr = [], tArr = [];
+    v.split("|").forEach(function (x) {
+      x = x.trim(); if (!x) return;
+      (scopeTags.indexOf(x) > -1 ? sArr : tArr).push(x);
+    });
+    return { s: sArr.join("|"), t: tArr.join("|") };
+  }
+  return { s: v.s || "", t: v.t || "" };
+}
+function rawTagsSet(id, s, t) {
   if (!id) return;
   var o = rawTagsAll();
-  var v = String(tags || "").trim();
-  if (v) o[id] = v; else delete o[id];
+  var vs = String(s || "").trim(), vt = String(t || "").trim();
+  if (vs || vt) o[id] = { s: vs, t: vt }; else delete o[id];
   rawTagsWrite(o);
 }
 function rawTagsDel(ids) {
@@ -831,7 +852,9 @@ function loadStatus() {
     box.appendChild(ub);
     document.getElementById("initBox").style.display = s.isRepo ? "none" : "block";
     document.getElementById("remote").value = s.defaultRemote || "";
-    allTags = s.tags || [];
+    allScope = s.scope || [];
+    allStyle = s.style || [];
+    scopeTags = s.scopeTags || [];
     doiIndex = s.dois || {};
     refreshAllDoiHints();          // 图库变了 → 已填的 DOI 提示要跟着重算
     refreshTagPickers(null);       // 图库标签变了 → 打开中的选择器候选跟着重算
@@ -1343,18 +1366,28 @@ function buildItemNode(rec) {
     onInput: function () { refreshAllDoiHints(); }   // 必须重算全部：同批互查靠它
   });
 
-  var tagBox = el("div", "full");
-  tagBox.appendChild(el("label", "", "标签 tags（点选已有，或输入新标签后回车）"));
-  var savedTags = String(rawTagsAll()[rec.id] || "").split("|").map(function (s) { return s.trim(); })
-                   .filter(Boolean);          // 刷新前输过的标签，按内容 id 恢复
-  var tp = tagPicker(savedTags, function (sel) {
-    rec.tags = sel.join("|");
-    rawTagsSet(rec.id, rec.tags);            // 随内容 id 持久化，刷新不丢
-    syncSessionTags();                       // 没人引用的标签从候选池收敛掉
-  });
-  if (savedTags.length) rec.tags = savedTags.join("|");
-  tagBox.appendChild(tp.node);
-  fields.appendChild(tagBox);
+  /* 双轨标签：范围/样式各一个选择器；留空的组在暂存/保存时自动兜底「待定」 */
+  function tagField(labelText, key, pool, savedStr) {
+    var box = el("div", "full");
+    box.appendChild(el("label", "", labelText));
+    var savedArr = String(savedStr || "").split("|").map(function (x) { return x.trim(); })
+                    .filter(Boolean);          // 刷新前输过的标签，按内容 id 恢复
+    var tp = tagPicker(savedArr, function (selArr) {
+      rec[key] = selArr.join("|");
+      rawTagsSet(rec.id, rec.scope || "", rec.style || "");   // 随内容 id 持久化，刷新不丢
+      syncSessionTags();                       // 没人引用的标签从候选池收敛掉
+    }, pool);
+    if (savedArr.length) rec[key] = savedArr.join("|");
+    box.appendChild(tp.node);
+    fields.appendChild(box);
+  }
+  var savedRT = rawTagsGet(rec.id);
+  tagField("范围 scope（点选已有，或输入新标签后回车；留空自动标「范围待定」）", "scope",
+    { base: function () { return allScope.concat(sessionScope); }, addSession: function (t) { sessionScope.push(t); } },
+    savedRT.s);
+  tagField("样式 style（点选已有，或输入新标签后回车；留空自动标「样式待定」）", "style",
+    { base: function () { return allStyle.concat(sessionStyle); }, addSession: function (t) { sessionStyle.push(t); } },
+    savedRT.t);
 
   right.appendChild(fields);
   node.appendChild(right);
@@ -1414,9 +1447,13 @@ function runJob(path, body, done, boxId) {
 }
 function collectItems() {
   return pending.map(function (p) {
+    var sc = (p.scope || "").split("|").map(function (t) { return t.trim(); }).filter(Boolean);
+    var st = (p.style || "").split("|").map(function (t) { return t.trim(); }).filter(Boolean);
     return {
       id: p.id,
-      tags: (p.tags || "").split("|").map(function (t) { return t.trim(); }).filter(Boolean),
+      /* 双轨兜底：两组各至少一个，留空自动标「待定」（后端 do_stage 还有二道保险） */
+      scope: sc.length ? sc : ["范围待定"],
+      style: st.length ? st : ["样式待定"],
       doi: p.doi || ""
     };
   });
@@ -1494,7 +1531,7 @@ document.getElementById("btnPush").addEventListener("click", function () {
 
 /* ── 图片管理（查 / 改 / 删 + 复刻主页的搜索筛选机制）── */
 var mItems = [];
-var mFilter = { q: "", tag: "*", from: "", to: "", doi: "*" };
+var mFilter = { q: "", scope: "*", style: "*", from: "", to: "", doi: "*" };
 var mPage = 1;
 var M_PER = 30;          // 图片管理每页条数：行含缩略图，整表渲染太重
 /* 分页条：上一页 / 页码（当前 ±2 窗口 + 首尾，间隔用 …）/ 下一页 + 位置信息；
@@ -1532,48 +1569,63 @@ function scrollListTop(id) {
 }
 function mFiltered() {
   return mItems.filter(function (it) {
-    if (mFilter.tag !== "*" && (it.tags || []).indexOf(mFilter.tag) === -1) return false;
+    if (mFilter.scope !== "*" && (it.scope || []).indexOf(mFilter.scope) === -1) return false;
+    if (mFilter.style !== "*" && (it.style || []).indexOf(mFilter.style) === -1) return false;
     if (mFilter.from && (it.added || "") < mFilter.from) return false;
     if (mFilter.to && (it.added || "") > mFilter.to) return false;
     if (mFilter.doi === "yes" && !it.doi) return false;
     if (mFilter.doi === "no" && it.doi) return false;
     if (mFilter.q) {
-      var hay = (it.id + " " + (it.doi || "") + " " + (it.title || "") + " " + (it.tags || []).join(" ")).toLowerCase();
+      var hay = (it.id + " " + (it.doi || "") + " " + (it.title || "") + " "
+        + (it.scope || []).join(" ") + " " + (it.style || []).join(" ")).toLowerCase();
       if (hay.indexOf(mFilter.q) === -1) return false;
     }
     return true;
   });
 }
 function mTagCounts() {
-  var c = {};
-  mItems.forEach(function (it) { (it.tags || []).forEach(function (t) { c[t] = (c[t] || 0) + 1; }); });
-  return c;
+  var cs = {}, ct = {};
+  mItems.forEach(function (it) {
+    (it.scope || []).forEach(function (t) { cs[t] = (cs[t] || 0) + 1; });
+    (it.style || []).forEach(function (t) { ct[t] = (ct[t] || 0) + 1; });
+  });
+  return { scope: cs, style: ct };
 }
 function mRenderChips() {
-  var box = document.getElementById("mTagChips");
-  if (!box) return;
   var counts = mTagCounts();
-  box.innerHTML = "";
-  var mk = function (label, val, n) {
-    var b = document.createElement("button");
-    b.type = "button";
-    b.setAttribute("aria-pressed", String(mFilter.tag === val));
-    /* 标签名是用户输入的自由文本，必须走 textContent —— innerHTML 会把它当
-       HTML 渲染，标签名形如 <img src=x onerror=…> 时直接在管理页注入元素 */
-    b.textContent = label;
-    if (n !== undefined) {
-      b.appendChild(document.createTextNode(" "));
-      b.appendChild(el("span", "n", String(n)));
-    }
-    b.addEventListener("click", function () {
-      mFilter.tag = (mFilter.tag === val ? "*" : val);
-      mPage = 1;                                 // 筛选变化：回到第一页
-      mRenderChips(); mRender();
-    });
-    box.appendChild(b);
-  };
-  mk("全部", "*");
-  Object.keys(counts).sort().forEach(function (t) { mk(t, t, counts[t]); });
+  /* 双轨两组 chips：范围组按白名单顺序（新增范围排后），样式组按数量降序 */
+  var scopeNames = (scopeTags || []).filter(function (t) { return counts.scope[t]; })
+    .concat(Object.keys(counts.scope).filter(function (t) { return scopeTags.indexOf(t) < 0; })
+      .sort(function (a, b2) { return counts.scope[b2] - counts.scope[a] || String(a).localeCompare(String(b2)); }));
+  var styleNames = Object.keys(counts.style).sort(function (a, b2) {
+    return counts.style[b2] - counts.style[a] || String(a).localeCompare(String(b2));
+  });
+  [["mScopeChips", "scope", counts.scope, scopeNames],
+   ["mStyleChips", "style", counts.style, styleNames]].forEach(function (g) {
+    var box = document.getElementById(g[0]);
+    if (!box) return;
+    box.innerHTML = "";
+    var mk = function (label, val, n) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(mFilter[g[1]] === val));
+      /* 标签名是用户输入的自由文本，必须走 textContent —— innerHTML 会把它当
+         HTML 渲染，标签名形如 <img src=x onerror=…> 时直接在管理页注入元素 */
+      b.textContent = label;
+      if (n !== undefined) {
+        b.appendChild(document.createTextNode(" "));
+        b.appendChild(el("span", "n", String(n)));
+      }
+      b.addEventListener("click", function () {
+        mFilter[g[1]] = (mFilter[g[1]] === val ? "*" : val);
+        mPage = 1;                                 // 筛选变化：回到第一页
+        mRenderChips(); mRender();
+      });
+      box.appendChild(b);
+    };
+    mk("全部", "*");
+    g[3].forEach(function (t) { mk(t, t, g[2][t]); });
+  });
 }
 function mWire() {
   var s = document.getElementById("mSearch");
@@ -1588,7 +1640,7 @@ function mWire() {
     f.addEventListener("change", function () { mFilter.from = f.value; mPage = 1; mRender(); });
     t.addEventListener("change", function () { mFilter.to = t.value; mPage = 1; mRender(); });
     r.addEventListener("click", function () {
-      mFilter = { q: "", tag: "*", from: "", to: "", doi: "*" };
+      mFilter = { q: "", scope: "*", style: "*", from: "", to: "", doi: "*" };
       s.value = ""; d.value = "*"; f.value = ""; t.value = "";
       mPage = 1;
       mRenderChips(); mRender();
@@ -1605,7 +1657,7 @@ function mWire() {
 function mRender() {
   var list = mFiltered();
   var c = document.getElementById("mCount");
-  if (c) c.textContent = (mFilter.q || mFilter.tag !== "*" || mFilter.from || mFilter.to || mFilter.doi !== "*")
+  if (c) c.textContent = (mFilter.q || mFilter.scope !== "*" || mFilter.style !== "*" || mFilter.from || mFilter.to || mFilter.doi !== "*")
     ? "匹配 " + list.length + " / " + mItems.length + " 张" : "共 " + mItems.length + " 张";
   var pages = Math.max(1, Math.ceil(list.length / M_PER));
   if (mPage > pages) mPage = pages;               // 删除等操作后条数变少：页码回缩
@@ -1660,7 +1712,8 @@ function manageRow(it) {
   }
   info.appendChild(doiLine);
   info.appendChild(el("div", "", "添加：" + (it.added || "—")));
-  info.appendChild(el("div", "", "标签：" + ((it.tags || []).join("、") || "—")));
+  info.appendChild(el("div", "", "范围：" + ((it.scope || []).join("、") || "—")));
+  info.appendChild(el("div", "", "样式：" + ((it.style || []).join("、") || "—")));
   node.appendChild(info);
 
   var act = el("div", "mact");
@@ -1707,11 +1760,18 @@ function openEdit(node, it) {
   }
   field("DOI doi", "doi", { placeholder: "10.xxxx/xxxxx" });
 
-  var tagBox = el("div", "full");
-  tagBox.appendChild(el("label", "", "标签 tags（点选已有，或输入新标签后回车）"));
-  var tp = tagPicker(it.tags || [], function (sel) { it.tags = sel; });
-  tagBox.appendChild(tp.node);
-  form.appendChild(tagBox);
+  /* 双轨标签编辑：范围/样式各一个选择器；留空的组保存时由后端兜底「待定」 */
+  function editTagField(labelText, key, pool) {
+    var box = el("div", "full");
+    box.appendChild(el("label", "", labelText));
+    var tp = tagPicker(it[key] || [], function (sel) { it[key] = sel; }, pool);
+    box.appendChild(tp.node);
+    form.appendChild(box);
+  }
+  editTagField("范围 scope（点选已有，或输入新标签后回车）", "scope",
+    { base: function () { return allScope.concat(sessionScope); }, addSession: function (t) { sessionScope.push(t); } });
+  editTagField("样式 style（点选已有，或输入新标签后回车）", "style",
+    { base: function () { return allStyle.concat(sessionStyle); }, addSession: function (t) { sessionStyle.push(t); } });
 
   var btnRow = el("div", "full");
   btnRow.style.display = "flex";
@@ -1728,7 +1788,7 @@ function openEdit(node, it) {
     save.textContent = "暂存中…";
     /* 暂存 = 纯本地写 titles.csv + refs.json，毫秒级同步返回，不构建不推送。
        连续改多条都很快，改完到上方点「一键推送全部」统一发布 */
-    api("/api/save", { items: [{ id: it.id, tags: it.tags, doi: it.doi }] }).then(function (r) {
+    api("/api/save", { items: [{ id: it.id, scope: it.scope || [], style: it.style || [], doi: it.doi }] }).then(function (r) {
       if (!r || !r.ok) {
         toast("暂存失败：" + ((r && r.error) || "未知错误"));
         save.disabled = false; save.textContent = "暂存保存";

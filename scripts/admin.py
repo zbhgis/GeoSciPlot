@@ -50,6 +50,7 @@ from PIL import Image, ImageOps  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from render_md import plain_text  # noqa: E402  字数统计与构建同源（含导流模板剥离）
+from site_common import SCOPE_TAGS  # noqa: E402  标签双轨的范围白名单（prepare/构建同一份）
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "raw"
@@ -65,9 +66,13 @@ DEFAULT_REMOTE = "git@github.com:zbhgis/GeoSciPlot.git"
 MAX_BODY = 200 * 1024 * 1024          # 单次请求体上限
 MAX_FETCH = 30 * 1024 * 1024          # 单张远程图片的下载上限
 SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
-CSV_FIELDS = ["id", "tags", "doi"]
+# 标签双轨（2026-10-24，与 site_common/prepare 同一套）：范围/样式两类并行，
+# 每张图两类各至少一个；缺类在 do_stage / do_save 兜底成「待定」
+CSV_FIELDS = ["id", "scope", "style", "doi"]
 MANUAL_TEXT = ("doi",)
-MANUAL_LIST = ("tags",)
+MANUAL_LIST = ("scope", "style")
+SCOPE_TBD = "范围待定"
+STYLE_TBD = "样式待定"
 IMG_TYPES = {".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg",
              ".jpeg": "image/jpeg", ".gif": "image/gif"}
 
@@ -213,7 +218,10 @@ def repo_state() -> dict:
         "dirty": dirty,
         "unpushed": unpushed,
         "count": len(items),
-        "tags": sorted({t for i in items for t in (i.get("tags") or [])}),
+        "scope": sorted({t for i in items for t in (i.get("scope") or [])}),
+        "style": sorted({t for i in items for t in (i.get("style") or [])}),
+        # 范围白名单：管理界面给旧格式 raw 标签做归属切分用（site_common 同一份）
+        "scopeTags": SCOPE_TAGS,
         "dois": dois,
         "defaultRemote": DEFAULT_REMOTE,
     }
@@ -524,6 +532,7 @@ def do_update(updates: list[dict]) -> dict:
         fid = (u.get("id") or "").strip()
         if not fid:
             continue
+        ensure_tbd(u)
         upd_map[fid] = {k: u[k] for k in list(MANUAL_TEXT) + list(MANUAL_LIST) if k in u}
     if not upd_map:
         return {"ok": False, "log": [{"step": "更新元数据", "ok": False, "out": "没有可更新的字段"}]}
@@ -664,6 +673,15 @@ def pipeline_after_content(log: list[dict], message: str, push: bool, sync: bool
     return {"ok": True, "log": log}
 
 
+def ensure_tbd(it: dict) -> None:
+    """双轨兜底：两类各至少一个标签，缺的补「待定」（前端已兜底，这里是后端保险，
+    防止手改 CSV / 直接调 API 漏字段）。原地修改。"""
+    if not [t for t in (it.get("scope") or []) if str(t).strip()]:
+        it["scope"] = [SCOPE_TBD]
+    if not [t for t in (it.get("style") or []) if str(t).strip()]:
+        it["style"] = [STYLE_TBD]
+
+
 def apply_items_to_csv(items: list[dict]) -> int:
     """把「待发布表单」的元数据写进 titles.csv（保留未提及字段的旧值）。"""
     fields, rows = read_titles()
@@ -675,16 +693,18 @@ def apply_items_to_csv(items: list[dict]) -> int:
         fid = (it.get("id") or "").strip()
         if not fid:
             continue
+        ensure_tbd(it)
         row = rows.get(fid, {k: "" for k in fields})
         for k in ("doi",):
             v = (it.get(k) or "").strip()
             if v:
                 row[k] = v
-        tags = it.get("tags")
-        if isinstance(tags, list):
-            tags = "|".join(t.strip() for t in tags if str(t).strip())
-        if tags:
-            row["tags"] = str(tags)
+        for k in MANUAL_LIST:
+            v = it.get(k)
+            if isinstance(v, list):
+                v = "|".join(t.strip() for t in v if str(t).strip())
+            if v:
+                row[k] = str(v)
         row["id"] = fid
         rows[fid] = row
         written += 1

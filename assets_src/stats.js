@@ -21,7 +21,7 @@
   const LOCAL = location.hostname.match(/^(localhost|127\.0\.0\.1|)$/);
   const API = window.GSP_STATS_API || "";
   const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const state = { tag: "*", ar: "*", from: "", to: "" };
+  const state = { scope: "*", style: "*", ar: "*", from: "", to: "" };
 
   /* 分类调色板（暗色亮色各一档，与站点 token 同源）：环形图 / hero 顶条 / 词云共用 */
   const PAL = [["#58a6ff", "#0969da"], ["#3fb950", "#1a7f37"], ["#a371f7", "#8250df"],
@@ -52,7 +52,8 @@
     sel.innerHTML = `<option value="*">全部</option>` +
       values.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
   }
-  fillSelect(el("st-tag"), [...new Set(DATA.flatMap((d) => d.tg || []))].sort());
+  fillSelect(el("st-scope"), [...new Set(DATA.flatMap((d) => d.sc || []))].sort());
+  fillSelect(el("st-style"), [...new Set(DATA.flatMap((d) => d.st || []))].sort());
   fillSelect(el("st-ar"), [...new Set(DATA.map((d) => d.ar).filter(Boolean))].sort());
 
   function filtered() {
@@ -60,7 +61,8 @@
        但保留月精度兜底：将来若只到月（YYYY-MM），按整月区间 [月初, 月底] 与
        筛选区间取重叠 —— 字符串比较即可，"-31" 只是月内上界、不校验真实历法 */
     return DATA.filter((d) => {
-      if (state.tag !== "*" && (d.tg || []).indexOf(state.tag) === -1) return false;
+      if (state.scope !== "*" && (d.sc || []).indexOf(state.scope) === -1) return false;
+      if (state.style !== "*" && (d.st || []).indexOf(state.style) === -1) return false;
       if (state.ar !== "*" && d.ar !== state.ar) return false;
       if (state.from || state.to) {
         const v = d.ad || "";
@@ -445,12 +447,13 @@
     renderGrowth(el("st-growth"), list);
     renderColorCard(list);
     renderColorBars(list);                   // 高频颜色：具体色号出现次数 Top 10
-    renderCloud(el("st-cloud"), countBy(list, (d) => d.tg, 34));
+    renderCloud(el("st-scloud"), countBy(list, (d) => d.sc, 20));
+    renderCloud(el("st-tcloud"), countBy(list, (d) => d.st, 34));
   }
 
   /* ── hero 总览（全量口径）── */
   countUp(el("stv-items"), DATA.length);
-  countUp(el("stv-tags"), new Set(DATA.flatMap((d) => d.tg || []).filter(Boolean)).size);
+  countUp(el("stv-tags"), new Set(DATA.flatMap((d) => (d.sc || []).concat(d.st || [])).filter(Boolean)).size);
   /* 最近更新日期 = 最大的上传日期；YYYY-MM-DD 可直接字符串比较 */
   el("stv-latest").textContent
     = DATA.reduce((m, d) => (d.ad && d.ad > m ? d.ad : m), "") || "—";
@@ -516,13 +519,14 @@
     b.addEventListener("click", () => blFamToggle(b.dataset.fam)));
 
   /* ── 筛选事件 ── */
-  el("st-tag").addEventListener("change", (e) => { state.tag = e.target.value; render(); });
+  el("st-scope").addEventListener("change", (e) => { state.scope = e.target.value; render(); });
+  el("st-style").addEventListener("change", (e) => { state.style = e.target.value; render(); });
   el("st-ar").addEventListener("change", (e) => { state.ar = e.target.value; render(); });
   el("st-from").addEventListener("input", (e) => { state.from = e.target.value.trim(); render(); });
   el("st-to").addEventListener("input", (e) => { state.to = e.target.value.trim(); render(); });
   el("st-reset").addEventListener("click", () => {
-    state.tag = "*"; state.ar = "*"; state.from = ""; state.to = "";
-    el("st-tag").value = "*"; el("st-ar").value = "*";
+    state.scope = "*"; state.style = "*"; state.ar = "*"; state.from = ""; state.to = "";
+    el("st-scope").value = "*"; el("st-style").value = "*"; el("st-ar").value = "*";
     el("st-from").value = ""; el("st-to").value = "";
     render();
   });

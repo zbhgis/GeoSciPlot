@@ -38,6 +38,7 @@ from PIL import Image, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from colors import extract_colors  # noqa: E402  主色提取（存入 refs.json 的 colors 字段）
+from site_common import SCOPE_SET, SCOPE_TBD, STYLE_TBD  # noqa: E402  标签双轨白名单
 
 
 def safe_colors(path: Path) -> list:
@@ -69,13 +70,13 @@ DISP_Q = 82             # 展示档 WebP 质量
 DISP_EDGE = 1600
 DISP_BYTES = 512 * 1024
 
+# ── 标签双轨（2026-10-24 重构）：范围/样式两类并行，每张图两类各至少一个 ──
+# 白名单与待定文案见 site_common.py（pages.py 共用同一份）
 SUPPORTED = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
 
 # 人工可编辑字段（CSV 列 → refs.json 字段）
 MANUAL_FIELDS = ["doi"]
-MANUAL_LIST_FIELDS = ["tags"]
-# 仅保留历史数据、不再在前端使用（迁移期兼容）
-KEEP_FIELDS = []
+MANUAL_LIST_FIELDS = ["scope", "style"]
 
 
 def file_id(path: Path) -> str:
@@ -108,7 +109,7 @@ def load_titles() -> dict[str, dict]:
             if not fid:
                 continue
             rec: dict = {}
-            for k in MANUAL_FIELDS + KEEP_FIELDS:
+            for k in MANUAL_FIELDS:
                 v = (row.get(k) or "").strip()
                 if v:
                     rec[k] = v
@@ -121,15 +122,17 @@ def load_titles() -> dict[str, dict]:
 
 
 def export_titles(items: list[dict]) -> None:
-    """导出人工编辑表（utf-8-sig：Excel 打开中文不乱码）。"""
+    """导出人工编辑表（utf-8-sig：Excel 打开中文不乱码）。
+    列序与 admin.py 的 CSV_FIELDS 一致：id, scope, style, doi。"""
     TITLES_CSV.parent.mkdir(parents=True, exist_ok=True)
-    cols = ["id"] + MANUAL_FIELDS + KEEP_FIELDS + MANUAL_LIST_FIELDS
+    cols = ["id"] + MANUAL_LIST_FIELDS + MANUAL_FIELDS
     with TITLES_CSV.open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
         w.writerow(cols)
         for it in items:
-            w.writerow([it.get("id", ""), it.get("doi", ""),
-                        "|".join(it.get("tags", []))])
+            w.writerow([it.get("id", ""),
+                        "|".join(it.get("scope") or []), "|".join(it.get("style") or []),
+                        it.get("doi", "")])
     print(f"导出编辑表 → {TITLES_CSV.relative_to(ROOT)}（Excel 编辑后重跑本脚本即回填）")
 
 
@@ -260,7 +263,47 @@ def main() -> int:
     ap.add_argument("--backfill-disp", action="store_true",
                     help="只补详情页展示档（raw/ 为空的存量库专用）：不重跑缩略图、"
                          "不清理任何文件，refs.json 仅新增 disp 字段")
+    ap.add_argument("--migrate-tags", action="store_true",
+                    help="一次性迁移（2026-10-24 双轨标签）：把 items[].tags 按范围"
+                         "白名单拆成 scope/style 两字段，缺类补「范围待定/样式待定」，"
+                         "并重写 titles.csv 为 id,doi,scope,style 四列")
     args = ap.parse_args()
+
+    # ── 一次性迁移：放在所有 guard 之前，raw/ 为空也能跑 ──
+    if args.migrate_tags:
+        existing = load_existing()
+        if not existing:
+            print("! refs.json 为空或不存在，无需迁移")
+            return 0
+        already = all("scope" in it and "style" in it and "tags" not in it
+                      for it in existing.values())
+        if already:
+            print("· 已是双轨格式，无需迁移")
+            return 0
+        n_sc = n_st = 0
+        for it in existing.values():
+            tags = it.pop("tags", None) or []      # 旧单轨字段一律移除
+            if "scope" not in it or "style" not in it:
+                scope = [t for t in tags if t in SCOPE_SET]
+                style = [t for t in tags if t not in SCOPE_SET]
+                if not scope:
+                    scope, n_sc = [SCOPE_TBD], n_sc + 1
+                if not style:
+                    style, n_st = [STYLE_TBD], n_st + 1
+                it["scope"], it["style"] = scope, style
+        items_sorted = sorted(existing.values(),
+                              key=lambda x: (x.get("added", ""), x["id"]), reverse=True)
+        payload = {"generated": date.today().isoformat(), "count": len(items_sorted),
+                   "thumbMax": THUMB_MAX, "items": items_sorted}
+        tmp = REFS_JSON.parent / (REFS_JSON.name + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                       encoding="utf-8")
+        tmp.replace(REFS_JSON)
+        export_titles(items_sorted)
+        print(f"· 迁移完成：{len(items_sorted)} 条 → scope/style 双轨"
+              f"（补「{SCOPE_TBD}」{n_sc} 张 · 补「{STYLE_TBD}」{n_st} 张），"
+              f"titles.csv 已重写为 id,doi,scope,style")
+        return 0
 
     for d in (THUMB_DIR, DISP_DIR, FULL_DIR, META_DIR):
         d.mkdir(parents=True, exist_ok=True)
@@ -365,7 +408,10 @@ def main() -> int:
         item = {
             "id": fid,
             "doi": manual.get("doi") or old.get("doi", ""),
-            "tags": manual.get("tags") or old.get("tags", []),
+            # 双轨标签：两类各至少一个（CSV > 旧值 > 待定兜底；新入库未分类的图
+            # 落「待定」，可在管理界面按待定筛出来补齐）
+            "scope": manual.get("scope") or old.get("scope") or [SCOPE_TBD],
+            "style": manual.get("style") or old.get("style") or [STYLE_TBD],
             "width": w,
             "height": h,
             "ext": ext,

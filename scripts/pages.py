@@ -11,7 +11,7 @@ import re
 from collections import Counter
 from urllib.parse import quote
 
-from site_common import PAGE_SIZE, ROOT, SITE_URL, asset_ver, doi_bare, esc
+from site_common import PAGE_SIZE, ROOT, SCOPE_TAGS, SITE_URL, asset_ver, doi_bare, esc
 
 # 作者实体：与主站 /about 的 Person 共用同一 URL 与 sameAs，把子域内容归因到
 # 同一作者（E-E-A-T / GEO）。站点是品牌，publisher 仍用 Organization。
@@ -174,19 +174,17 @@ def flat(values, default: str = "—") -> Counter:
     return Counter([str(v) if v else default for v in values])
 
 
-# 标签面板第一排固定为「区域/尺度」组（人工策展顺序：全球 → 大洲 → 中国地图 → 其他），
-# 其余标签按热度进第二排；库里暂不存在的固定项不渲染（点不出结果）
-PINNED_TAGS = ["全球陆地", "全球海洋", "北极", "南极", "美国", "欧洲", "亚洲", "非洲",
-               "横版中国地图", "竖版中国地图", "半球", "沿海"]
+# 范围组固定顺序（site_common.SCOPE_TAGS，用户策展：全球 → 大洲 → 中国地图 →
+# 其他）；样式组按热度排序。库里暂不存在的固定项不渲染（点不出结果）
 
 
 def chips(values: Counter, key: str, pinned: list[str] | None = None) -> str:
     """多选标签 chips（正向选择语义，2026-10-14 与 MacroBiodiv 统一）：默认全不选，
-    点击=选中该标签（选中值之间 OR）；全选/反选/严格 单独一排收尾。
-    严格=图片携带的每个标签都必须被选中（带任一未选中标签的图排除）。
-    pinned 给定时分组：固定组一排（按给定顺序）、其余标签一排（数量降序）、
-    操作按钮一排。三排同在 .chips[data-key] 容器内 —— gallery.js 的容器级
-    事件委托与 querySelectorAll 均不受分组影响。"""
+    点击=选中该标签（组内选中值之间 OR）；全选/反选/严格 单独一排收尾，每组独立。
+    严格=图片携带的该组每个标签都必须被选中（带任一未选中标签的图排除）。
+    pinned 给定时：固定组一排（按给定顺序）+ 其余一排（数量降序）+ 操作一排；
+    否则标签一排 + 操作一排。全部同在 .chips[data-key] 容器内 —— gallery.js 的
+    容器级事件委托与 querySelectorAll 均不受分组影响。"""
     def chip_btn(name: str, n: int) -> str:
         return (f'<button type="button" class="chip" data-v="{esc(name)}" aria-pressed="false">'
                 f'{esc(name)}<i class="n">{n}</i></button>')
@@ -203,16 +201,15 @@ def chips(values: Counter, key: str, pinned: list[str] | None = None) -> str:
         row2 = [chip_btn(name, cnt) for name, cnt in
                 sorted(((k, v) for k, v in values.items() if k not in pinned_set),
                        key=lambda kv: (-kv[1], str(kv[0])))]
-        return (f'<div class="chips" data-key="{key}">\n'
-                f'  <div class="chips-row">\n    ' + "\n    ".join(row1) + '\n  </div>\n'
-                f'  <div class="chips-row">\n    ' + "\n    ".join(row2) + '\n  </div>\n'
-                f'  <div class="chips-row chips-act-row">\n    ' + "\n    ".join(act_btns()) + '\n  </div>\n'
-                f'</div>')
-
-    items = [chip_btn(name, n) for name, n in
-             sorted(values.items(), key=lambda kv: (-kv[1], str(kv[0])))]
-    items += act_btns()
-    return f'<div class="chips" data-key="{key}">\n  ' + "\n  ".join(items) + "\n</div>"
+        rows = [row1, row2]
+    else:
+        rows = [[chip_btn(name, n) for name, n in
+                 sorted(values.items(), key=lambda kv: (-kv[1], str(kv[0])))]]
+    rows.append(act_btns())
+    inner = "".join(
+        f'  <div class="chips-row{" chips-act-row" if r is rows[-1] else ""}">\n    '
+        + "\n    ".join(r) + '\n  </div>\n' for r in rows)
+    return f'<div class="chips" data-key="{key}">\n{inner}</div>'
 
 
 def filter_row(label: str, inner: str) -> str:
@@ -220,10 +217,12 @@ def filter_row(label: str, inner: str) -> str:
 
 
 def card_html(item: dict, base: str) -> str:
-    tags = item.get("tags") or []
+    scope = [str(t) for t in (item.get("scope") or [])]
+    style = [str(t) for t in (item.get("style") or [])]
+    tags = scope + style
     cap = " · ".join(tags) if tags else "—"
     # alt 用语义标签（图片搜索/读屏的主入口），哈希 id 只做无标签时的兜底
-    alt = " · ".join(str(t) for t in tags) if tags else f"图 {item['id']}"
+    alt = " · ".join(tags) if tags else f"图 {item['id']}"
     # width/height 取 refs.json 里的真实尺寸：加载前预留同比例空间（零抖动），
     # .c-covbox::before 的「加载中」层在图片画出前可见（CSS 同款占位语言）
     w, h = int(item.get("width") or 0), int(item.get("height") or 0)
@@ -233,9 +232,10 @@ def card_html(item: dict, base: str) -> str:
     # LCP 也不必等 JS 跑起来。data-rel 保留——逐源降级靠它换下一个源。
     thumb = str(item.get("thumb") or "")
     src = f' src="{esc(base + "/" + thumb)}"' if thumb else ""
-    # 标签做成 accent 描边徽章（同 MacroBiodiv .c-j 语言）：flex-wrap 换行，
-    # 多标签不再被单行截断；无标签回落一条弱化的 —
-    badges = "".join(f"<i>{esc(str(t))}</i>" for t in tags) or '<i class="none">—</i>'
+    # 徽章 flex-wrap 换行：范围在前（accent tint 轻微区分），样式在后中性；
+    # 双轨迁移后每张图必有两类徽章，无「—」兜底路径（保留防御不删）
+    badges = ("".join(f'<i class="sc">{esc(t)}</i>' for t in scope)
+              + "".join(f"<i>{esc(t)}</i>" for t in style)) or '<i class="none">—</i>'
     return f"""  <a class="card" href="{esc(item['id'])}/" data-id="{esc(item['id'])}" title="{esc(' · '.join(tags))}">
     <span class="c-covbox"><img{src} data-rel="{esc(item.get('thumb'))}"{dims} alt="{esc(alt)}" loading="lazy"></span>
     <span class="cap"><span class="tags">{badges}</span></span>
@@ -262,10 +262,14 @@ fbB.setAttribute("aria-expanded","false")}}
 var q=P.get("q");if(q){var qi=document.getElementById("q");if(qi)qi.value=q}
 ["from","to"].forEach(function(k){var v=P.get(k);if(v){
 var el=document.getElementById("f-"+k);if(el)el.value=v}});
-var t=P.get("tag");if(t){var names=t.split("|");
-document.querySelectorAll('#filters .chips[data-key="tag"] button.chip[data-v]')
-.forEach(function(b){b.setAttribute("aria-pressed",
-String(names.indexOf(b.getAttribute("data-v"))>-1))})}
+/* 双轨标签恢复：scope=/style= 各自多值（| 分隔）；旧 tag= 链接按值归属
+   映射到对应组（范围池命中→scope，否则→style），历史分享链接不断链 */
+["scope","style","tag"].forEach(function(k){var v=P.get(k);if(!v)return;
+v.split("|").forEach(function(name){
+var sel='button.chip[data-v="'+name+'"]';
+var b=document.querySelector('.chips[data-key="scope"] '+sel)
+    ||document.querySelector('.chips[data-key="style"] '+sel);
+if(b)b.setAttribute("aria-pressed","true")})});
 var c=String(P.get("color")||"").replace(/^#/,"");
 if(/^[0-9a-fA-F]{6}$/.test(c)){c="#"+c.toUpperCase();
 var ci=document.getElementById("f-color");if(ci)ci.value=c;
@@ -290,10 +294,13 @@ if(pSel)pSel.value=String(pp)}
 
 
 def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
-    tag_counter: Counter = Counter()
+    scope_counter: Counter = Counter()
+    style_counter: Counter = Counter()
     for it in items:
-        for t in it.get("tags", []):
-            tag_counter[str(t)] += 1
+        for t in it.get("scope") or []:
+            scope_counter[str(t)] += 1
+        for t in it.get("style") or []:
+            style_counter[str(t)] += 1
 
     # 首屏静态渲染，其余交给 JS（1000 张时也只输出 48 个卡片节点）
     first_page = items[:PAGE_SIZE]
@@ -336,7 +343,8 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
   + ' <span class="flabel" style="min-width:auto">占比≥</span>'
   + '<input type="range" id="f-minpct" class="tolrange" min="0" max="100" value="0" aria-label="命中主色的最小占比">'
   + '<span id="f-minpctval">0%</span>')}
-{filter_row("标签", chips(tag_counter, "tag", pinned=PINNED_TAGS))}
+{filter_row("范围", chips(scope_counter, "scope", pinned=SCOPE_TAGS))}
+{filter_row("样式", chips(style_counter, "style"))}
 {filter_row("上传", '<input type="date" id="f-from" class="dateinp">\n'
   + ' <span class="flabel" style="min-width:auto">至</span>\n'
   + '<input type="date" id="f-to" class="dateinp">\n'
@@ -399,7 +407,8 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
             "numberOfItems": len(items),
             "itemListElement": [
                 {"@type": "ListItem", "position": i + 1,
-                 "name": (" · ".join(str(t) for t in (it.get("tags") or [])) or f"图 {it['id']}"),
+                 "name": (" · ".join([str(t) for t in (it.get("scope") or [])]
+                                     + [str(t) for t in (it.get("style") or [])]) or f"图 {it['id']}"),
                  "url": f"{SITE_URL}/{it['id']}/"}
                 for i, it in enumerate(items)],
         },
@@ -435,7 +444,8 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
         label = "下一张" if to_next else "上一张"
         arrow = chev_r if to_next else chev_l
         inner = (f'{label}{arrow}' if to_next else f'{arrow}{label}')
-        sub = " · ".join(it_.get("tags") or []) or (it_.get("doi") or "—")
+        sub = " · ".join([str(t) for t in (it_.get("scope") or [])]
+                         + [str(t) for t in (it_.get("style") or [])]) or (it_.get("doi") or "—")
         return (f'<a class="{cls}" href="../{esc(it_["id"])}/">'
                 f'<span class="dir">{inner}</span>'
                 f'<span class="ttl">图 {esc(it_["id"])}</span>'
@@ -461,14 +471,15 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
              pn_item(next_it, True),
              '</div>']
 
-    # 标签做成可跳转：点击回到首页并自动套用该标签的搜索
-    tags = it.get("tags", [])
-    if tags:
-        tags_html = "".join(
-            f'<a class="tag" href="/?tag={quote(str(t), safe="")}">{esc(t)}</a>' for t in tags
-        )
-    else:
-        tags_html = "—"
+    # 标签双轨：范围/样式两行各自可点跳转（点击回首页并套用对应组的筛选）
+    scope = [str(t) for t in (it.get("scope") or [])]
+    style = [str(t) for t in (it.get("style") or [])]
+    scope_html = "".join(
+        f'<a class="tag" href="/?scope={quote(t, safe="")}">{esc(t)}</a>' for t in scope
+    ) or "—"
+    style_html = "".join(
+        f'<a class="tag" href="/?style={quote(t, safe="")}">{esc(t)}</a>' for t in style
+    ) or "—"
 
     # refs.json 里 DOI 可能存的是完整 URL（管理端按粘贴原样入库），
     # 统一剥掉前缀再用，避免拼出 https://doi.org/https://doi.org/… 的坏链
@@ -483,8 +494,8 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
                 'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
                 '<path d="M10 3 5 8l5 5"/></svg>')
     # 语义串：title/alt/ImageObject name 共用。哈希 id 对搜索引擎和 AI 无语义，
-    # 标签（主题 · 图表类型）才是图片搜索与语义检索的入口；无标签时退回 id。
-    sem = " · ".join(str(t) for t in tags)
+    # 范围+样式（主题 · 图表类型）才是图片搜索与语义检索的入口；无标签时退回 id。
+    sem = " · ".join(scope + style)
     main_alt = sem if sem else f"图 {it['id']}"
     full_url = f"{abs_base}/{it.get('full', '')}"
     thumb_url = f"{abs_base}/{it.get('thumb', '')}"
@@ -515,14 +526,14 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
   <dt>DOI</dt><dd>{doi_html}</dd>
   <dt>上传日期</dt><dd>{esc(it.get('added'))}</dd>
   <dt>被浏览</dt><dd><span id="views">…</span></dd>
-  <dt>标签</dt><dd>{tags_html}</dd>{swatches_row}
+  <dt>范围</dt><dd>{scope_html}</dd>
+  <dt>样式</dt><dd>{style_html}</dd>{swatches_row}
 </dl>
 {chr(10).join(pager)}"""
     gh_img = "https://github.com/{}/{}/blob/{}/images/{}".format(
         cfg.get("owner") or "OWNER", cfg["repo"], cfg.get("branch", "main"), it.get("full", ""))
-    tags = [str(t) for t in it.get("tags", [])]
     added = str(it.get("added") or "")
-    desc_parts = [t for t in [" · ".join(tags), added, f"图 {it['id']}"] if t]
+    desc_parts = [t for t in [" · ".join(scope + style), added, f"图 {it['id']}"] if t]
     detail_desc = (" · ".join(desc_parts) + f" · DOI: {doi_bare(it.get('doi'))}" if it.get("doi") else " · ".join(desc_parts)) or cfg["lede"]
     image_ld = json.dumps({
         "@context": "https://schema.org",
@@ -534,7 +545,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
         "thumbnailUrl": thumb_url,
         "uploadDate": added,
         "url": f"{SITE_URL}/{it['id']}/",
-        "keywords": ", ".join(tags),
+        "keywords": ", ".join(scope + style),
         "inLanguage": "zh-CN",
         "author": {"@type": "Organization", "name": cfg.get("title", "geosciplot"), "url": SITE_URL},
     }, ensure_ascii=False)
@@ -732,8 +743,10 @@ def build_stats_page(cfg: dict, items: list[dict]) -> str:
 <div class="st-ranks" id="st-rank"><p class="st-none">加载中…</p></div></section>
 
 <div class="st-filter">
-  <span class="st-fgroup"><span class="flabel">标签</span>
-    <select id="st-tag" aria-label="按标签筛选"><option value="*">全部</option></select></span>
+  <span class="st-fgroup"><span class="flabel">范围</span>
+    <select id="st-scope" aria-label="按范围筛选"><option value="*">全部</option></select></span>
+  <span class="st-fgroup"><span class="flabel">样式</span>
+    <select id="st-style" aria-label="按样式筛选"><option value="*">全部</option></select></span>
   <span class="st-fgroup"><span class="flabel">画幅</span>
     <select id="st-ar" aria-label="按画幅筛选"><option value="*">全部</option></select></span>
   <span class="st-fgroup"><span class="flabel">上传</span>
@@ -761,8 +774,9 @@ def build_stats_page(cfg: dict, items: list[dict]) -> str:
       {st_bl_buttons}
     </div>
     <div class="st-bars" id="st-bars"></div></section>
-  <section class="st-card st-wide"><h3>标签词云<em>字号随收录张数</em></h3>
-    <div class="st-cloud" id="st-cloud"></div></section>
+  <section class="st-card st-wide"><h3>标签词云<em>上：范围 · 下：样式 · 字号随收录张数</em></h3>
+    <div class="st-cloud" id="st-scloud"></div>
+    <div class="st-cloud" id="st-tcloud"></div></section>
 </div>
 <p class="st-cta">想找某张图？<a href="../search/">去全站搜索</a>，或回<a href="../">图库首页</a>按标签浏览，去<a href="../color-lab/">色彩实验</a>取色调色。</p>"""
     return page_shell(cfg, "全站统计", body, depth=1,
