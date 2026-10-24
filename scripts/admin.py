@@ -15,7 +15,11 @@
        「一键推送全部」= 把所有已暂存/已保存的变更一次性：prepare 增量入库
        → 构建站点 → git 提交推送 →（可选）同步服务器
     4. raw 暂存区：查看 raw/ 里全部文件（含已发布图的副本，可筛选/单个删除），一键清空 raw/
-    5. 点「保存并推送」→ 自动执行：写 meta/titles.csv → prepare.py → build_site.py
+    5. 制图经验文章（content/guide/*.md，mystation admin-server 同款交互）：列表搜索 /
+       行内改元数据（frontmatter，日期联动文件名前缀）/ 正文浮层编辑器（.bak 自动备份 +
+       mtime 乐观锁）/ 新建（frontmatter 自动生成）/ 删除进本机回收站（content/.trash/guide/）
+       与恢复；改动只落本地文件，随「一键推送全部」流水线统一发布
+    6. 点「保存并推送」→ 自动执行：写 meta/titles.csv → prepare.py → build_site.py
        → git add / commit / push →（可选）同步到服务器
 
 为什么不需要登录：服务只监听 127.0.0.1，物理上只有本机能连；推送用你本机已配置的
@@ -43,6 +47,9 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 
 from PIL import Image, ImageOps  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from render_md import plain_text  # noqa: E402  字数统计与构建同源（含导流模板剥离）
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "raw"
@@ -830,6 +837,358 @@ def do_fetch_image(query: dict) -> tuple[int, bytes, str]:
     return 200, data, (ctype or "image/png")
 
 
+# ────────────────────────── 制图经验文章管理 ──────────────────────────
+# content/guide/*.md 的本地增删改查，交互照搬 mystation 的 admin-server：
+# 列表（默认只读）· 行内改元数据（frontmatter）· 正文浮层编辑器（frontmatter
+# 分离保留）· 新建（frontmatter 自动生成）· 删除进本机回收站 + 恢复。
+# 所有改动都只是本地文件写（毫秒级）；构建与推送走既有「一键推送全部」流水线，
+# 单次编辑不触发 git —— 与图库的「暂存 → 一键推送」同一节奏。
+
+GUIDE_DIR = ROOT / "content" / "guide"
+ARTICLE_TRASH = ROOT / "content" / ".trash" / "guide"   # 本机回收站（gitignore，不进仓库）
+FM_OPEN_RE = re.compile(r"\A[\s\uFEFF]*---[ \t]*\r?\n")
+ARTICLE_MAX = 2 * 1024 * 1024          # 单篇读写上限（与 mystation admin-server 一致）
+
+
+def article_safe_name(name: str) -> str:
+    """文件名清洗：只留 basename、去路径成分与非法字符，缺 .md 补上。"""
+    name = (name or "").strip().replace("\\", "/").split("/")[-1]
+    name = re.sub(r'[<>:"|?*\x00-\x1f]', "", name).strip()
+    if not name:
+        return ""
+    if not name.lower().endswith(".md"):
+        name += ".md"
+    return name
+
+
+def _under_dir(path: Path, d: Path) -> bool:
+    """路径必须落在目录内（防目录穿越；d 需为已解析的绝对路径）。"""
+    try:
+        path.resolve().relative_to(d.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def split_front_matter(text: str) -> tuple[str, str, str]:
+    """拆 frontmatter → (fm 块含首尾 ---（无尾换行）, --- 行尾换行, 正文)。
+    分隔换行必须与正文分开保真：重写元数据按 `fm + sep + body` 拼回才能逐字节
+    还原（有的文章 closing --- 后带空行，无脑拼 `---\n` 会把它吃掉）。
+    无 frontmatter 时前两项为空串。"""
+    m = FM_OPEN_RE.match(text)
+    if not m:
+        return "", "", text
+    rest = text[m.end():]
+    close = re.search(r"\r?\n---[ \t]*(?=\r?\n)", rest)      # closing --- 行（后面还有内容）
+    if close is None:
+        close = re.search(r"\r?\n---[ \t]*\Z", rest)          # 文件恰在 --- 结束
+        if close is None:
+            return "", "", text
+        return "---\n" + rest[:close.start()] + "\n---", "", ""
+    after = rest[close.end():]
+    nl = re.match(r"\r?\n", after)
+    return ("---\n" + rest[:close.start()] + "\n---",
+            nl.group(0) if nl else "",
+            after[1:] if nl else after)
+
+
+def parse_fm_fields(fm_block: str) -> dict:
+    """frontmatter → {title, date, categoryTags: [...], subCategoryTags: [...]}。
+    极简 YAML 子集（数组优先按 JSON 解析，退回逗号拆分），与 render_md 同口径。"""
+    out: dict = {"title": "", "date": "", "categoryTags": [], "subCategoryTags": []}
+    for line in fm_block.splitlines():
+        if ":" not in line or line.strip().startswith("---"):
+            continue
+        key, _, val = line.partition(":")
+        key, val = key.strip(), val.strip()
+        if key not in out:
+            continue
+        if isinstance(out[key], list):
+            try:
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    out[key] = [str(x).strip() for x in parsed if str(x).strip()]
+                    continue
+            except ValueError:
+                pass
+            out[key] = [x.strip().strip('"').strip("'")
+                        for x in val.strip().strip("[]").split(",") if x.strip()]
+        else:
+            out[key] = val.strip().strip('"').strip("'")
+    return out
+
+
+def build_front_matter(meta: dict) -> str:
+    """元数据 → 规范 frontmatter 块（双引号标量 + JSON 数组，与存量文章同款）。"""
+    def q(s: str) -> str:
+        return '"' + str(s or "").replace('"', "'") + '"'
+    lines = ["---",
+             f"title: {q(meta.get('title', ''))}",
+             f"date: {q(meta.get('date', ''))}"]
+    for k in ("categoryTags", "subCategoryTags"):
+        tags = meta.get(k) or []
+        lines.append(f"{k}: [" + ", ".join(q(t) for t in tags) + "]")
+    lines.append("---")
+    return "\n".join(lines)          # 不带尾换行 —— 拼回时用 split_front_matter 的 sep 保真
+
+
+def _fm_title(meta: dict, body: str, stem: str) -> str:
+    """标题兜底链与构建一致：frontmatter title > 正文首个 # 标题 > 文件名。"""
+    if meta.get("title"):
+        return str(meta["title"])
+    h1 = re.search(r"(?m)^#\s+(.+)$", body)
+    return (h1.group(1).strip() if h1 else "") or stem
+
+
+def article_record(path: Path) -> dict | None:
+    """列表行：文件名 + 元数据 + slug / 字数 / 大小 / 修改时间。"""
+    try:
+        st = path.stat()
+        text = path.read_text(encoding="utf-8").replace("\uFEFF", "")
+    except (OSError, UnicodeDecodeError):
+        return None
+    fm, _sep, body = split_front_matter(text)
+    meta = parse_fm_fields(fm)
+    m_date = re.match(r"^(\d{4}-\d{2}-\d{2})-(.+)$", path.stem)
+    # 字数与构建同口径（剥标记纯文本；plain_text 自带 frontmatter 剥离与模板段过滤）
+    try:
+        words = len(plain_text(body).strip())
+    except Exception:
+        words = len(re.sub(r"\s", "", body))
+    return {"file": path.name,
+            "title": _fm_title(meta, body, path.stem),
+            "date": meta.get("date") or (m_date.group(1) if m_date else ""),
+            "categoryTags": meta.get("categoryTags") or [],
+            "subCategoryTags": meta.get("subCategoryTags") or [],
+            "slug": m_date.group(2) if m_date else path.stem,
+            "sizeBytes": st.st_size, "mtimeMs": round(st.st_mtime * 1000),
+            "words": words}
+
+
+def article_trash_list() -> list[dict]:
+    """content/.trash/guide/ 下的已删文章（本机回收站）。"""
+    out: list[dict] = []
+    if ARTICLE_TRASH.is_dir():
+        for md in ARTICLE_TRASH.glob("*.md"):
+            try:
+                st = md.stat()
+                text = md.read_text(encoding="utf-8").replace("\uFEFF", "")
+            except (OSError, UnicodeDecodeError):
+                continue
+            fm, _sep, body = split_front_matter(text)
+            out.append({"name": md.name, "title": _fm_title(parse_fm_fields(fm), body, md.stem),
+                        "sizeBytes": st.st_size, "mtimeMs": round(st.st_mtime * 1000)})
+    out.sort(key=lambda r: r["mtimeMs"], reverse=True)
+    return out
+
+
+def do_articles_list() -> dict:
+    arts: list[dict] = []
+    if GUIDE_DIR.is_dir():
+        for md in GUIDE_DIR.glob("*.md"):
+            rec = article_record(md)
+            if rec:
+                arts.append(rec)
+    arts.sort(key=lambda r: (r["date"], r["file"]), reverse=True)
+    return {"articles": arts, "trash": article_trash_list()}
+
+
+def _article_path(file: str) -> tuple[Path | None, str]:
+    """清洗并解析文章绝对路径；返回 (路径, 错误信息)。防目录穿越。"""
+    fname = article_safe_name(file)
+    if not fname:
+        return None, "文件名不合法"
+    p = (GUIDE_DIR / fname)
+    if not _under_dir(p, GUIDE_DIR):
+        return None, "非法路径"
+    return p, ""
+
+
+def do_article_read(file: str) -> dict:
+    """正文预览/编辑：frontmatter 与正文分体返回（编辑器只编辑正文）。"""
+    p, err = _article_path(file)
+    if err:
+        return {"ok": False, "error": err}
+    if not p.is_file():
+        return {"ok": False, "error": "文件不存在（可能已删除）"}
+    try:
+        st = p.stat()
+        if st.st_size > ARTICLE_MAX:
+            return {"ok": False, "error": "文件超过 2MB，不支持在线编辑"}
+        raw = p.read_text(encoding="utf-8").replace("\uFEFF", "")
+    except (OSError, UnicodeDecodeError) as e:
+        return {"ok": False, "error": f"读取失败：{e}"}
+    fm, _sep, body = split_front_matter(raw)
+    meta = parse_fm_fields(fm)
+    return {"ok": True, "file": p.name, "title": _fm_title(meta, body, p.stem),
+            "meta": meta, "frontmatter": fm, "body": body,
+            "sizeBytes": st.st_size, "mtimeMs": round(st.st_mtime * 1000)}
+
+
+def _mtime_conflict(p: Path, expected) -> str:
+    """乐观锁（mystation 同款）：expected 带了且与当前 mtime 对不上 → 提示冲突。
+    防两处静默覆盖：另一标签页保存过 / 外部编辑器改过文件。"""
+    if expected in (None, ""):
+        return ""
+    try:
+        cur = round(p.stat().st_mtime * 1000)
+    except OSError:
+        return "文件已不存在（可能被删除或移入回收站）——请刷新列表"
+    if abs(cur - float(expected)) > 1:
+        return ("文章已在后台被更新（其他标签页或外部编辑器），当前编辑已过期——"
+                "刷新列表取最新内容后重做，避免覆盖他人改动")
+    return ""
+
+
+def _backup_md(p: Path) -> None:
+    """写回前备份上一版为同名 .bak（覆盖式单份）：手滑改坏时有一步回退。"""
+    if p.exists():
+        p.with_name(p.name + ".bak").write_bytes(p.read_bytes())
+
+
+def do_article_save(file: str, body: str, expected_mtime) -> dict:
+    """保存正文：只写正文，文件自己的 frontmatter 原样保留。"""
+    p, err = _article_path(file)
+    if err:
+        return {"ok": False, "error": err}
+    if not p.is_file():
+        return {"ok": False, "error": "文件不存在（可能已删除）"}
+    if conflict := _mtime_conflict(p, expected_mtime):
+        return {"ok": False, "conflict": True, "error": conflict}
+    if len(body or "") > ARTICLE_MAX:
+        return {"ok": False, "error": "正文超过 2MB"}
+    try:
+        raw = p.read_text(encoding="utf-8").replace("\uFEFF", "")
+        fm, sep, _ = split_front_matter(raw)
+        _backup_md(p)
+        # 正文里的 BOM 一并剥掉（Windows 剪贴板常带，卡在行首会让 ^ 锚点失配）
+        p.write_text(fm + sep + (body or "").replace("\uFEFF", ""),
+                     encoding="utf-8", newline="\n")
+    except OSError as e:
+        return {"ok": False, "error": f"写入失败：{e}"}
+    return {"ok": True, "mtimeMs": round(p.stat().st_mtime * 1000)}
+
+
+def do_article_meta(file: str, meta: dict, expected_mtime) -> dict:
+    """行内元数据编辑：重写 frontmatter（title/date/两级标签），正文原样保留。
+
+    文件名日期前缀是排序与 slug 的真正来源（构建优先取它），只改 frontmatter
+    date 会造成「列表显示新日期、站点仍旧日期」的静默不一致 —— 前缀存在时
+    随 date 一起重命名文件，保持单一口径。"""
+    p, err = _article_path(file)
+    if err:
+        return {"ok": False, "error": err}
+    if not p.is_file():
+        return {"ok": False, "error": "文件不存在（可能已删除）"}
+    if conflict := _mtime_conflict(p, expected_mtime):
+        return {"ok": False, "conflict": True, "error": conflict}
+
+    new_meta = {
+        "title": str((meta or {}).get("title") or "").strip(),
+        "date": str((meta or {}).get("date") or "").strip()[:10],
+        "categoryTags": [str(t).strip() for t in ((meta or {}).get("categoryTags") or []) if str(t).strip()],
+        "subCategoryTags": [str(t).strip() for t in ((meta or {}).get("subCategoryTags") or []) if str(t).strip()],
+    }
+    if not new_meta["title"]:
+        return {"ok": False, "error": "标题不能为空"}
+    if new_meta["date"] and not re.match(r"^\d{4}-\d{2}-\d{2}$", new_meta["date"]):
+        return {"ok": False, "error": "日期格式应为 YYYY-MM-DD"}
+
+    try:
+        raw = p.read_text(encoding="utf-8").replace("\uFEFF", "")
+        _, sep, body = split_front_matter(raw)
+        renamed = ""
+        m_date = re.match(r"^(\d{4}-\d{2}-\d{2})-(.+)$", p.stem)
+        if new_meta["date"] and m_date and m_date.group(1) != new_meta["date"]:
+            target = GUIDE_DIR / f"{new_meta['date']}-{m_date.group(2)}.md"
+            if target.exists():
+                return {"ok": False, "error": f"目标文件名已存在：{target.name}（改日期会重命名文件，但同名文件已在）"}
+            old_bak = p.with_name(p.name + ".bak")
+            p.rename(target)
+            if old_bak.exists():                 # .bak 跟着文件改名，避免旧名孤儿备份散在目录里
+                old_bak.rename(target.with_name(target.name + ".bak"))
+            p = target
+            renamed = target.name
+        # 备份放在改名**之后**：.bak 必须跟最终文件名配对，否则改名场景下旧名 .bak 会失配
+        _backup_md(p)
+        p.write_text(build_front_matter(new_meta) + sep + body, encoding="utf-8", newline="\n")
+    except OSError as e:
+        return {"ok": False, "error": f"写入失败：{e}"}
+    return {"ok": True, "file": p.name, "renamed": renamed,
+            "mtimeMs": round(p.stat().st_mtime * 1000)}
+
+
+def do_article_new(title: str, slug: str, date: str, category_tags, sub_tags) -> dict:
+    """新建文章：frontmatter 自动生成，文件名 = 日期前缀 + 语义 slug（构建同款）。"""
+    title = (title or "").strip()
+    if not title:
+        return {"ok": False, "error": "标题不能为空"}
+    date = (date or "").strip() or time.strftime("%Y-%m-%d")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+        return {"ok": False, "error": "日期格式应为 YYYY-MM-DD（或留空用今天）"}
+    # slug 是 URL 的一部分（/guide/<slug>/）：只留 URL 安全字符
+    slug = re.sub(r"[^a-zA-Z0-9-]+", "-", (slug or "").strip()).strip("-").lower()
+    if not slug:
+        return {"ok": False, "error": "slug 只能含英文字母 / 数字 / 连字符"}
+    GUIDE_DIR.mkdir(parents=True, exist_ok=True)
+    target = GUIDE_DIR / f"{date}-{slug}.md"
+    if target.exists():
+        return {"ok": False, "error": f"同名文件已存在：{target.name}"}
+    meta = {"title": title, "date": date,
+            "categoryTags": [str(t).strip() for t in (category_tags or []) if str(t).strip()],
+            "subCategoryTags": [str(t).strip() for t in (sub_tags or []) if str(t).strip()]}
+    try:
+        target.write_text(build_front_matter(meta) + "\n" + f"# {title}\n\n",
+                          encoding="utf-8", newline="\n")
+    except OSError as e:
+        return {"ok": False, "error": f"创建失败：{e}"}
+    return {"ok": True, "file": target.name, "slug": slug}
+
+
+def do_article_delete(file: str) -> dict:
+    """删除 = 移入本机回收站 content/.trash/guide/（mystation 同款软删除）。
+    不动 git、不构建 —— 线上下线随下一次「推送文章改动」生效。"""
+    p, err = _article_path(file)
+    if err:
+        return {"ok": False, "error": err}
+    if not p.is_file():
+        return {"ok": False, "error": "文件不存在（可能已删除）"}
+    ARTICLE_TRASH.mkdir(parents=True, exist_ok=True)
+    target = ARTICLE_TRASH / p.name
+    if target.exists():
+        target = ARTICLE_TRASH / f"{p.stem}.deleted-{int(time.time())}.md"
+    try:
+        p.rename(target)
+        bak = p.with_name(p.name + ".bak")      # .bak 随正文一起进回收站，恢复时才不散架
+        if bak.exists():
+            bak.rename(ARTICLE_TRASH / bak.name)
+    except OSError as e:
+        return {"ok": False, "error": f"移动失败：{e}"}
+    return {"ok": True, "trashName": target.name}
+
+
+def do_article_restore(name: str) -> dict:
+    """从回收站恢复。原文件名被占时改用 .restored-<时间戳> 名（如实告知）。"""
+    fname = article_safe_name(name)
+    if not fname:
+        return {"ok": False, "error": "文件名不合法"}
+    src = ARTICLE_TRASH / fname
+    if not _under_dir(src, ARTICLE_TRASH) or not src.is_file():
+        return {"ok": False, "error": "回收站中不存在该文件"}
+    GUIDE_DIR.mkdir(parents=True, exist_ok=True)
+    dest = GUIDE_DIR / fname
+    if dest.exists():
+        dest = GUIDE_DIR / f"{Path(fname).stem}.restored-{int(time.time())}.md"
+    try:
+        src.rename(dest)
+        bak = src.with_name(src.name + ".bak")   # .bak 跟着恢复，名字对齐恢复后的文件名
+        if bak.exists():
+            bak.rename(dest.with_name(dest.name + ".bak"))
+    except OSError as e:
+        return {"ok": False, "error": f"恢复失败：{e}"}
+    return {"ok": True, "file": dest.name}
+
+
 # ────────────────────────── HTTP ──────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
@@ -927,6 +1286,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json(load_refs())
         elif path == "/api/raw":
             self._json(do_raw_list())
+        elif path == "/api/articles":
+            self._json(do_articles_list())
+        elif path == "/api/article/trash":
+            self._json({"items": article_trash_list()})
+        elif path == "/api/article":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            self._json(do_article_read((q.get("file") or [""])[0]))
         elif path.startswith("/api/job/"):
             self._json(job_snapshot(path[len("/api/job/"):]))
         elif path == "/api/fetch-image":
@@ -966,6 +1332,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "error": "已有发布/推送任务在运行，等它结束后再保存"})
             else:
                 self._json(do_update(body.get("items") or []))
+        elif path.startswith("/api/article/"):
+            # 文章增删改都是本地文件写（毫秒级），同步返回；
+            # 流水线正在跑时拒绝 —— content/guide 可能正被构建读取
+            if PIPELINE_LOCK.locked():
+                self._json({"ok": False, "error": "已有发布/推送任务在运行，等它结束后再操作文章"})
+            elif path == "/api/article/save":
+                self._json(do_article_save(body.get("file") or "", body.get("body") or "",
+                                           body.get("expectedMtimeMs")))
+            elif path == "/api/article/meta":
+                self._json(do_article_meta(body.get("file") or "", body.get("meta") or {},
+                                           body.get("expectedMtimeMs")))
+            elif path == "/api/article/new":
+                self._json(do_article_new(body.get("title") or "", body.get("slug") or "",
+                                          body.get("date") or "",
+                                          body.get("categoryTags"), body.get("subCategoryTags")))
+            elif path == "/api/article/delete":
+                self._json(do_article_delete(body.get("file") or ""))
+            elif path == "/api/article/restore":
+                self._json(do_article_restore(body.get("name") or ""))
+            else:
+                self._send(404, b"not found", "text/plain; charset=utf-8")
         elif path in ("/api/publish", "/api/stage", "/api/deploy", "/api/delete",
                       "/api/sync-server", "/api/init", "/api/push"):
             # 长操作：立即返回任务号，后台线程执行，前端轮询 /api/job/<id>

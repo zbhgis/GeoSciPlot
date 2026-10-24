@@ -106,6 +106,36 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
 .pager button.on{color:var(--accent);border-color:var(--accent)}
 .pager .info,.pager .pggap{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint)}
 .pager .info{margin-left:6px}
+/* 制图经验文章管理（mystation admin-ui 同款交互：表格默认只读 → 点「编辑」解锁单行 + 正文浮层编辑器） */
+.atbl{margin-top:14px;border:1px solid var(--line);border-radius:8px;overflow-x:auto}
+.atbl table{border-collapse:collapse;width:100%;min-width:820px}
+.atbl th{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;font-weight:500;letter-spacing:.06em;color:var(--faint);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.atbl td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:12.5px}
+.atbl tbody tr:last-child td{border-bottom:none}
+.atbl tbody tr:hover{background:var(--card)}
+.atbl tr.editing{background:var(--card);box-shadow:inset 2px 0 0 var(--accent)}
+.atbl .fname{font-size:13px;max-width:230px;overflow-wrap:anywhere}
+.atbl .fmeta{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;color:var(--faint);margin-top:2px;white-space:nowrap}
+.atbl td input{width:100%;min-width:96px;padding:5px 8px;font-size:12px}
+.atbl td input[readonly]{border-color:transparent;cursor:default}
+.atbl td input[readonly]:hover{border-color:var(--line2)}
+.atbl td.act{white-space:nowrap}
+.atbl td.act .btns{display:inline-flex;gap:6px}
+.npform{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 0;padding:12px 14px;border:1px dashed var(--line2);border-radius:8px;background:var(--card)}
+.npform input{width:190px}
+.npform .nplabel{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint)}
+/* 正文编辑器浮层：只编辑正文，frontmatter 由行内「编辑」管理（保存时原样保留） */
+#editorMask{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;z-index:98}
+#editorMask.on{display:block}
+.editor{position:absolute;inset:3vh 4vw;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line2);border-radius:10px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.editor .ehead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.editor .etitle{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.editor .emeta{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--faint);white-space:nowrap}
+.editor .espacer{flex:1}
+.editor textarea{flex:1;resize:none;width:100%;min-height:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.7;padding:12px;color:var(--text);background:var(--card);border:1px solid var(--line2);border-radius:6px}
+.editor textarea:focus{outline:none;border-color:var(--accent)}
+.editor .efoot{display:flex;align-items:center;gap:12px;margin-top:10px}
+.editor .efoot #editorStatus{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -127,6 +157,7 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
   <div class="tabs">
     <button class="tab active" data-tab="add">添加图片</button>
     <button class="tab" data-tab="manage">图片管理</button>
+    <button class="tab" data-tab="articles">制图经验</button>
     <button class="tab" data-tab="raw">raw 暂存区</button>
   </div>
 
@@ -188,6 +219,58 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
     <div id="manageList"><p class="note">读取中…</p></div>
   </div>
 
+  <div class="tabpage" id="tab-articles" style="display:none">
+    <h2 style="margin-top:0">制图经验文章（content/guide/*.md）</h2>
+    <div class="row" style="margin:0 0 4px">
+      <input id="aSearch" placeholder="搜索 文件名 / 标题 / 标签 / slug…" style="flex:1 1 220px;max-width:320px" autocomplete="off">
+      <span class="note" id="aCount"></span>
+      <span style="flex:1"></span>
+      <span class="note" id="aStatus"></span>
+      <button id="aTrashBtn">回收站</button>
+      <button id="aNewBtn" class="primary">新建文章</button>
+    </div>
+
+    <div class="npform" id="aNewForm" style="display:none">
+      <span class="nplabel">标题</span>
+      <input id="npTitle" placeholder="文章标题" style="width:280px">
+      <span class="nplabel">slug</span>
+      <input id="npSlug" placeholder="URL 片段：英数与连字符" style="width:200px">
+      <span class="nplabel">日期</span>
+      <input id="npDate" type="date" style="width:150px">
+      <span class="nplabel">分类</span>
+      <input id="npCat" placeholder="逗号分隔，默认 科研" style="width:150px">
+      <span class="nplabel">二级标签</span>
+      <input id="npSub" placeholder="逗号分隔，可空" style="width:170px">
+      <button id="npCreate" class="primary">创建</button>
+      <button id="npCancel" class="tiny">收起</button>
+    </div>
+
+    <div class="atbl">
+      <table>
+        <thead><tr>
+          <th>文章</th><th style="width:220px">标题</th><th style="width:140px">日期</th>
+          <th style="width:120px">分类</th><th style="width:150px">二级标签</th><th>操作</th>
+        </tr></thead>
+        <tbody id="aRows"></tbody>
+      </table>
+    </div>
+    <p class="note" id="aEmpty" style="display:none">content/guide/ 下还没有文章。点「新建文章」创建，或把现有 md 放进该目录后点刷新。</p>
+
+    <div id="aTrashBox" style="display:none">
+      <h2>回收站（content/.trash/guide/ · 本机目录，git 不跟踪）</h2>
+      <div id="aTrashList"></div>
+    </div>
+
+    <h2>发布文章改动</h2>
+    <div class="row">
+      <input id="aMsg" style="flex:1 1 240px;max-width:360px" placeholder="提交信息（留空自动生成）">
+      <button class="primary" id="aDeploy">推送文章改动</button>
+      <span class="note">编辑只是改本地文件（毫秒级，不碰 git）；点此才生成站点 → git 提交推送 → 同步服务器。<br>
+        推送 / 同步开关沿用「添加图片」页发布区的勾选；推送期间文章编辑会暂时被拒绝。</span>
+    </div>
+    <div class="log" id="aLog"></div>
+  </div>
+
   <div class="tabpage" id="tab-raw" style="display:none">
     <h2 style="margin-top:0">raw 暂存区</h2>
     <p class="note">
@@ -230,8 +313,29 @@ input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1}
       连续改多少条都不用等；改完点<b>「一键推送全部」</b>，把所有暂存过的变更
       （含 raw/ 里未入库的图、其他图片的改动）一次性构建站点、提交推送并同步服务器。<br>
     · 删除图片会同时移除缩略图、原图副本、raw/ 原图与索引条目，并同步 GitHub。<br>
-    · 保存并推送 = 暂存 + 一键推送：写 meta/titles.csv → prepare.py → build_site.py → git add/commit/push →（可选）同步服务器。
+    · 保存并推送 = 暂存 + 一键推送：写 meta/titles.csv → prepare.py → build_site.py → git add/commit/push →（可选）同步服务器。<br>
+    · <b>制图经验页签</b>管理 content/guide/*.md（mystation 同款交互）：列表默认只读，点某行「编辑」解锁该行改元数据
+      （标题 / 日期 / 两级标签，改日期会同步重命名文件的日期前缀——构建排序与 slug 以文件名前缀为准），
+      「正文」打开浮层编辑器只改正文（frontmatter 原样保留，保存前自动备份 .bak，带 mtime 冲突检测防并发覆盖）；
+      「新建文章」自动生成 frontmatter 与 <b>日期-slug.md</b> 文件名；「删除」把 md 移入 content/.trash/guide/（本机回收站，git 不跟踪）可恢复。
+      文章改动都只写本地文件，点<b>「推送文章改动」</b>才构建站点并发布。
   </p>
+</div>
+
+<div id="editorMask">
+  <div class="editor">
+    <div class="ehead">
+      <span class="etitle" id="editorTitle"></span>
+      <span class="emeta" id="editorMeta"></span>
+      <span class="espacer"></span>
+      <button id="editorClose" class="tiny">关闭</button>
+    </div>
+    <textarea id="editorBody" spellcheck="false"></textarea>
+    <div class="efoot">
+      <span id="editorStatus"></span>
+      <button id="editorSave" class="primary">保存正文</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -393,13 +497,321 @@ function showTab(name) {
   });
   document.getElementById("tab-add").style.display = name === "add" ? "" : "none";
   document.getElementById("tab-manage").style.display = name === "manage" ? "" : "none";
+  document.getElementById("tab-articles").style.display = name === "articles" ? "" : "none";
   document.getElementById("tab-raw").style.display = name === "raw" ? "" : "none";
   if (name === "manage") loadItems();
+  if (name === "articles") { art.loaded = true; loadArticles(); }
   if (name === "raw") loadRaw();
 }
 document.querySelectorAll(".tab").forEach(function (t) {
   t.addEventListener("click", function () { showTab(t.getAttribute("data-tab")); });
 });
+
+/* ── 制图经验文章管理（mystation admin-server 同款交互）──
+   列表默认只读防误改；「编辑」解锁单行改元数据（frontmatter，日期联动文件名前缀）；
+   「正文」开浮层编辑器只改正文（frontmatter 原样保留，保存前自动备份 .bak，
+   带 mtime 乐观锁防并发覆盖）；删除进 content/.trash/guide/（本机回收站）可恢复；
+   所有改动只落本地文件，统一走「推送文章改动」发布。 */
+var art = { items: [], trash: [], filter: "", editing: null, dirty: false,
+            trashShown: false, loaded: false };
+var editorState = { file: null, mtimeMs: 0 };
+var ART_SITE = "https://geosciplot.zbhgis.com";   // 线上地址（gallery.config.json 未配 site_url 时的缺省）
+
+function aSetStatus(text, cls) {
+  var s = document.getElementById("aStatus");
+  s.textContent = text || "";
+  s.style.color = cls === "err" ? "var(--bad)" : (cls === "ok" ? "var(--ok)" : "");
+}
+
+function loadArticles() {
+  return api("/api/articles").then(function (r) {
+    art.items = r.articles || [];
+    art.trash = r.trash || [];
+    if (art.editing && !art.items.some(function (it) { return it.file === art.editing; }))
+      art.editing = null;                    // 正在编辑的行已不存在（删除 / 恢复竞争）
+    artRender();
+  });
+}
+
+function artVisible() {
+  var f = art.filter.trim().toLowerCase();
+  if (!f) return art.items;
+  return art.items.filter(function (it) {
+    return (it.file + " " + it.title + " " + it.slug + " " +
+            (it.categoryTags || []).join(" ") + " " + (it.subCategoryTags || []).join(" "))
+            .toLowerCase().indexOf(f) > -1;
+  });
+}
+
+function fmtBytes(n) { return n > 1024 ? (n / 1024).toFixed(1) + "KB" : n + "B"; }
+
+function artRender() {
+  var tbody = document.getElementById("aRows");
+  tbody.innerHTML = "";
+  var list = artVisible();
+  var lockOthers = art.editing !== null;
+  list.forEach(function (it) {
+    var editing = it.file === art.editing;
+    var tr = document.createElement("tr");
+    if (editing) tr.className = "editing";
+    tr.dataset.file = it.file;
+
+    var tdF = document.createElement("td");
+    tdF.appendChild(el("div", "fname", it.file));
+    tdF.appendChild(el("div", "fmeta", "/" + it.slug + "/ · " + fmtBytes(it.sizeBytes) +
+                                (it.words ? " · " + it.words + " 字" : "")));
+    tr.appendChild(tdF);
+
+    function mkInput(field, value, type) {
+      var inp = document.createElement("input");
+      inp.type = type || "text";
+      inp.dataset.field = field;
+      inp.readOnly = !editing;
+      inp.value = value || "";
+      inp.addEventListener("input", function () {
+        art.dirty = true;
+        aSetStatus("● 本行有未保存更改（改完点本行「保存」）");
+      });
+      return inp;
+    }
+    var tdTitle = document.createElement("td");
+    tdTitle.appendChild(mkInput("title", it.title));
+    var tdDate = document.createElement("td");
+    tdDate.appendChild(mkInput("date", it.date, "date"));
+    var tdCat = document.createElement("td");
+    tdCat.appendChild(mkInput("categoryTags", (it.categoryTags || []).join(", ")));
+    var tdSub = document.createElement("td");
+    tdSub.appendChild(mkInput("subCategoryTags", (it.subCategoryTags || []).join(", ")));
+    tr.appendChild(tdTitle); tr.appendChild(tdDate); tr.appendChild(tdCat); tr.appendChild(tdSub);
+
+    var tdAct = document.createElement("td");
+    tdAct.className = "act";
+    var btns = el("div", "btns");
+    if (editing) {
+      var saveB = el("button", "tiny primary", "保存");
+      saveB.addEventListener("click", function () { artSaveRow(it.file); });
+      var cancelB = el("button", "tiny", "放弃");
+      cancelB.addEventListener("click", function () {
+        art.editing = null; art.dirty = false;
+        loadArticles().then(function () { aSetStatus("已放弃更改", "ok"); });
+      });
+      btns.appendChild(saveB); btns.appendChild(cancelB);
+    } else {
+      var bodyB = el("button", "tiny", "正文");
+      bodyB.disabled = lockOthers;            // 编辑器与行编辑互斥，避免双层未保存状态
+      bodyB.addEventListener("click", function () { artOpenEditor(it.file); });
+      var editB = el("button", "tiny", "编辑");
+      editB.disabled = lockOthers;            // 一次只编辑一行
+      editB.addEventListener("click", function () {
+        art.editing = it.file; art.dirty = false; artRender();
+        aSetStatus("编辑中：改完点本行「保存」写回，或「放弃」还原");
+      });
+      var viewB = el("button", "tiny", "站点");
+      viewB.title = "打开线上文章页（新改动需先推送）";
+      viewB.addEventListener("click", function () {
+        window.open(ART_SITE + "/guide/" + it.slug + "/", "_blank", "noopener");
+      });
+      var delB = el("button", "tiny danger", "删除");
+      delB.disabled = lockOthers;
+      delB.addEventListener("click", function () { artDelete(it.file, it.title); });
+      btns.appendChild(bodyB); btns.appendChild(editB); btns.appendChild(viewB); btns.appendChild(delB);
+    }
+    tdAct.appendChild(btns);
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
+  });
+  document.getElementById("aCount").textContent = list.length + " / " + art.items.length + " 篇";
+  document.getElementById("aEmpty").style.display = art.items.length ? "none" : "";
+
+  var tb = document.getElementById("aTrashList");
+  tb.innerHTML = "";
+  document.getElementById("aTrashBtn").textContent = art.trashShown ? "收起回收站" : ("回收站（" + art.trash.length + "）");
+  document.getElementById("aTrashBox").style.display = art.trashShown ? "" : "none";
+  if (art.trashShown) {
+    if (!art.trash.length) tb.appendChild(el("p", "note", "回收站是空的。删除文章会先进这里（git 不跟踪），可随时恢复。"));
+    art.trash.forEach(function (t) {
+      var row = el("div", "mrow");
+      row.style.gridTemplateColumns = "1fr auto";
+      var info = el("div", "minfo");
+      info.appendChild(el("div", "t", t.title));
+      info.appendChild(el("div", "", t.name + " · " + fmtBytes(t.sizeBytes)));
+      row.appendChild(info);
+      var act = el("div", "mact");
+      var resB = el("button", "tiny", "恢复");
+      resB.addEventListener("click", function () {
+        resB.disabled = true;
+        api("/api/article/restore", { name: t.name }).then(function (r) {
+          if (!r.ok) { aSetStatus("恢复失败：" + (r.error || ""), "err"); resB.disabled = false; return; }
+          aSetStatus("已恢复 " + r.file + "（文件名带 .restored- 说明原名被占，已改名）", "ok");
+          loadArticles();
+        });
+      });
+      act.appendChild(resB);
+      row.appendChild(act);
+      tb.appendChild(row);
+    });
+  }
+  // 编辑期间锁定搜索 / 新建，防重渲染丢掉未保存内容
+  document.getElementById("aSearch").disabled = lockOthers;
+  document.getElementById("aNewBtn").disabled = lockOthers;
+}
+
+function artSaveRow(file) {
+  var it = null;
+  art.items.forEach(function (x) { if (x.file === file) it = x; });
+  var tr = document.querySelector('#aRows tr[data-file="' + (window.CSS && CSS.escape ? CSS.escape(file) : file) + '"]');
+  if (!it || !tr) return;
+  function val(f) { return tr.querySelector('input[data-field="' + f + '"]').value.trim(); }
+  var meta = { title: val("title"), date: val("date") };
+  if (!meta.title) { aSetStatus("标题不能为空", "err"); return; }
+  meta.categoryTags = val("categoryTags").split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean);
+  meta.subCategoryTags = val("subCategoryTags").split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean);
+  aSetStatus("保存中…");
+  api("/api/article/meta", { file: file, meta: meta, expectedMtimeMs: it.mtimeMs })
+    .then(function (r) {
+      if (!r.ok) {
+        aSetStatus("保存失败：" + (r.error || "") + (r.conflict ? "——本行仍在编辑，可刷新列表后重试或放弃" : ""), "err");
+        return;
+      }
+      art.editing = null; art.dirty = false;
+      var msg = "已保存 ✓" + (r.renamed ? "（文件随日期重命名为 " + r.renamed + "）" : "");
+      loadArticles().then(function () { aSetStatus(msg, "ok"); });
+    });
+}
+
+function artDelete(file, title) {
+  askConfirm("确定删除《" + title + "》？\n源 md 将移入 content/.trash/guide/（本机回收站，git 不跟踪），\n下次「推送文章改动」后线上文章页下线；可随时在回收站恢复。", function () {
+    api("/api/article/delete", { file: file }).then(function (r) {
+      if (!r.ok) { aSetStatus("删除失败：" + (r.error || ""), "err"); return; }
+      if (art.editing === file) { art.editing = null; art.dirty = false; }
+      loadArticles().then(function () { aSetStatus("已删除 " + file + "（移入回收站）", "ok"); });
+    });
+  });
+}
+
+/* ── 正文编辑器：只编辑正文，frontmatter 由行内「编辑」管理 ── */
+function artOpenEditor(file) {
+  aSetStatus("载入正文中…");
+  api("/api/article?file=" + encodeURIComponent(file)).then(function (b) {
+    if (!b.ok) { aSetStatus("载入失败：" + (b.error || ""), "err"); return; }
+    editorState.file = b.file;
+    editorState.mtimeMs = b.mtimeMs;
+    document.getElementById("editorTitle").textContent = b.title;
+    document.getElementById("editorMeta").textContent =
+      b.file + " · " + fmtBytes(b.sizeBytes) +
+      (b.frontmatter ? " · frontmatter 已保留" : " · 无 frontmatter");
+    document.getElementById("editorBody").value = b.body;
+    delete document.getElementById("editorBody").dataset.dirty;
+    var st = document.getElementById("editorStatus");
+    st.textContent = "";
+    st.style.color = "";
+    document.getElementById("editorMask").classList.add("on");
+    document.getElementById("editorBody").focus();
+    aSetStatus("");
+  });
+}
+
+function artSaveEditor() {
+  if (!editorState.file) return;
+  var btn = document.getElementById("editorSave");
+  var st = document.getElementById("editorStatus");
+  btn.disabled = true;
+  st.textContent = "保存中…";
+  st.style.color = "";
+  api("/api/article/save", { file: editorState.file,
+                             body: document.getElementById("editorBody").value,
+                             expectedMtimeMs: editorState.mtimeMs })
+    .then(function (r) {
+      if (!r.ok) {
+        st.textContent = "保存失败：" + (r.error || "") +
+          (r.conflict ? "——当前文本未丢弃，需要的话先全选复制，再刷新列表重做" : "");
+        st.style.color = "var(--bad)";
+        return;
+      }
+      editorState.mtimeMs = r.mtimeMs;         // 本机保存成功 → 乐观锁基准跟着走
+      delete document.getElementById("editorBody").dataset.dirty;
+      st.textContent = "已保存 ✓（frontmatter 原样保留；上一版备份为同名 .bak）";
+      st.style.color = "var(--ok)";
+      loadArticles();                          // 标题兜底自正文首行 h1，列表同步刷新
+    })
+    .catch(function (e) { st.textContent = "保存失败：" + e; })
+    .then(function () { btn.disabled = false; });
+}
+
+function artCloseEditor() {
+  var ta = document.getElementById("editorBody");
+  function close() {
+    editorState.file = null;
+    delete ta.dataset.dirty;
+    document.getElementById("editorMask").classList.remove("on");
+  }
+  if (ta.dataset.dirty) askConfirm("正文有未保存更改，关闭将丢弃。继续？", close);
+  else close();
+}
+
+/* ── 新建文章 ── */
+function artShowNew() {
+  document.getElementById("aNewForm").style.display = "flex";
+  var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+  document.getElementById("npDate").value = d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  if (!document.getElementById("npCat").value) document.getElementById("npCat").value = "科研";
+  document.getElementById("npTitle").focus();
+}
+
+function artCreate() {
+  var title = document.getElementById("npTitle").value.trim();
+  var slug = document.getElementById("npSlug").value.trim();
+  if (!title || !slug) { aSetStatus("标题与 slug 必填", "err"); return; }
+  function tags(id) {
+    return document.getElementById(id).value.split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+  document.getElementById("npCreate").disabled = true;
+  api("/api/article/new", { title: title, slug: slug,
+                            date: document.getElementById("npDate").value,
+                            categoryTags: tags("npCat"), subCategoryTags: tags("npSub") })
+    .then(function (r) {
+      document.getElementById("npCreate").disabled = false;
+      if (!r.ok) { aSetStatus("创建失败：" + (r.error || ""), "err"); return; }
+      document.getElementById("aNewForm").style.display = "none";
+      ["npTitle", "npSlug", "npSub"].forEach(function (id) { document.getElementById(id).value = ""; });
+      loadArticles().then(function () {
+        aSetStatus("已创建 " + r.file + " —— 编辑器已打开，开始写作", "ok");
+        artOpenEditor(r.file);
+      });
+    });
+}
+
+document.getElementById("aDeploy").addEventListener("click", function () {
+  var btn = document.getElementById("aDeploy");
+  askConfirm("推送文章改动：\n· 增量入库 + 生成站点\n· git 提交并推送到 GitHub\n· 同步到服务器\n\n确认开始？", function () {
+    btn.disabled = true;
+    btn.textContent = "推送中…（下方看实时进度）";
+    runJob("/api/deploy", { message: document.getElementById("aMsg").value }, function () {
+      btn.disabled = false;
+      btn.textContent = "推送文章改动";
+      loadStatus();
+    }, "aLog");
+  });
+});
+
+document.getElementById("aSearch").addEventListener("input", function () { art.filter = this.value; artRender(); });
+document.getElementById("aTrashBtn").addEventListener("click", function () { art.trashShown = !art.trashShown; artRender(); });
+document.getElementById("aNewBtn").addEventListener("click", artShowNew);
+document.getElementById("npCancel").addEventListener("click", function () { document.getElementById("aNewForm").style.display = "none"; });
+document.getElementById("npCreate").addEventListener("click", artCreate);
+document.getElementById("npTitle").addEventListener("keydown", function (e) { if (e.key === "Enter") artCreate(); });
+document.getElementById("npSlug").addEventListener("keydown", function (e) { if (e.key === "Enter") artCreate(); });
+document.getElementById("editorClose").addEventListener("click", artCloseEditor);
+document.getElementById("editorSave").addEventListener("click", artSaveEditor);
+document.getElementById("editorBody").addEventListener("input", function (e) { e.target.dataset.dirty = "1"; });
+document.getElementById("editorBody").addEventListener("keydown", function (e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); artSaveEditor(); }
+});
+window.addEventListener("beforeunload", function (e) {
+  var editorDirty = editorState.file && document.getElementById("editorBody").dataset.dirty;
+  if (art.dirty || editorDirty) { e.preventDefault(); e.returnValue = ""; }
+});
+
 
 /* ── 仓库状态 ── */
 function loadStatus() {
