@@ -11,6 +11,8 @@
    （进撤销栈），此后下载即为模拟图。
    画布交互分两种模式（「开始/结束框选」按钮切换）：框选模式下拖拽选区；
    非框选模式（默认）单击画布打开放大镜（滚轮缩放/拖拽平移，显示当前编辑状态）。
+   载入成功后工具栏下显示该图的信息条（id / DOI / 范围×样式标签 / 入库日期 /
+   尺寸 / 详情页链接），数据与首页网格同源（gallery-data.js）。
    全部计算在浏览器本地完成。 */
 (function () {
   "use strict";
@@ -22,7 +24,7 @@
   var stageEl = $("cl-stage");
   var work = document.createElement("canvas"), wctx = work.getContext("2d", { willReadFrequently: true });
   var overlay = $("cl-overlay"), selbox = $("cl-selbox"), placeholder = $("cl-placeholder");
-  var statusEl = $("cl-status"), selinfo = $("cl-selinfo");
+  var statusEl = $("cl-status"), selinfo = $("cl-selinfo"), metaEl = $("cl-meta");
   var idInput = $("cl-id"), paletteEl = $("cl-palette");
   var loadBtn = $("cl-load"), randomBtn = $("cl-random"), loadingEl = $("cl-loading");
   var targetChip = $("cl-target-chip"), targetHex = $("cl-target-hex");
@@ -146,6 +148,30 @@
     }
     return null;
   }
+  /* ── 图片信息条：当前图的 id / DOI / 范围×样式标签 / 入库日期 / 尺寸 / 详情页链接。
+     数据与首页网格同源（gallery-data.js）。信息跟随画布——载入成功才更新，
+     失败时保留上一张（与画布仍显示上一张一致）；初始 hidden，首次成功载入后展开 ── */
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function renderMeta(id) {
+    if (!metaEl) return;
+    var it = null;
+    for (var i = 0; i < ITEMS.length; i++) if (ITEMS[i].id === id) { it = ITEMS[i]; break; }
+    if (!it) { metaEl.hidden = true; return; }
+    var html = '<a class="cl-mid mono" href="../' + escHtml(id) + '/" target="_blank" rel="noopener"'
+      + ' title="打开详情页">' + escHtml(id) + '</a>';
+    (it.sc || []).forEach(function (t) { html += '<i class="cl-mtag sc">' + escHtml(t) + '</i>'; });
+    (it.st || []).forEach(function (t) { html += '<i class="cl-mtag">' + escHtml(t) + '</i>'; });
+    html += '<span>' + (it.w || "?") + '×' + (it.h || "?") + '</span>';
+    if (it.ad) html += '<span>入库 ' + escHtml(it.ad) + '</span>';
+    if (it.doi) html += '<a href="' + escHtml(it.doi) + '" target="_blank" rel="noopener">DOI: '
+      + escHtml(String(it.doi).replace(/^https?:\/\/doi\.org\//i, "")) + '</a>';
+    metaEl.innerHTML = html;
+    metaEl.hidden = false;
+  }
   var LOAD_TIMEOUT = 20000, STAGGER_MS = 4000;
   function staggerLoad(urls, ok, fail) {
     if (!urls.length) { fail(); return; }
@@ -247,6 +273,7 @@
     }
     var isThumb = (img.getAttribute("data-src") || "").indexOf("/thumb/") > -1;
     setStatus("已载入 图 " + id + "（" + natW + "×" + natH + "px" + (isThumb ? "，原图不可达，暂用缩略图" : "") + "）");
+    renderMeta(id);
     try {
       history.replaceState(null, "", "?id=" + encodeURIComponent(id)
         + (urlColor ? "&color=" + encodeURIComponent(urlColor) : ""));

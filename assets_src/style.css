@@ -291,6 +291,14 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .clayout{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;margin-top:26px}
 .cl-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .cl-toolbar .searchbox{flex:1 1 260px;max-width:430px}
+/* 图片信息条：载入成功后显示当前图的 id / DOI / 范围×样式标签 / 入库日期 / 尺寸；
+   徽章沿用首页卡片双轨语言——范围灰（.sc）、样式蓝描边 */
+.cl-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:12px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint)}
+.cl-meta a{color:var(--accent);text-decoration:none;overflow-wrap:anywhere}
+.cl-meta a:hover{text-decoration:underline}
+.cl-meta .cl-mid{color:var(--text);font-weight:600}
+.cl-meta .cl-mtag{font-style:normal;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent);border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap;max-width:12em;overflow:hidden;text-overflow:ellipsis}
+.cl-meta .cl-mtag.sc{color:var(--dim);border-color:var(--line2)}
 .cl-stage{position:relative;margin-top:14px;border:1px solid var(--line);border-radius:8px;background:var(--card);overflow:hidden;min-height:240px;max-width:100%}
 .cl-stage canvas{display:block;width:100%;height:auto}
 /* 右下角拖拽手柄：横向拖动调舞台宽度（40%–100%），pointer capture 跟手 */

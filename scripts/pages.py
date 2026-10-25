@@ -642,6 +642,7 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
       <span class="searchbox"><input id="cl-id" class="search" type="search" placeholder="输入图片 id（如 c29fd21ed1）…" autocomplete="off"><button id="cl-load" type="button">载入</button></span>
       <button id="cl-random" class="cl-btn" type="button">随机来一张</button>
     </div>
+    <div class="cl-meta" id="cl-meta" hidden></div>
     <div class="cl-stage" id="cl-stage">
       <canvas id="cl-canvas" width="0" height="0"></canvas>
       <div class="cl-overlay" id="cl-overlay"><div class="cl-selbox" id="cl-selbox"></div></div>
