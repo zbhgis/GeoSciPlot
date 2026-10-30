@@ -25,6 +25,16 @@ AUTHOR_LD = {
 }
 
 
+def ld_json(obj) -> str:
+    """JSON-LD 序列化唯一出口：把 "<" 统一转成 \\u003c。
+
+    标题/标签/图注里一旦出现 "</script>"，内嵌脚本会提前闭合——整块结构化数据
+    静默失效，页面也可能被破坏。首页与详情页曾直接 json.dumps，与其余页不一致，
+    这里收敛成一个函数，避免以后再漏。
+    """
+    return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c")
+
+
 # 调色板图标（lucide palette）：导航菜单「色彩实验」与详情页「转到色彩实验」共用
 ICO_PALETTE = ('<svg class="mnav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
                'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
@@ -370,7 +380,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
 </div>
 
 <script>window.GALLERY_PAGE = {PAGE_SIZE};</script>"""
-    website_ld = json.dumps({
+    website_ld = ld_json({
         "@context": "https://schema.org",
         "@type": "WebSite",
         "name": "geosciplot",
@@ -388,10 +398,10 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
                        "urlTemplate": SITE_URL + "/search/?q={search_term_string}"},
             "query-input": "required name=search_term_string",
         },
-    }, ensure_ascii=False)
+    })
     # CollectionPage + 全量图片 ItemList（2026-10-18）：首页是图库主落地页，
     # 与 sitemap 的 image 扩展同源互补——结构化实体清单供 AI 引擎直接取用
-    col_ld = json.dumps({
+    col_ld = ld_json({
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "全部图片",
@@ -412,7 +422,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
                  "url": f"{SITE_URL}/{it['id']}/"}
                 for i, it in enumerate(items)],
         },
-    }, ensure_ascii=False)
+    })
     head = (f'<script type="application/ld+json">{website_ld}</script>'
             f'<script type="application/ld+json">{col_ld}</script>')
     return page_shell(cfg, cfg["subtitle"], body,
@@ -535,7 +545,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     added = str(it.get("added") or "")
     desc_parts = [t for t in [" · ".join(scope + style), added, f"图 {it['id']}"] if t]
     detail_desc = (" · ".join(desc_parts) + f" · DOI: {doi_bare(it.get('doi'))}" if it.get("doi") else " · ".join(desc_parts)) or cfg["lede"]
-    image_ld = json.dumps({
+    image_ld = ld_json({
         "@context": "https://schema.org",
         "@type": "ImageObject",
         "@id": f"{SITE_URL}/{it['id']}/#image",
@@ -547,8 +557,11 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
         "url": f"{SITE_URL}/{it['id']}/",
         "keywords": ", ".join(scope + style),
         "inLanguage": "zh-CN",
-        "author": {"@type": "Organization", "name": cfg.get("title", "geosciplot"), "url": SITE_URL},
-    }, ensure_ascii=False)
+        # 图片归属与主站同一 Person 实体（E-E-A-T / 跨域实体图谱）；站点品牌仍走 Organization
+        "author": AUTHOR_LD,
+        "publisher": {"@type": "Organization", "name": cfg.get("title", "GeoSciPlot"),
+                      "url": SITE_URL},
+    })
     # 详情页 title 语义优先：标签（主题 · 类型）打头，末尾带图 id。
     # 仅用标签会大量撞标题（同主题同类型的图很多），id 让每条 title 唯一。
     title_text = (f"{sem} · 图 {it['id']} · 地学科研绘图参考" if sem
@@ -563,13 +576,13 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
                f'<meta name="twitter:description" content="{esc(detail_desc[:200])}">'
                f'<meta name="twitter:image" content="{esc(disp_url)}">')
     # 面包屑（图库首页 → 图详情）：与主站文章页同构，帮引擎把图片实体挂到站内层级
-    breadcrumb_ld = json.dumps({
+    breadcrumb_ld = ld_json({
         "@context": "https://schema.org", "@type": "BreadcrumbList",
         "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "图库首页", "item": SITE_URL + "/"},
             {"@type": "ListItem", "position": 2, "name": h1_text, "item": f"{SITE_URL}/{it['id']}/"},
         ],
-    }, ensure_ascii=False)
+    })
     # AEO/GEO：图库详情页此前只有 ImageObject + BreadcrumbList，缺少「页面」实体，
     # AI 引擎无法把图片挂到带发布时间的页面上。补 WebPage 节点（uploadDate 仍留在
     # ImageObject，语义不混用），mainEntity 用 @id 关联同一张图。
@@ -589,7 +602,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     }
     if added:
         webpage["datePublished"] = added
-    webpage_ld = json.dumps(webpage, ensure_ascii=False)
+    webpage_ld = ld_json(webpage)
     head = (f'{og_meta}<script type="application/ld+json">{image_ld}</script>'
             f'<script type="application/ld+json">{webpage_ld}</script>'
             f'<script type="application/ld+json">{breadcrumb_ld}</script>')
@@ -797,7 +810,7 @@ def render_about_page(cfg: dict, doc: str) -> str:
 </div>"""
     # AboutPage + 主站同一 Person 实体：搜索引擎/AI 引擎可把「关于」页
     # 认定为作者与站点归属的规范说明页（E-E-A-T）
-    about_ld = json.dumps({
+    about_ld = ld_json({
         "@context": "https://schema.org", "@type": "AboutPage",
         "name": f"关于本站 · {cfg.get('title', 'GeoSciPlot')}",
         "url": SITE_URL + "/about/",
@@ -806,7 +819,7 @@ def render_about_page(cfg: dict, doc: str) -> str:
         "mainEntity": AUTHOR_LD,
         "isPartOf": {"@type": "WebSite", "name": cfg.get("title", "GeoSciPlot"),
                      "url": SITE_URL + "/"},
-    }, ensure_ascii=False).replace("<", "\\u003c")
+    })
     head = '<script type="application/ld+json">' + about_ld + "</script>"
     return page_shell(cfg, "关于本站", body, depth=1,
                       meta_desc="关于 GeoSciPlot：站点定位、数据来源、图片版权与引用说明。",
@@ -916,10 +929,8 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
     head = (f'<meta property="article:published_time" content="{p["date"]}">'
             f'<meta property="article:modified_time" content="{p["date"]}">'
             f'<meta property="article:section" content="制图经验">'
-            f'<script type="application/ld+json">'
-            f'{json.dumps(ld, ensure_ascii=False).replace("<", "\\u003c")}</script>'
-            f'<script type="application/ld+json">'
-            f'{json.dumps(bc, ensure_ascii=False).replace("<", "\\u003c")}</script>')
+            f'<script type="application/ld+json">{ld_json(ld)}</script>'
+            f'<script type="application/ld+json">{ld_json(bc)}</script>')
     return page_shell(
         cfg, f'{p["title"]} · {cfg["title"]}', body, depth=2,
         meta_desc=p["summary"], og_type="article", og_image=p["og_image"],
@@ -974,8 +985,7 @@ def render_guide_list(cfg: dict, posts: list[dict]) -> str:
             ],
         },
     }
-    head = ('<script type="application/ld+json">'
-            + json.dumps(col_ld, ensure_ascii=False).replace("<", "\\u003c") + "</script>")
+    head = '<script type="application/ld+json">' + ld_json(col_ld) + "</script>"
     # 列表面包屑：首页 → 制图经验。详情页有三层面包屑，列表页此前缺失
     bc = {
         "@context": "https://schema.org", "@type": "BreadcrumbList",
@@ -985,8 +995,7 @@ def render_guide_list(cfg: dict, posts: list[dict]) -> str:
              "item": SITE_URL + "/guide/"},
         ],
     }
-    head += ('<script type="application/ld+json">'
-             + json.dumps(bc, ensure_ascii=False).replace("<", "\\u003c") + "</script>")
+    head += '<script type="application/ld+json">' + ld_json(bc) + "</script>"
     return page_shell(cfg, f"制图经验 · {cfg['title']}", body, depth=1,
                       meta_desc=f"地学科研制图经验整理，共 {len(posts)} 篇。",
                       og_url=SITE_URL + "/guide/", active_nav="guide", head_extra=head)
