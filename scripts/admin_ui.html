@@ -1699,8 +1699,12 @@ function manageRow(it) {
   info.appendChild(el("div", "t", "图 " + it.id));
   var doiLine = el("div", "");
   if (it.doi) {
+    /* refs.json 存的是完整 URL 形式（库里全部条目如此），链接前必须剥掉
+       doi.org 前缀，否则拼出 https://doi.org/https://doi.org/… 全部打不开；
+       展示文本仍按库里原样显示 */
+    var bare = String(it.doi).replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "");
     var a = document.createElement("a");
-    a.href = "https://doi.org/" + it.doi;
+    a.href = "https://doi.org/" + bare;
     a.textContent = it.doi;
     a.target = "_blank";
     a.rel = "noopener";

@@ -16,6 +16,48 @@
 <link rel="stylesheet" href="[[UP]]assets/style.css?v=[[V_CSS]]">
 <link rel="icon" type="image/png" href="[[UP]]assets/favicon.png?v=[[V_FAV]]">
 <script>try{var t=localStorage.getItem("gsp-theme");if(t)document.documentElement.setAttribute("data-theme",t);var f=localStorage.getItem("gsp-fs");if(f)document.documentElement.setAttribute("data-fs",f);var r=localStorage.getItem("gsp-rstyle");document.documentElement.setAttribute("data-rstyle",r||"plain")}catch(e){}</script>
+<!-- 外链图多级兜底（mystation layout.tsx 同款）：图床仓库超 jsDelivr 单包 50MB 上限后
+     新增文件会被拒发，且 jsDelivr 国内可达性波动——guide 文章等外链 CDN 图加载失败时
+     按 ghfast → gh-proxy → raw 直链逐级换源，全部失败才换占位块（样式 .img-ph）。
+     内容里的图片地址保持 jsDelivr 原址不变（sitemap/SEO 零变化），兜底纯运行时。
+     必须在正文图片解析前同步注册：error 事件不冒泡，只能捕获阶段监听。
+     带 data-rel 的图由 gallery.js 的 bind() 降级链接管、灯箱内部图有自己的失败提示，均跳过 -->
+<script>
+(function(){
+  var RE = /cdn\.jsdelivr\.net\/gh\/zbhgis\/([^\/@\s]+)@([^\/\s]+)\/(.+)$/;
+  var RAW = "https://raw.githubusercontent.com/";
+  var M = ["https://ghfast.top/", "https://gh-proxy.com/"];
+  function ph(img){
+    img.dataset.fbDone = "1";
+    var s = document.createElement("span");
+    s.className = "img-ph";
+    var w = img.getAttribute("width"), h = img.getAttribute("height");
+    if (w && h) { s.style.aspectRatio = w + "/" + h; s.style.width = "100%"; }
+    s.textContent = "图片加载失败（图源暂时不可用）";
+    if (img.dataset.fbOrig) s.title = img.dataset.fbOrig;
+    if (img.parentNode) img.parentNode.replaceChild(s, img);
+  }
+  function onErr(e){
+    var img = e.target;
+    if (!img || img.tagName !== "IMG" || img.dataset.fbDone === "1") return;
+    if (img.hasAttribute("data-rel") || (img.closest && img.closest("[data-lbx]"))) return;
+    var orig = img.dataset.fbOrig;
+    if (!orig) {
+      var src = img.currentSrc || img.src || "";
+      if (!RE.test(src)) return;
+      orig = src; img.dataset.fbOrig = orig; img.dataset.fbTry = "0";
+    }
+    var m = orig.match(RE);
+    if (!m) return;
+    var n = parseInt(img.dataset.fbTry || "0", 10);
+    if (n > 2) { ph(img); return; }
+    var raw = RAW + "zbhgis/" + m[1] + "/" + m[2] + "/" + m[3];
+    img.dataset.fbTry = String(n + 1);
+    img.src = (n === 2) ? raw : M[n] + raw;
+  }
+  document.addEventListener("error", onErr, true);
+})();
+</script>
 </head>
 <body>
 [[NAV]]

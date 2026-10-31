@@ -1,5 +1,5 @@
 (function () {
-  var CFG = window.GALLERY, ITEMS = window.GALLERY_DATA || [], PAGE = window.GALLERY_PAGE || 48;
+  var CFG = window.GALLERY, ITEMS = window.GALLERY_DATA || [], PAGE = window.GALLERY_PAGE || 30;
   if (!CFG) return;
 
   /* ── 随机会话种子：随机键 = hash(id + 种子)，种子存 sessionStorage ——

@@ -31,6 +31,7 @@ import hashlib
 import json
 import shutil
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -92,9 +93,18 @@ def load_existing() -> dict[str, dict]:
         return {}
     try:
         data = json.loads(REFS_JSON.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        print("  ! meta/refs.json 解析失败，将重新生成（人工字段会丢失）")
-        return {}
+        if not (isinstance(data, dict) and isinstance(data.get("items"), list)):
+            raise ValueError("形状不符（缺 items 数组）")
+    except (json.JSONDecodeError, ValueError) as e:
+        # 与 admin.load_refs 同一道防线：损坏时备份现场并抛错，绝不静默按空库继续
+        # ——空库 + raw/ 只剩最近一批时，prune_unused 会把历史图库整批物理删除
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        backup = REFS_JSON.parent / (REFS_JSON.name + f".corrupt-{stamp}")
+        backup.write_bytes(REFS_JSON.read_bytes())
+        raise RuntimeError(
+            f"refs.json 损坏（{e}），已备份为 {backup.name}"
+            "——修复或恢复该文件后重试，拒绝以空库清空图库"
+        ) from e
     return {item["id"]: item for item in data.get("items", []) if item.get("id")}
 
 

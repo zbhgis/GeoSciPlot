@@ -64,6 +64,17 @@ def load_cfg() -> dict:
     return cfg
 
 
+def trash_dest(trash: Path, name: str) -> Path:
+    """site_trash 里不撞名的目标路径：过期目录改名用秒级时间戳当后缀，
+    同一秒内搬两个目录会撞名，rename 失败被吞后过期目录留在 site/ 继续部署。"""
+    dest = trash / (name + "-" + str(int(time.time())))
+    n = 1
+    while dest.exists():
+        dest = trash / (name + "-" + str(int(time.time())) + "-" + str(n))
+        n += 1
+    return dest
+
+
 def build_sources(cfg: dict, preview: bool = False, origin: bool = False) -> list[dict]:
     owner = cfg.get("owner") or "OWNER"
     repo = cfg["repo"]
@@ -230,7 +241,7 @@ def build_guide(cfg: dict) -> list[dict]:
     for d in (SITE / "guide").iterdir():
         if d.is_dir() and d.name not in live:
             trash.mkdir(parents=True, exist_ok=True)
-            dest = trash / (d.name + "-" + str(int(time.time())))
+            dest = trash_dest(trash, d.name)
             print(f"· 过期制图经验页 {d.name} → site_trash/（不删除）")
             try:
                 d.rename(dest)
@@ -630,7 +641,7 @@ def main() -> int:
                     and d.name not in live
                     and (d / "index.html").exists()):
                 trash.mkdir(parents=True, exist_ok=True)
-                dest = trash / (d.name + "-" + str(int(time.time())))
+                dest = trash_dest(trash, d.name)
                 print(f"· 过期详情页 {d.name} → site_trash/（不删除）")
                 try:
                     d.rename(dest)
@@ -684,7 +695,7 @@ def main() -> int:
         if stale.exists() and stale.is_dir():
             trash = ROOT / "site_trash"
             trash.mkdir(parents=True, exist_ok=True)
-            dest = trash / ("images-" + str(int(time.time())))
+            dest = trash_dest(trash, "images")
             print("· 预览遗留 site/images/ → site_trash/（部署包不再携带，清空 site_trash 时一起走）")
             try:
                 stale.rename(dest)
@@ -743,8 +754,11 @@ def main() -> int:
     (colorlab_dir / "index.html").write_text(build_colorlab_page(cfg, items), encoding="utf-8")
     stats_dir = SITE / "statistics"
     stats_dir.mkdir(parents=True, exist_ok=True)
-    (stats_dir / "index.html").write_text(build_stats_page(cfg, items), encoding="utf-8")
+    # stats-data.js 必须先写盘再渲染统计页：asset_ver 按文件最终内容算 ?v= hash，
+    # 顺序反了页面会引用上一轮旧内容的 hash，配合 nginx immutable 缓存，
+    # 发布后访客会看到滞后一个发布周期的旧统计（口径见 site_common.asset_ver）
     build_stats_data(cfg, items)
+    (stats_dir / "index.html").write_text(build_stats_page(cfg, items), encoding="utf-8")
     about_dir = SITE / "about"
     about_dir.mkdir(parents=True, exist_ok=True)
     (about_dir / "index.html").write_text(build_about(cfg), encoding="utf-8")

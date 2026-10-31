@@ -187,10 +187,12 @@ def doi_key(s: str) -> str:
 def repo_state() -> dict:
     refs = load_refs()
     items = refs.get("items", [])
-    is_repo = (ROOT / ".git").is_dir()
+    # exists() 而非 is_dir()：git worktree 检出时 .git 是文件，is_dir 会误判成「非仓库」
+    is_repo = (ROOT / ".git").exists()
     remote = ""
     branch = "main"
     dirty = 0
+    unpushed = 0        # 非 git 仓库不进入下面的 if 块——必须先初始化，否则 return 处 NameError
     if is_repo:
         code, out = run(["git", "remote", "get-url", "origin"])
         remote = out if code == 0 else ""
@@ -552,7 +554,7 @@ def do_delete(fid: str) -> dict:
         return {"ok": False, "log": [{"step": "删除", "ok": False, "out": f"id 不存在：{fid}"}]}
 
     removed: list[str] = []
-    for key in ("thumb", "full"):
+    for key in ("thumb", "full", "disp"):   # disp 一并删：孤立展示档要等下次 prepare 才被清，期间还进 git
         p = IMG_DIR / str(it.get(key, ""))
         # is_file() 而非 exists()：字段缺失时路径落在 images/ 目录本身，
         # exists() 为真、unlink() 对目录抛 PermissionError——此时图片已删、
@@ -573,7 +575,7 @@ def do_delete(fid: str) -> dict:
     rows.pop(fid, None)
     write_titles(fields, rows)
 
-    for d in (IMG_DIR / "thumb", IMG_DIR / "full"):
+    for d in (IMG_DIR / "thumb", IMG_DIR / "full", IMG_DIR / "disp"):
         if d.exists():
             for sub in d.iterdir():
                 if sub.is_dir() and not any(sub.iterdir()):
@@ -641,7 +643,7 @@ def pipeline_after_content(log: list[dict], message: str, push: bool, sync: bool
     if not ok:
         return {"ok": False, "log": log, "hint": "build_site.py 失败，未提交"}
 
-    if not (ROOT / ".git").is_dir():
+    if not (ROOT / ".git").exists():   # exists()：worktree 下 .git 是文件（口径同 repo_state）
         log.append({"step": "Git", "ok": False,
                     "out": "尚未初始化 git 仓库 —— 点上方「初始化仓库」后再发布"})
         return {"ok": False, "log": log, "hint": "请先初始化 git 仓库"}

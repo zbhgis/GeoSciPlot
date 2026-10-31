@@ -312,7 +312,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
         for t in it.get("style") or []:
             style_counter[str(t)] += 1
 
-    # 首屏静态渲染，其余交给 JS（1000 张时也只输出 48 个卡片节点）
+    # 首屏静态渲染，其余交给 JS（只输出第一页的卡片节点，量级 = PAGE_SIZE）
     first_page = items[:PAGE_SIZE]
 
     ghsvg = ('<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">'

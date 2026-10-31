@@ -191,7 +191,10 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
    样式徽章（accent 蓝描边，.c-j 同款）构成双轨视觉区分 */
 .card .cap .tags i.sc{color:var(--dim);border-color:var(--line2)}
 .card .cap .tags i.none{color:var(--faint);border:none;padding:0}
-.ph{display:flex;align-items:center;justify-content:center;min-height:120px;padding:18px;font-family:ui-monospace,monospace;font-size:var(--fs-xs);color:var(--faint);text-align:center}
+.ph{display:flex;align-items:center;justify-content:center;min-height:120px;padding:18px;font-family:ui-monospace,monospace;font-size:var(--fs-xs);color:var(--faint);text-align:center;position:relative;z-index:1;background:var(--line)}
+/* 外链图兜底占位（shell.html 兜底脚本）：图源逐级换源全失败时替换 <img>；
+   有宽高的图由脚本内联 aspect-ratio 锁比例，这里兜住无宽高的情况（guide 外链图） */
+.img-ph{display:flex;align-items:center;justify-content:center;width:100%;min-height:120px;padding:12px;border:1px dashed var(--line2);border-radius:6px;background:var(--card);color:var(--faint);font-size:var(--fs-sm);text-align:center}
 .pgbar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;margin:44px 0 0;padding-top:24px;border-top:1px solid var(--line)}
 /* 步进按钮：只有文字 + 一枚内联箭头，hover 才点亮（与主站 .v3-pager-step 同语言） */
 .pgbar button{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);line-height:1.35;padding:5px 13px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
