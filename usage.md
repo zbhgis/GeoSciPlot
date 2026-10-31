@@ -44,6 +44,13 @@ python scripts/admin.py        # 本地管理界面（仅本机可访问，自�
 
 ### 发布前必查（踩坑清单）
 
+- **构建自检门禁**：build_site.py 末尾的 `verify_build` 会对全部产物跑 11 项断言
+  （?v= 与资产 hash 一致、item 三档图片存在、像素不变量抽样、.bak 配对、
+  titles.csv 收敛、DOI 坏链、JSON-LD 可解析、图片引用存在、node --check），
+  失败即中止发布——按报错修数据/代码，而不是加 `--no-verify` 绕过
+  （绕过会在 site/ 留痕，下次正常构建会提示）。
+- **跨项目家族指纹**：修复同源 bug 后跑 `python scripts/check_family.py . ../MacroBiodiv`，
+  未同步的兄弟仓库副本会当场现形（复制代码前也先跑一遍）。
 - **人工字段**：`meta/titles.csv` 四列 id / scope / style / doi（2026-10-24 起
   标签双轨化，旧 tags 单列已迁移拆分；journal / published 占位列更早已移除）。
   scope（范围）与 style（样式）两类并行、组内多值用 `|` 分隔，每张图两类各至少

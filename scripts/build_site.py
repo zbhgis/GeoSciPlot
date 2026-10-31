@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import gzip
@@ -202,7 +203,7 @@ def build_guide(cfg: dict) -> list[dict]:
         # 摘要：正文第一段非引导语（跳过公众号关注/星标提示），截 90 字
         summary = ""
         for p in re.findall(r"<p>(.*?)</p>", doc, re.S):
-            t = re.sub(r"<[^>]+>", "", p).strip()
+            t = html.unescape(re.sub(r"<[^>]+>", "", p)).strip()
             if len(t) >= 30 and "点击上方" not in t and "关注并设为" not in t:
                 summary = t[:90] + ("…" if len(t) > 90 else "")
                 break
@@ -219,7 +220,9 @@ def build_guide(cfg: dict) -> list[dict]:
         posts.append({
             "slug": slug, "title": title, "date": date, "month": month,
             "doc": doc, "toc": toc, "words": words, "reading": max(1, -(-words // 200)),
-            "summary": summary, "og_image": first_img.group(1) if first_img else "",
+            # og:image 用原文 URL：src 取自已转义 HTML（& 已是 &amp;），page_shell 还会
+        # esc 一次——不 unescape 就双重转义，带查询串的图源分享卡直接 404（家族#10）
+        "summary": summary, "og_image": html.unescape(first_img.group(1)) if first_img else "",
             "text": full_text,
         })
     if not posts:
@@ -435,7 +438,7 @@ def minify_js(src: str) -> str:
     """构建期注释剥离（保留一行一语句、不合并压缩）：本仓库前端注释是中文大段
     （UTF-8 每字 3 字节），实测省 30%+ 传输。带字面量状态机——单/双引号串、
     模板串、正则字面量里的 "//" 与 "/*" 绝不误删（img 的正则含斜杠对、灯箱模板里
-    有 /* CSS 注释 */）。产物每次构建后过 node --check 校验（见 build 输出）。"""
+    有 /* CSS 注释 */）。产物在 verify_build 门禁经 node --check 校验（node 缺失跳过）。"""
     SQ, DQ, TPL, BCOM, REGEX, RCLS = range(6)
     state = None
     prev = ""            # NORMAL 态最近非空白字符（正则起始 vs 除法判定）
@@ -600,6 +603,173 @@ def precompress(site: Path) -> None:
     print(f"· 预压缩 {n} 个文本文件 → 同名 .gz（nginx gzip_static 直出）")
 
 
+def verify_build(items: list[dict]) -> bool:
+    """构建自检门禁：把人工排查踩过的 bug 类别固化成机器断言（2026-10-31 第四轮）。
+    覆盖：?v= 与资产实际 hash 一致（stats-data 曾滞后一轮）、item 三档文件存在、
+    DOI 链接形态（arxiv/双前缀类坏链）、gallery-data 与 refs 一致。
+    失败打印明细并返回 False——main() 以非零退出，管理台流水线在
+    「生成静态站」一步直接失败，不再带病发布。孤儿文件仅告警（prepare 会清理）。"""
+    problems: list[str] = []
+    warns: list[str] = []
+
+    # 1) 逐页单遍扫描四类产物断言：
+    #    a. assets/X?v=HASH 与盘上文件 sha1 前 8 位一致（stats-data 曾滞后一轮）
+    #    b. DOI href 形态（双前缀 / 非 10.x 的 doi.org 链接）
+    #    c. JSON-LD 可解析（\u003c 还原后 json.loads，防 </script> 类截断）
+    #    d. 页面引用的站内图片真实存在（og:image / 灯箱原图 / 详情图）
+    ref_re = re.compile(r"assets/([A-Za-z0-9._-]+\.(?:js|css|png))\?v=([0-9a-f]{8})")
+    doi_href_re = re.compile(r'href="(https://doi\.org/[^"]*)"')
+    ld_re = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+    img_ref_re = re.compile(
+        r'(?:src|content|href|data-lightbox-src)="((?:https://cdn\.jsdelivr\.net/gh/[^/]+/[^@]+@[^/]+)?/images/[^"]+)"')
+    hashes: dict[str, str | None] = {}
+    pages = list(SITE.rglob("*.html"))
+    n_refs = 0
+    n_img_refs = 0
+    for pg in pages:
+        text = pg.read_text(encoding="utf-8")
+        rel_pg = str(pg.relative_to(SITE))
+        for name, v in ref_re.findall(text):
+            n_refs += 1
+            if name not in hashes:
+                f = SITE / "assets" / name
+                hashes[name] = hashlib.sha1(f.read_bytes()).hexdigest()[:8] if f.is_file() else None
+            real = hashes[name]
+            if real is None:
+                problems.append(f"{rel_pg}: 引用不存在的资产 {name}")
+            elif real != v:
+                problems.append(f"{rel_pg}: {name} ?v={v} ≠ 实际 {real}")
+        for href in doi_href_re.findall(text):
+            if not re.match(r"^https://doi\.org/10\.\d{4,9}/", href):
+                problems.append(f"{rel_pg}: DOI 坏链 {href}（请修 meta/refs.json 对应条目——"
+                                "剥掉多余前缀即可；应急可用 --no-verify）")
+        for blk in ld_re.findall(text):
+            try:
+                json.loads(blk.replace("\\u003c", "<"))
+            except ValueError as e:
+                problems.append(f"{rel_pg}: JSON-LD 解析失败 {e}")
+        for u in img_ref_re.findall(text):
+            n_img_refs += 1
+            rel = u.split("/images/", 1)[1]
+            if not (IMAGES / rel).is_file():
+                problems.append(f"{rel_pg}: 图片引用缺失 {rel}")
+    if n_img_refs == 0 and items:
+        print(f"! 图片存在性检查未覆盖任何引用——activeSource 非 jsDelivr/本地时"
+              f"图片 URL 形态不在扫描范围内（当前共 {sum(1 for it in items if it.get('thumb'))} 条 item）")
+
+    # 2) 每条 item 的 thumb/full/disp 文件必须存在（生产模式图片走 CDN，
+    #    但本地 images/ 就该齐全——缺文件说明 prepare 与 refs 脱节）
+    for it in items:
+        for k in ("thumb", "full", "disp"):
+            rel = it.get(k)
+            if rel and not (IMAGES / rel).is_file():
+                problems.append(f"item {it['id']}: {k} 文件缺失 {rel}")
+
+    # 2b) 像素不变量抽样：缩略图近单色而原图有内容 = 16-bit 白图类静默损坏
+    #     （第四轮 to_rgb 修复的回归门禁；确定性步进抽样，构建可复现）
+    try:
+        from PIL import Image, ImageStat
+        # 上取整步进：len∈25..47 时 floor 会只取最老 24 张、最新入库恰在盲区
+        stride = max(1, -(-len(items) // 24))
+        for it in items[::stride][:24]:
+            tp = IMAGES / it["thumb"] if it.get("thumb") else None
+            fp = IMAGES / it["full"] if it.get("full") else None
+            if not (tp and tp.is_file() and fp and fp.is_file()):
+                continue
+            try:
+                with Image.open(tp) as tim, Image.open(fp) as fim:
+                    t_std = ImageStat.Stat(tim.convert("L").resize((16, 16))).stddev[0]
+                    fim2 = fim.convert("L")
+                    fim2.thumbnail((64, 64))
+                    f_std = ImageStat.Stat(fim2).stddev[0]
+            except OSError:
+                continue
+            if t_std < 1.0 and f_std > 12:
+                problems.append(f"item {it['id']}: 缩略图退化（std {t_std:.2f}）而原图有内容"
+                                f"（std {f_std:.1f}）——疑似 16-bit 白图类损坏")
+    except ImportError:
+        print("! 未安装 Pillow，跳过像素不变量抽样")
+
+    # 2c) .bak 配对：文章备份必须与现存 md 配对（抓改名/恢复中间态散架）
+    guide_dir = ROOT / "content" / "guide"
+    if guide_dir.is_dir():
+        for bak in guide_dir.glob("*.md.bak"):
+            if not bak.with_name(bak.name[:-4]).is_file():
+                problems.append(f"孤儿备份 {bak.name}（同名 md 不存在）")
+
+    # 2e) JS 产物语法校验（兑现 minify_js 曾声称的 node --check——状态机一旦
+    #     误判正则字面量，坏 JS 会被 ?v= 主动强推全站）；node 缺失时跳过
+    import shutil as _sh
+    import subprocess as _sp
+    _node = _sh.which("node")
+    if _node:
+        for _js in sorted((SITE / "assets").glob("*.js")):
+            _pr = _sp.run([_node, "--check", str(_js)], capture_output=True, timeout=60)
+            if _pr.returncode != 0:
+                _out = ((_pr.stdout or b"") + (_pr.stderr or b"")).decode("utf-8", "replace")
+                problems.append(f"{_js.name}: node --check 失败（minify_js 状态机误判？）{_out.strip()[:160]}")
+
+    # 2d) titles.csv 与 refs 的 id 收敛（抓 prepare 半途 / 删除撕裂）
+    csv_path = ROOT / "meta" / "titles.csv"
+    if csv_path.is_file():
+        import csv as _csv
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as fh:
+            csv_ids = {row.get("id", "").strip() for row in _csv.DictReader(fh)}
+        csv_ids.discard("")
+        stray = csv_ids - {it.get("id") for it in items}
+        if stray:
+            problems.append(f"titles.csv 含 refs 里不存在的 id {len(stray)} 个："
+                            + " ".join(sorted(stray)[:5]))
+
+    # 3) DOI 链接形态：与 build_detail 同一逻辑，全部条目重演一遍。
+    #    剥一次前缀后若仍是 doi.org 链接 = 双前缀入库（会拼出坏链）；裸值必须是 10.x
+    for it in items:
+        doi = str(it.get("doi") or "").strip()
+        doi = re.sub(r"^(?:https?://)?(?:dx\.)?doi\.org/", "", doi, flags=re.I)
+        if re.match(r"^https?://", doi, flags=re.I):
+            if re.match(r"^https?://(?:dx\.)?doi\.org/", doi, flags=re.I):
+                problems.append(f"item {it['id']}: DOI 双前缀 {doi}")
+            continue                      # 非 DOI 的绝对链接（arXiv 等）直通
+        if doi and not re.match(r"^10\.\d{4,9}/", doi):
+            problems.append(f"item {it['id']}: DOI 形态可疑 {doi}")
+
+    # 4) gallery-data.js 与 refs 一致（条数、NaN、空缩略图）
+    gd = (SITE / "assets" / "gallery-data.js").read_text(encoding="utf-8")
+    m = re.match(r"window\.GALLERY_DATA = (\[.*\]);\n$", gd, re.S)
+    if not m:
+        problems.append("gallery-data.js 形状异常（无法解析）")
+    else:
+        data = json.loads(m.group(1).replace("\\u003c", "<"))
+        if len(data) != len(items):
+            problems.append(f"gallery-data {len(data)} 条 ≠ refs {len(items)} 条")
+        if "NaN" in gd:
+            problems.append("gallery-data.js 含 NaN（脏 hex/数值漏进了产物）")
+        n_empty = sum(1 for x in data if not x.get("rel"))
+        if n_empty:
+            problems.append(f"gallery-data 有 {n_empty} 条缺缩略图 rel")
+
+    # 5) 孤儿文件：images/ 里不被任何 item 引用 → 只告警（prepare 会清理，
+    #    构建期误杀风险大，不作为失败条件）
+    referenced = {it.get(k) for it in items for k in ("thumb", "full", "disp") if it.get(k)}
+    actual = {p.as_posix().split("images/", 1)[1] for p in IMAGES.rglob("*") if p.is_file()}
+    orphans = actual - referenced
+    if orphans:
+        warns.append(f"images/ 有 {len(orphans)} 个孤儿文件（未被任何 item 引用，下次 prepare 清理）："
+                     + "、".join(sorted(orphans)[:3]) + ("…" if len(orphans) > 3 else ""))
+
+    for w in warns:
+        print("! " + w)
+    if problems:
+        print(f"! 构建自检未通过（{len(problems)} 处）：")
+        for p in problems[:20]:
+            print("  - " + p)
+        if len(problems) > 20:
+            print(f"  …共 {len(problems)} 处")
+        return False
+    print(f"· 构建自检通过：{n_refs} 处 ?v= 引用 / {len(pages)} 页 / {len(items)} 条 item 全部一致")
+    return True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="GeoSciPlot 静态站生成")
     ap.add_argument("--preview", action="store_true",
@@ -608,6 +778,8 @@ def main() -> int:
                     help="生产模式启用同源源站图片（需先把 images/thumb 与 images/disp "
                          "同步到服务器 /var/www/geosciplot-images/，见 usage.md「源站图片」）："
                          "sources 首位插入 /images，jsDelivr/raw 仍作在线降级")
+    ap.add_argument("--no-verify", action="store_true",
+                    help="跳过构建末尾的自检门禁（应急用；正常情况下自检失败应当修复而不是跳过）")
     args = ap.parse_args()
 
     cfg = load_cfg()
@@ -617,6 +789,9 @@ def main() -> int:
     items = json.loads(REFS_JSON.read_text(encoding="utf-8")).get("items", [])
     if not items:
         print("! 索引为空")
+        return 1
+    if any(not isinstance(x, dict) for x in items):
+        print("! refs.json 含非对象元素——先修复 meta/refs.json 再构建（verify_build 依赖字段访问）")
         return 1
 
     origin_images = args.origin_images and not args.preview
@@ -773,6 +948,19 @@ def main() -> int:
 
     # 404 页：noindex + 回首页/搜索入口（nginx 需 error_page 404 /404.html 配合）
     (SITE / "404.html").write_text(render_404(cfg), encoding="utf-8")
+
+    # 自检门禁：?v= / item 文件 / DOI 形态 / gallery-data 一致性（--no-verify 应急跳过）
+    marker = SITE / ".no-verify-skip"
+    if args.no_verify:
+        marker.write_text(time.strftime("%Y-%m-%d %H:%M:%S") + " 本次构建跳过了自检\n", encoding="utf-8")
+        print("! 本次构建跳过了自检门禁（--no-verify）——已留痕，下次正常构建会提示")
+    else:
+        if marker.is_file():
+            print("! 上一次构建曾使用 --no-verify 跳过自检（留痕 " + marker.read_text(encoding='utf-8').strip() + "）"
+                  "——本次已恢复全量自检")
+        marker.unlink(missing_ok=True)
+        if not verify_build(items):
+            return 1
 
     precompress(SITE)
 

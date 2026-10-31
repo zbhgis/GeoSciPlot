@@ -51,6 +51,7 @@ from PIL import Image, ImageOps  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from render_md import plain_text  # noqa: E402  字数统计与构建同源（含导流模板剥离）
 from site_common import SCOPE_TAGS  # noqa: E402  标签双轨的范围白名单（prepare/构建同一份）
+from colors import to_rgb  # noqa: E402  预览缩略图与入库管线同一模式转换（I;16/F 全同值等）
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "raw"
@@ -111,9 +112,10 @@ def load_refs() -> dict:
     if REFS_JSON.exists():
         try:
             data = json.loads(REFS_JSON.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and isinstance(data.get("items"), list):
-                return data
-            raise ValueError("形状不符（缺 items 数组）")
+            if not (isinstance(data, dict) and isinstance(data.get("items"), list)):
+                raise ValueError("形状不符（缺 items 数组）")
+            if any(not isinstance(x, dict) for x in data["items"]):
+                raise ValueError("items 含非对象元素")
         except (json.JSONDecodeError, ValueError) as e:
             stamp = time.strftime("%Y%m%d-%H%M%S")
             backup = REFS_JSON.parent / (REFS_JSON.name + f".corrupt-{stamp}")
@@ -122,6 +124,7 @@ def load_refs() -> dict:
                 f"refs.json 损坏（{e}），已备份为 {backup.name}"
                 "——修复或恢复该文件后重试，拒绝以空库覆盖"
             ) from e
+        return data
     return {"items": []}
 
 
@@ -160,8 +163,7 @@ def preview_b64(path: Path, box: int = 360) -> str:
     try:
         with Image.open(path) as im:
             im = ImageOps.exif_transpose(im)
-            if im.mode not in ("RGB", "RGBA"):
-                im = im.convert("RGB")
+            im = to_rgb(im)   # 16-bit/float 灰度等与入库管线同一口径，预览不再白图/噪声
             im.thumbnail((box, box), Image.LANCZOS)
             buf = io.BytesIO()
             im.save(buf, "WEBP", quality=72, method=4)
@@ -175,11 +177,12 @@ def doi_key(s: str) -> str:
 
     必须归一化，否则查重会静默失效：库里历史数据存的是**完整 URL 形式**
     （`https://doi.org/10.1038/xxx`，见 meta/titles.csv），而用户手输的多半是
-    **裸 DOI**（`10.1038/xxx`）。另外 DOI 本身大小写不敏感。
+    **裸 DOI**（`10.1038/xxx`）——粘贴来源还可能给出无协议的 `doi.org/10.x`。
+    另外 DOI 本身大小写不敏感。
     前端 `doiKey()` 用的是同一套规则，两边必须保持一致。
     """
     k = str(s or "").strip().lower()
-    k = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", k)
+    k = re.sub(r"^(?:https?://)?(?:dx\.)?doi\.org/", "", k)
     k = re.sub(r"^doi:\s*", "", k)
     return k
 
@@ -267,7 +270,11 @@ def start_job(kind: str, body: dict) -> str:
                          "log": [{"step": "忙碌", "ok": False,
                                   "out": "同一时间只允许一条发布/推送流水线"}]}
         return jid
-    job = {"kind": kind, "log": [], "done": False, "ok": None, "hint": ""}
+    # 共享日志：job["log"] 与 do_* 里 step() 写的是同一个列表对象——
+    # 此前日志只在 worker 收尾时一次性塞回，前端轮询在整个构建+推送期间
+    # 拿到的恒为空列表，「实时进度」从未真正生效（子代理复盘发现）
+    shared_log: list[dict] = []
+    job = {"kind": kind, "log": shared_log, "done": False, "ok": None, "hint": ""}
     with JOBS_LOCK:
         JOBS[jid] = job
         done_ids = [k for k, v in JOBS.items() if v["done"]]
@@ -278,25 +285,30 @@ def start_job(kind: str, body: dict) -> str:
         try:
             if kind == "publish":
                 res = do_publish(body.get("items") or [], body.get("message") or "",
-                                 bool(body.get("push", True)), bool(body.get("sync", True)))
+                                 bool(body.get("push", True)), bool(body.get("sync", True)),
+                                 log=shared_log)
             elif kind == "stage":
-                res = do_stage(body.get("items") or [])
+                res = do_stage(body.get("items") or [], log=shared_log)
             elif kind == "deploy":
                 res = do_deploy(body.get("message") or "",
-                                bool(body.get("push", True)), bool(body.get("sync", True)))
+                                bool(body.get("push", True)), bool(body.get("sync", True)),
+                                log=shared_log)
             elif kind == "delete":
                 res = do_delete_and_finish((body.get("id") or "").strip(), body.get("message") or "",
-                                           bool(body.get("push", True)), bool(body.get("sync", True)))
+                                           bool(body.get("push", True)), bool(body.get("sync", True)),
+                                           log=shared_log)
             elif kind == "sync-server":
-                res = do_sync_server()
+                res = do_sync_server(log=shared_log)
             elif kind == "init":
-                res = do_init(body.get("remote") or "")
+                res = do_init(body.get("remote") or "", log=shared_log)
             elif kind == "push":
-                res = do_push()
+                res = do_push(log=shared_log)
             else:
                 res = {"ok": False, "log": [{"step": kind, "ok": False, "out": "未知任务类型"}]}
         except Exception as e:            # 后台线程绝不能静默死掉
-            res = {"ok": False, "hint": "", "log": [{"step": "后台任务异常", "ok": False, "out": repr(e)}]}
+            # 异常条目追加进共享日志而不是整表替换：前面步骤的实时记录要保留
+            shared_log.append({"step": "后台任务异常", "ok": False, "out": repr(e)})
+            res = {"ok": False, "hint": "", "log": shared_log}
         finally:
             if kind in PIPELINE_KINDS:
                 PIPELINE_LOCK.release()
@@ -306,7 +318,16 @@ def start_job(kind: str, body: dict) -> str:
             job["ok"] = bool(res.get("ok"))
             job["hint"] = res.get("hint", "")
 
-    threading.Thread(target=worker, daemon=True, name=f"job-{kind}-{jid}").start()
+    try:
+        threading.Thread(target=worker, daemon=True, name=f"job-{kind}-{jid}").start()
+    except Exception as e:
+        # 线程启动失败时 worker 不会运行、finally 里的锁释放不会发生——
+        # 不在这里补放 PIPELINE_LOCK 的话，所有流水线任务从此永远「忙碌」直到重启
+        if kind in PIPELINE_KINDS:
+            PIPELINE_LOCK.release()
+        with JOBS_LOCK:
+            job.update(done=True, ok=False, hint="后台线程启动失败，请重试",
+                       log=[{"step": "启动后台任务", "ok": False, "out": repr(e)}])
     return jid
 
 
@@ -530,14 +551,30 @@ def do_upload(files: list[dict]) -> dict:
 def do_update(updates: list[dict]) -> dict:
     """批量更新元数据：写 titles.csv + 回填 refs.json（不重新生成站点）。"""
     upd_map: dict[str, dict] = {}
+    skipped: list[str] = []
+    known = {it.get("id") for it in load_refs().get("items", [])}
     for u in updates:
         fid = (u.get("id") or "").strip()
         if not fid:
             continue
+        if fid not in known:
+            # 杂散 id 入 CSV 会被构建门禁 2d 判收敛失败，堵死之后的每次发布——
+            # 这里直接拒绝而不是照写（UI 不会发，防 curl/脚本误敲）
+            skipped.append(fid)
+            continue
+        # 先记录调用方显式提供的字段：ensure_tbd 会给缺标签的 u 补「待定」，
+        # 那是为「表单整包保存、用户清空标签」设计的兜底；若部分字段的 API 调用
+        # （如只改 doi）也吃进补出来的待定值，就会把没动过的真实标签整组覆盖掉
+        provided = [k for k in list(MANUAL_TEXT) + list(MANUAL_LIST) if k in u]
         ensure_tbd(u)
-        upd_map[fid] = {k: u[k] for k in list(MANUAL_TEXT) + list(MANUAL_LIST) if k in u}
+        # None 与「显式空串/空数组」语义不同：null 不是用户输入（UI 不会发），
+        # 过滤掉，否则 str(None) 会把字面 "None" 写进 titles.csv 并回流成坏链
+        upd_map[fid] = {k: u[k] for k in provided if k in u and u[k] is not None}
     if not upd_map:
-        return {"ok": False, "log": [{"step": "更新元数据", "ok": False, "out": "没有可更新的字段"}]}
+        msg = "没有可更新的字段"
+        if skipped:
+            msg += f"（{len(skipped)} 个 id 不在图库中：{' '.join(skipped[:5])}）"
+        return {"ok": False, "log": [{"step": "更新元数据", "ok": False, "out": msg}]}
 
     n_csv = apply_to_csv(upd_map)
     n_refs = apply_to_refs(upd_map)
@@ -546,7 +583,9 @@ def do_update(updates: list[dict]) -> dict:
                      "out": f"titles.csv 与 refs.json 各回填 {n_csv}/{n_refs} 条"}]}
 
 
-def do_delete(fid: str) -> dict:
+def do_delete(fid: str, log: list[dict] | None = None) -> dict:
+    if log is None:
+        log = []
     refs = load_refs()
     items = refs.get("items", [])
     it = next((x for x in items if x.get("id") == fid), None)
@@ -554,18 +593,27 @@ def do_delete(fid: str) -> dict:
         return {"ok": False, "log": [{"step": "删除", "ok": False, "out": f"id 不存在：{fid}"}]}
 
     removed: list[str] = []
+    failed: list[str] = []
     for key in ("thumb", "full", "disp"):   # disp 一并删：孤立展示档要等下次 prepare 才被清，期间还进 git
         p = IMG_DIR / str(it.get(key, ""))
         # is_file() 而非 exists()：字段缺失时路径落在 images/ 目录本身，
         # exists() 为真、unlink() 对目录抛 PermissionError——此时图片已删、
         # save_refs 未执行，状态撕裂且每次重试都卡在同一处
         if p.is_file():
-            p.unlink()
-            removed.append(str(p.relative_to(ROOT)))
+            # unlink_retry：Windows 上杀软/索引服务的短时句柄占用很常见，
+            # 与 do_raw_delete/do_raw_clear 同一口径，不再让单个文件锁毁掉整个删除任务
+            ok, err = unlink_retry(p)
+            if ok:
+                removed.append(str(p.relative_to(ROOT)))
+            else:
+                failed.append(f"{p.name}：{err}")
     raw_file = RAW_DIR / str(it.get("origName", ""))
     if raw_file.is_file():
-        raw_file.unlink()
-        removed.append(str(raw_file.relative_to(ROOT)))
+        ok, err = unlink_retry(raw_file)
+        if ok:
+            removed.append(str(raw_file.relative_to(ROOT)))
+        else:
+            failed.append(f"{raw_file.name}：{err}")
 
     refs["items"] = [x for x in items if x.get("id") != fid]
     refs["count"] = len(refs["items"])
@@ -582,11 +630,18 @@ def do_delete(fid: str) -> dict:
                     sub.rmdir()
 
     out = "已移除 " + "、".join(removed) if removed else "已从索引移除"
-    return {"ok": True, "item": it,
-            "log": [{"step": f"删除 {fid}", "ok": True, "out": out}]}
+    if failed:
+        out += ("；以下文件删除失败（文件被占用，raw/ 非空的下次入库时会由 prepare "
+                "重试清理，或手动删除）：" + "；".join(failed))
+    log.append({"step": f"删除 {fid}", "ok": True, "out": out})
+    return {"ok": True, "item": it, "log": log}
 
 
-def do_sync_server() -> dict:
+def do_sync_server(log: list[dict] | None = None) -> dict:
+    """把 site/ 同步到服务器：SSH 建 staging → scp 上传 → 原子换台（失败回滚）→ IndexNow。
+    传入 start_job 的共享 log 时每阶段完成即写入，前端轮询能看到实时进度。"""
+    if log is None:
+        log = []
     cfg = {}
     cfg_path = ROOT / "gallery.config.json"
     if cfg_path.exists():
@@ -602,10 +657,10 @@ def do_sync_server() -> dict:
     # 已换台成功、任务却被标失败）—— 这里就地解析并容错跳过
     site_url = (cfg.get("site_url") or "").rstrip("/") or "https://geosciplot.zbhgis.com"
     if not host:
-        return {"ok": False,
-                "log": [{"step": "同步服务器", "ok": False,
-                         "out": "未配置 server.host —— 在 gallery.config.json 里加 "
-                                "\"server\": {\"host\": \"root@47.98.133.104\", \"webroot\": \"/var/www/geosciplot\"}"}]}
+        log.append({"step": "同步服务器", "ok": False,
+                    "out": "未配置 server.host —— 在 gallery.config.json 里加 "
+                           "\"server\": {\"host\": \"root@47.98.133.104\", \"webroot\": \"/var/www/geosciplot\"}"})
+        return {"ok": False, "log": log}
 
     ssh_base = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", host]
     # 原子换台式同步：先整体传到 staging 目录，成功后再毫秒级 rename 就位。
@@ -615,25 +670,49 @@ def do_sync_server() -> dict:
     stage = webroot + ".staging"
     code, out = run(ssh_base + [f"rm -rf {stage} && mkdir -p {stage}"],
                     timeout=60)
+    ssh_msg = "" if code == 0 else ("SSH 连接失败（需先把本机公钥加入服务器 authorized_keys，"
+                                    "命令见 README「服务器部署」一节）\n" + out)
+    log.append({"step": "SSH 建暂存目录", "ok": code == 0, "out": ssh_msg})
     if code != 0:
-        return {"ok": False, "log": [{"step": "同步服务器", "ok": False,
-                                      "out": "SSH 连接失败（需先把本机公钥加入服务器 authorized_keys，"
-                                             "命令见 README「服务器部署」一节）\n" + out}]}
+        return {"ok": False, "log": log}
 
     code, out = run(["scp", "-r", "-o", "BatchMode=yes", str(SITE) + "/.", f"{host}:{stage}/"], timeout=600)
+    log.append({"step": f"scp 上传 site/ → {host}:{stage}/", "ok": code == 0,
+                "out": "scp 失败（线上保持旧版本）\n" + out if code != 0 else ""})
     if code != 0:
         run(ssh_base + [f"rm -rf {stage}"], timeout=60)  # 清掉残局，线上保持旧版本
-        return {"ok": False, "log": [{"step": "同步服务器", "ok": False, "out": "scp 失败（线上保持旧版本）\n" + out}]}
-    code, out = run(ssh_base + [f"mv {webroot} {webroot}.old 2>/dev/null; "
-                                f"mv {stage} {webroot} && rm -rf {webroot}.old"], timeout=120)
+        return {"ok": False, "log": log}
+    # 原子换台（防嵌套语义）：先清掉上次失败可能遗留的 webroot.old（换台成功本来
+    # 就要删它；不清理则本次 mv webroot 会嵌进旧备份，回滚恢复出坏布局）；
+    # webroot 存在则必须先挪走（挪不走 = 挂载点/权限问题，直接放弃——继续 mv stage
+    # 会把 staging 嵌进现网目录并伪成功）；换台失败按回滚结果分型报错
+    swap_cmd = (
+        f"rm -rf {webroot}.old; "
+        f"if [ -d {webroot} ]; then mv {webroot} {webroot}.old || {{ echo MOVE_FAIL; exit 1; }}; fi; "
+        f"if mv {stage} {webroot}; then rm -rf {webroot}.old; echo SWAP_OK; "
+        f"else if [ -d {webroot}.old ]; then if mv {webroot}.old {webroot}; then echo ROLLBACK_OK; "
+        f"else echo ROLLBACK_FAIL; fi; else echo NO_OLD; fi; exit 1; fi"
+    )
+    code, out = run(ssh_base + [swap_cmd], timeout=120)
     if code != 0:
-        return {"ok": False, "log": [{"step": "同步服务器", "ok": False, "out": "切换 staging 失败\n" + out}]}
+        if "ROLLBACK_FAIL" in out:
+            swap_msg = "换台失败且自动回滚未成功——旧版本仍在 " + webroot + ".old，需手工恢复"
+        elif "NO_OLD" in out:
+            swap_msg = "换台失败（首次部署，服务器上无旧版本可回滚）——staging 保留在服务器，可直接重试"
+        elif "MOVE_FAIL" in out:
+            swap_msg = "旧站点目录无法挪动（挂载点/权限？），本次部署未生效，线上保持原样"
+        else:
+            swap_msg = "换台失败（旧版本已回滚就位）"
+        log.append({"step": "原子换台", "ok": False, "out": swap_msg + "\n" + out})
+    else:
+        log.append({"step": "原子换台", "ok": True, "out": f"site/ → {host}:{webroot}"})
+    if code != 0:
+        return {"ok": False, "log": log}
     # 部署后搜索引擎推送：服务器端 ping-search.sh 按 sitemap 增量对比推 IndexNow
     # （脚本与主站共用同一份，按传入 URL 分账状态；失败只记日志不影响发布）
     ping, ping_out = run(ssh_base + [f"bash /opt/mystation/deploy/ping-search.sh {site_url}"], timeout=120)
-    ping_log = {"step": "搜索引擎推送（IndexNow）", "ok": ping == 0, "out": ping_out.strip() or "完成"}
-    return {"ok": True, "log": [{"step": "同步服务器", "ok": True, "out": f"site/ → {host}:{webroot}"},
-                                ping_log]}
+    log.append({"step": "搜索引擎推送（IndexNow）", "ok": ping == 0, "out": ping_out.strip() or "完成"})
+    return {"ok": True, "log": log}
 
 
 def pipeline_after_content(log: list[dict], message: str, push: bool, sync: bool) -> dict:
@@ -663,10 +742,8 @@ def pipeline_after_content(log: list[dict], message: str, push: bool, sync: bool
             return {"ok": False, "log": log, "hint": "推送失败：检查 origin 与 SSH key（也可能是网络波动，稍后手动 git push）"}
 
     if sync:
-        log.append({"step": "同步服务器（ssh 清理 + scp 上传）", "out": "", "ok": None})
-        res = do_sync_server()
-        log[-1]["ok"] = bool(res["ok"])
-        log[-1]["out"] = "\n".join(x.get("out", "") for x in res["log"])
+        # 各阶段条目由 do_sync_server 直接写进共享 log（scp 上传较久，实时可见）
+        res = do_sync_server(log=log)
         if not res["ok"]:
             return {"ok": True, "log": log,
                     "hint": "GitHub 已同步；服务器同步失败（见日志）——通常是本机公钥还没加到服务器的 authorized_keys，"
@@ -714,12 +791,13 @@ def apply_items_to_csv(items: list[dict]) -> int:
     return written
 
 
-def do_stage(items: list[dict]) -> dict:
+def do_stage(items: list[dict], log: list[dict] | None = None) -> dict:
     """暂存到本地（不推送）：写 titles.csv + prepare.py 增量入库（缩略图 + refs.json）。
 
     之后不构建站点、不碰 git——攒够一批后点「一键推送全部」统一发布。
     prepare.py 本身是增量的：raw/ 里没有新图时直接跳过（防误删保险），秒级返回。"""
-    log: list[dict] = []
+    if log is None:
+        log = []
     written = apply_items_to_csv(items)
     log.append({"step": "写入标题表", "ok": True, "out": f"meta/titles.csv 更新 {written} 条"})
     ok, out = step(log, "生成图片与索引 (prepare.py)", [PYTHON, "scripts/prepare.py"])
@@ -730,22 +808,26 @@ def do_stage(items: list[dict]) -> dict:
     return {"ok": True, "log": log}
 
 
-def do_deploy(message: str, push: bool = True, sync: bool = True) -> dict:
+def do_deploy(message: str, push: bool = True, sync: bool = True,
+              log: list[dict] | None = None) -> dict:
     """一键推送所有已保存的变更：prepare 增量入库 → 构建站点 → git 提交推送 →（可选）同步服务器。
 
     「所有已保存的」= 此前用「暂存」写进 titles.csv / refs.json 的元数据改动、
     raw/ 里还没入库的图（prepare 增量收录），以及一切未提交的本地文件——
     流水线对内容不可知，git add -A 全收。"""
-    log: list[dict] = []
+    if log is None:
+        log = []
     ok, out = step(log, "增量入库 (prepare.py)", [PYTHON, "scripts/prepare.py"])
     if not ok:
         return {"ok": False, "log": log, "hint": "prepare.py 失败，未继续后面的步骤"}
     return pipeline_after_content(log, message or "update: 图库内容变更", push, sync)
 
 
-def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = True) -> dict:
+def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = True,
+               log: list[dict] | None = None) -> dict:
     """保存并推送 = 暂存（写表 + 入库）+ 完整流水线。"""
-    log: list[dict] = []
+    if log is None:
+        log = []
     written = apply_items_to_csv(items)
     log.append({"step": "写入标题表", "ok": True, "out": f"meta/titles.csv 更新 {written} 条"})
 
@@ -756,16 +838,18 @@ def do_publish(items: list[dict], message: str, push: bool = True, sync: bool = 
     return pipeline_after_content(log, message or f"add: {written} 张图", push, sync)
 
 
-def do_push() -> dict:
-    log: list[dict] = []
+def do_push(log: list[dict] | None = None) -> dict:
+    if log is None:
+        log = []
     ok, out = step(log, "git push（推送到 GitHub）", ["git", "push"], timeout=300)
     if not ok:
         return {"ok": False, "log": log, "hint": "推送失败：检查 origin 与 SSH key（也可能是网络波动，稍后重试）"}
     return {"ok": True, "log": log}
 
 
-def do_init(remote: str) -> dict:
-    log: list[dict] = []
+def do_init(remote: str, log: list[dict] | None = None) -> dict:
+    if log is None:
+        log = []
     if not remote.strip():
         remote = DEFAULT_REMOTE
 
@@ -792,11 +876,12 @@ def do_init(remote: str) -> dict:
     return {"ok": True, "log": log}
 
 
-def do_delete_and_finish(fid: str, message: str, push: bool, sync: bool) -> dict:
-    res = do_delete(fid)
+def do_delete_and_finish(fid: str, message: str, push: bool, sync: bool,
+                         log: list[dict] | None = None) -> dict:
+    res = do_delete(fid, log=log)
     if not res.get("ok"):
         return res
-    log = res.get("log", [])
+    log = res.get("log", log if log is not None else [])
     return pipeline_after_content(log, message or f"delete: 图 {fid}", push, sync)
 
 
@@ -894,24 +979,27 @@ def _under_dir(path: Path, d: Path) -> bool:
 
 def split_front_matter(text: str) -> tuple[str, str, str]:
     """拆 frontmatter → (fm 块含首尾 ---（无尾换行）, --- 行尾换行, 正文)。
-    分隔换行必须与正文分开保真：重写元数据按 `fm + sep + body` 拼回才能逐字节
-    还原（有的文章 closing --- 后带空行，无脑拼 `---\n` 会把它吃掉）。
-    无 frontmatter 时前两项为空串。"""
+    分隔换行必须与正文分开保真：重写元数据按 `fm + sep + body` 拼回，二次拆分
+    幂等且 body 逐字节不变。注意调用方经 read_text() 读文件（通用换行翻译），
+    CRLF 在进入本函数前已是 LF——首保存把 CRLF 文件整体规范成 LF 是 read_text
+    的行为，不是本函数引入；本函数在 LF 域内逐字节保真。无 frontmatter 时前两项为空串。"""
     m = FM_OPEN_RE.match(text)
     if not m:
         return "", "", text
     rest = text[m.end():]
-    close = re.search(r"\r?\n---[ \t]*(?=\r?\n)", rest)      # closing --- 行（后面还有内容）
+    # 捕获 closing --- 前的换行并原样复用：CRLF 文件少一次无谓改写
+    # （此前重组补硬编码 \n，会把 FM 内部最后一行的 \r\n 规范化掉）
+    close = re.search(r"(\r?\n)---[ \t]*(?=\r?\n)", rest)    # closing --- 行（后面还有内容）
     if close is None:
-        close = re.search(r"\r?\n---[ \t]*\Z", rest)          # 文件恰在 --- 结束
+        close = re.search(r"(\r?\n)---[ \t]*\Z", rest)        # 文件恰在 --- 结束
         if close is None:
             return "", "", text
-        return "---\n" + rest[:close.start()] + "\n---", "", ""
+        return "---\n" + rest[:close.start()] + close.group(1) + "---", "", ""
     after = rest[close.end():]
     nl = re.match(r"\r?\n", after)
-    return ("---\n" + rest[:close.start()] + "\n---",
+    return ("---\n" + rest[:close.start()] + close.group(1) + "---",
             nl.group(0) if nl else "",
-            after[1:] if nl else after)
+            after[len(nl.group(0)):] if nl else after)
 
 
 def parse_fm_fields(fm_block: str) -> dict:
@@ -1133,6 +1221,10 @@ def do_article_meta(file: str, meta: dict, expected_mtime) -> dict:
             renamed = target.name
         # 备份放在改名**之后**：.bak 必须跟最终文件名配对，否则改名场景下旧名 .bak 会失配
         _backup_md(p)
+        # 无 frontmatter 的文章（手拷进来的 md）：sep 为空会让闭合 --- 与正文首行
+        # 粘成一行，此后 frontmatter 永远解析不出——补一个换行
+        if not sep:
+            sep = "\n"
         p.write_text(build_front_matter(new_meta) + sep + body, encoding="utf-8", newline="\n")
     except OSError as e:
         return {"ok": False, "error": f"写入失败：{e}"}
@@ -1336,7 +1428,6 @@ class Handler(BaseHTTPRequestHandler):
             self._safe_500(e)
 
     def _handle_post(self):
-        path = (self.path or "/").split("?")[0]
         path = (self.path or "").split("?")[0]
         body = self._read_json()
         if path == "/api/upload":
@@ -1349,32 +1440,40 @@ class Handler(BaseHTTPRequestHandler):
             self._json(do_raw_clear())
         elif path == "/api/save":
             # 元数据暂存：纯本地读写（titles.csv + refs.json），毫秒级，同步返回。
-            # 流水线正在跑时拒绝——refs.json / titles.csv 可能正被读取，写了就是撕裂状态
-            if PIPELINE_LOCK.locked():
-                self._json({"ok": False, "error": "已有发布/推送任务在运行，等它结束后再保存"})
+            # 真持锁再写（此前只 locked() 探测存在 check-then-write 窗口）：
+            # 流水线持有锁期间到这里的写入直接被拒，refs.json / titles.csv 不会撕裂
+            if PIPELINE_LOCK.acquire(blocking=False):
+                try:
+                    self._json(do_update(body.get("items") or []))
+                finally:
+                    PIPELINE_LOCK.release()
             else:
-                self._json(do_update(body.get("items") or []))
+                self._json({"ok": False, "error": "已有发布/推送任务在运行，等它结束后再保存"})
         elif path.startswith("/api/article/"):
             # 文章增删改都是本地文件写（毫秒级），同步返回；
-            # 流水线正在跑时拒绝 —— content/guide 可能正被构建读取
-            if PIPELINE_LOCK.locked():
+            # 真持锁再写（口径同 /api/save）—— content/guide 可能正被构建读取
+            if not PIPELINE_LOCK.acquire(blocking=False):
                 self._json({"ok": False, "error": "已有发布/推送任务在运行，等它结束后再操作文章"})
-            elif path == "/api/article/save":
-                self._json(do_article_save(body.get("file") or "", body.get("body") or "",
-                                           body.get("expectedMtimeMs")))
-            elif path == "/api/article/meta":
-                self._json(do_article_meta(body.get("file") or "", body.get("meta") or {},
-                                           body.get("expectedMtimeMs")))
-            elif path == "/api/article/new":
-                self._json(do_article_new(body.get("title") or "", body.get("slug") or "",
-                                          body.get("date") or "",
-                                          body.get("categoryTags"), body.get("subCategoryTags")))
-            elif path == "/api/article/delete":
-                self._json(do_article_delete(body.get("file") or ""))
-            elif path == "/api/article/restore":
-                self._json(do_article_restore(body.get("name") or ""))
             else:
-                self._send(404, b"not found", "text/plain; charset=utf-8")
+                try:
+                    if path == "/api/article/save":
+                        self._json(do_article_save(body.get("file") or "", body.get("body") or "",
+                                                   body.get("expectedMtimeMs")))
+                    elif path == "/api/article/meta":
+                        self._json(do_article_meta(body.get("file") or "", body.get("meta") or {},
+                                                   body.get("expectedMtimeMs")))
+                    elif path == "/api/article/new":
+                        self._json(do_article_new(body.get("title") or "", body.get("slug") or "",
+                                                  body.get("date") or "",
+                                                  body.get("categoryTags"), body.get("subCategoryTags")))
+                    elif path == "/api/article/delete":
+                        self._json(do_article_delete(body.get("file") or ""))
+                    elif path == "/api/article/restore":
+                        self._json(do_article_restore(body.get("name") or ""))
+                    else:
+                        self._send(404, b"not found", "text/plain; charset=utf-8")
+                finally:
+                    PIPELINE_LOCK.release()
         elif path in ("/api/publish", "/api/stage", "/api/deploy", "/api/delete",
                       "/api/sync-server", "/api/init", "/api/push"):
             # 长操作：立即返回任务号，后台线程执行，前端轮询 /api/job/<id>

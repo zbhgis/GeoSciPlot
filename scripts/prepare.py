@@ -38,7 +38,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from colors import extract_colors  # noqa: E402  主色提取（存入 refs.json 的 colors 字段）
+from colors import extract_colors, to_rgb  # noqa: E402  主色提取 + 共享模式转换（I;16 拉伸）
 from site_common import SCOPE_SET, SCOPE_TBD, STYLE_TBD  # noqa: E402  标签双轨白名单
 
 
@@ -95,6 +95,8 @@ def load_existing() -> dict[str, dict]:
         data = json.loads(REFS_JSON.read_text(encoding="utf-8"))
         if not (isinstance(data, dict) and isinstance(data.get("items"), list)):
             raise ValueError("形状不符（缺 items 数组）")
+        if any(not isinstance(x, dict) for x in data["items"]):
+            raise ValueError("items 含非对象元素")
     except (json.JSONDecodeError, ValueError) as e:
         # 与 admin.load_refs 同一道防线：损坏时备份现场并抛错，绝不静默按空库继续
         # ——空库 + raw/ 只剩最近一批时，prune_unused 会把历史图库整批物理删除
@@ -174,22 +176,19 @@ def make_assets(src: Path, fid: str, day: str) -> tuple[int, int, str, int]:
     full_day.mkdir(parents=True, exist_ok=True)
 
     full_path = full_day / f"{fid}.{ext}"
-    shutil.copyfile(src, full_path)          # 原图：逐字节复制
-    full_bytes = full_path.stat().st_size
 
+    # 先解码生成缩略图、后复制原图：坏文件在 copyfile 之前就崩，不会留下
+    # 「full/ 已落盘、索引却没有」的孤儿副本（敌意语料实测的崩溃批次遗留）
     with Image.open(src) as im:
         im = ImageOps.exif_transpose(im)
-        if im.mode in ("RGBA", "LA", "P"):
-            im = im.convert("RGBA")
-            bg = Image.new("RGB", im.size, (255, 255, 255))
-            bg.paste(im, mask=im.split()[-1])
-            im = bg
-        elif im.mode != "RGB":
-            im = im.convert("RGB")
+        im = to_rgb(im)          # 透明铺白底；I;16/I 灰度按动态范围拉伸（直接转 RGB 会全白/噪声）
         w, h = im.size
         thumb = im.copy()
         thumb.thumbnail((THUMB_MAX, THUMB_MAX), Image.LANCZOS)
         thumb.save(thumb_day / f"{fid}.webp", "WEBP", quality=THUMB_Q, method=6)
+
+    shutil.copyfile(src, full_path)          # 原图：逐字节复制
+    full_bytes = full_path.stat().st_size
 
     return w, h, ext, full_bytes
 
@@ -221,13 +220,7 @@ def ensure_disp(item: dict, full_path: Path, keep: set, dry_run: bool = False) -
     try:
         with Image.open(full_path) as im:
             im = ImageOps.exif_transpose(im)
-            if im.mode in ("RGBA", "LA", "P"):
-                im = im.convert("RGBA")
-                bg = Image.new("RGB", im.size, (255, 255, 255))
-                bg.paste(im, mask=im.split()[-1])
-                im = bg
-            elif im.mode != "RGB":
-                im = im.convert("RGB")
+            im = to_rgb(im)      # 与 make_assets 同一转换口径
             disp = im.copy()
             disp.thumbnail((DISP_MAX, DISP_MAX), Image.LANCZOS)
             disp_path.parent.mkdir(parents=True, exist_ok=True)
@@ -369,6 +362,7 @@ def main() -> int:
     seen_ids: set[str] = set()
     keep_paths: set[Path] = set()
     n_new = n_skip = n_dup = 0
+    poison: list[str] = []
     bytes_orig = bytes_full = bytes_thumb = bytes_disp = 0
     today = date.today().isoformat()
 
@@ -380,69 +374,81 @@ def main() -> int:
             continue
         seen_ids.add(fid)
 
-        old = existing.get(fid, {})
-        manual = titles.get(fid, {})
-        day = old.get("added") or today          # 日期目录：首次处理那天，保持稳定
-        thumb_path = THUMB_DIR / day / f"{fid}.webp"
+        try:
+            old = existing.get(fid, {})
+            manual = titles.get(fid, {})
+            day = old.get("added") or today          # 日期目录：首次处理那天，保持稳定
+            thumb_path = THUMB_DIR / day / f"{fid}.webp"
 
-        exts = {p.suffix.lower().lstrip(".") for p in (FULL_DIR / day).glob(f"{fid}.*")}
-        has_full = bool(exts)
-        ext = old.get("ext") or (next(iter(exts)) if exts else src.suffix.lower().lstrip("."))
-        full_path = FULL_DIR / day / f"{fid}.{ext}"
+            exts = {p.suffix.lower().lstrip(".") for p in (FULL_DIR / day).glob(f"{fid}.*")}
+            has_full = bool(exts)
+            ext = old.get("ext") or (next(iter(exts)) if exts else src.suffix.lower().lstrip("."))
+            full_path = FULL_DIR / day / f"{fid}.{ext}"
 
-        if not args.force and thumb_path.exists() and has_full:
-            w, h = old.get("width"), old.get("height")
-            if not w or not h:
-                with Image.open(src) as im:
-                    w, h = im.size
-            full_bytes = full_path.stat().st_size
-            n_skip += 1
-            flag = "跳过"
-            # 已入库的图沿用旧颜色；历史条目缺失时补算一次（下次继续跳过）
-            colors = old.get("colors") or (safe_colors(full_path) if full_path.is_file() else [])
-        else:
-            if args.dry_run:
-                with Image.open(src) as im:
-                    w, h = im.size
-                full_bytes = src.stat().st_size
-                colors = []
+            if not args.force and thumb_path.exists() and has_full:
+                w, h = old.get("width"), old.get("height")
+                if not w or not h:
+                    with Image.open(src) as im:
+                        w, h = im.size
+                full_bytes = full_path.stat().st_size
+                n_skip += 1
+                flag = "跳过"
+                # 已入库的图沿用旧颜色；历史条目缺失时补算一次（下次继续跳过）
+                colors = old.get("colors") or (safe_colors(full_path) if full_path.is_file() else [])
             else:
-                w, h, ext, full_bytes = make_assets(src, fid, day)
-                colors = safe_colors(src)
-            n_new += 1
-            flag = "处理"
+                if args.dry_run:
+                    with Image.open(src) as im:
+                        w, h = im.size
+                    full_bytes = src.stat().st_size
+                    colors = []
+                else:
+                    w, h, ext, full_bytes = make_assets(src, fid, day)
+                    colors = safe_colors(src)
+                n_new += 1
+                flag = "处理"
 
-        keep_paths.add(thumb_path)
-        keep_paths.add(FULL_DIR / day / f"{fid}.{ext}")
+            keep_paths.add(thumb_path)
+            keep_paths.add(FULL_DIR / day / f"{fid}.{ext}")
 
-        item = {
-            "id": fid,
-            "doi": manual.get("doi") or old.get("doi", ""),
-            # 双轨标签：两类各至少一个（CSV > 旧值 > 待定兜底；新入库未分类的图
-            # 落「待定」，可在管理界面按待定筛出来补齐）
-            "scope": manual.get("scope") or old.get("scope") or [SCOPE_TBD],
-            "style": manual.get("style") or old.get("style") or [STYLE_TBD],
-            "width": w,
-            "height": h,
-            "ext": ext,
-            "thumb": f"thumb/{day}/{fid}.webp",
-            "full": f"full/{day}/{fid}.{ext}",
-            "bytes": full_bytes,
-            "origName": src.name,
-            "added": day,
-        }
-        if colors:
-            item["colors"] = colors
-        # 展示档：增量跳过的老图若缺 disp 会在这里补生成（规则变化/首次升级的回填）
-        bytes_disp += ensure_disp(item, full_path, keep_paths, args.dry_run)
-        items.append(item)
+            item = {
+                "id": fid,
+                "doi": manual.get("doi") or old.get("doi", ""),
+                # 双轨标签：两类各至少一个（CSV > 旧值 > 待定兜底；新入库未分类的图
+                # 落「待定」，可在管理界面按待定筛出来补齐）
+                "scope": manual.get("scope") or old.get("scope") or [SCOPE_TBD],
+                "style": manual.get("style") or old.get("style") or [STYLE_TBD],
+                "width": w,
+                "height": h,
+                "ext": ext,
+                "thumb": f"thumb/{day}/{fid}.webp",
+                "full": f"full/{day}/{fid}.{ext}",
+                "bytes": full_bytes,
+                "origName": src.name,
+                "added": day,
+            }
+            if colors:
+                item["colors"] = colors
+            # 展示档：增量跳过的老图若缺 disp 会在这里补生成（规则变化/首次升级的回填）
+            bytes_disp += ensure_disp(item, full_path, keep_paths, args.dry_run)
+            items.append(item)
 
-        tsize = thumb_path.stat().st_size if thumb_path.exists() else 0
-        bytes_orig += src.stat().st_size
-        bytes_full += full_bytes
-        bytes_thumb += tsize
-        print(f"  {flag}  {fid}  {w}x{h}  {day}  原图 {full_bytes/1024:7.1f}KB + "
-              f"缩略图 {tsize/1024:5.1f}KB  {src.name}")
+            tsize = thumb_path.stat().st_size if thumb_path.exists() else 0
+            bytes_orig += src.stat().st_size
+            bytes_full += full_bytes
+            bytes_thumb += tsize
+            print(f"  {flag}  {fid}  {w}x{h}  {day}  原图 {full_bytes/1024:7.1f}KB + "
+                  f"缩略图 {tsize/1024:5.1f}KB  {src.name}")
+        except Exception as e:
+            # 单文件隔离（敌意语料实测：一个截断/0 字节/伪装扩展名的文件会让整批
+            # 入库崩溃，且毒文件留在 raw/ 把之后每次暂存/推送流水线永久堵死）——
+            # 跳过并记录，其余文件照常入库
+            poison.append(f"{src.name}: {e}")
+            print(f"  跳过（解析失败）  {src.name}  {e}")
+
+    if poison:
+        print(f"\n! raw/ 中有 {len(poison)} 个无法解析的文件被跳过（原文件保留，可手工删除后重跑）：")
+        for p_ in poison:
+            print("  - " + p_)
 
     # raw/ 里已无原图、但产物还在的条目：保留（不删历史）；展示档同样补齐
     for fid, old in existing.items():

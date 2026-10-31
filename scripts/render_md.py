@@ -261,7 +261,9 @@ def render(text: str) -> tuple[str, list[tuple[int, str, str]]]:
         if m:
             flush()
             level, txt = len(m.group(1)), m.group(2).strip()
-            plain = _esc(re.sub(r"\*+", "", txt))
+            # TOC 存原文（未转义）：消费端各自 esc 一次——存转义文本会让
+            # 侧栏/标题二次转义（MacroBiodiv weekly-18 产物实测在案）
+            plain = re.sub(r"\*+", "", txt)
             if level == 1:
                 h2 += 1
                 h3 = 0

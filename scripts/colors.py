@@ -36,14 +36,44 @@ MERGE_DIST2 = 1600      # 近色合并阈值：RGB 欧氏距离平方 < 40^2
 ALPHA_MIN = 128         # 透明度低于该值的像素不参与统计（与前端一致）
 
 
+def to_rgb(im):
+    """任意模式 → RGB（prepare 缩略图/展示档与主色提取共用同一转换）。
+
+    透明像素铺白底；16/32 位灰度与 float32（I;16 / I / F，DEM、出版级导出、
+    GIS 概率图常见）不能直接 convert("RGB")：Pillow 按位截断会把像素映射成
+    低字节噪声或纯白——先按实际动态范围线性拉伸到 8 位再转；全同值图按
+    位深映射为常量灰（拉伸会得到纯黑）。
+    """
+    if "A" in im.getbands() or im.mode == "P":
+        im = im.convert("RGBA")
+        bg = Image.new("RGB", im.size, (255, 255, 255))
+        bg.paste(im, mask=im.split()[-1])
+        return bg
+    if im.mode == "I" or im.mode.startswith("I;16") or im.mode == "F":
+        if im.mode not in ("I", "F"):
+            # I;16B/L/N 等字节序变体：getextrema 不支持（I;16B 实测 ValueError），
+            # 先拓宽到 32 位 I——值不变，后续拉伸/常量映射统一口径
+            im = im.convert("I")
+        lo, hi = im.getextrema()
+        if hi <= 255 and lo >= 0 and im.mode != "F":
+            return im.convert("L").convert("RGB")
+        span = hi - lo
+        if span <= 0:
+            # 全图同值：拉伸会得到纯黑（(v-lo)*k = 0），按位深映射常量灰
+            g = min(255, max(0, round(float(hi) / 257.0)))
+            return im.point(lambda v: g, mode="L").convert("RGB")
+        k = 255.0 / span
+        return im.point(lambda v: v * k - lo * k, mode="L").convert("RGB")
+    if im.mode != "RGB":
+        return im.convert("RGB")
+    return im
+
+
 def extract_colors(path: Path, top: int = TOP_N) -> list[dict]:
     """统计一张图的主色：[{hex, pct}]，pct 为相对全部不透明采样像素的占比。"""
     with Image.open(path) as img:
         img = ImageOps.exif_transpose(img)
-        if "A" in img.getbands() or img.mode == "P":
-            img = img.convert("RGBA")
-        elif img.mode != "RGB":
-            img = img.convert("RGB")
+        img = to_rgb(img)
         w, h = img.size
         n_px = w * h
         if n_px > MAX_SAMPLES:

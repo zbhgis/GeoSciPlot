@@ -26,3 +26,6 @@ nav_test_result.json
 
 # 本地调试日志
 debug.log
+
+# refs.json 损坏时的现场备份（load_refs / load_existing 抛错前落盘）
+meta/*.corrupt-*

@@ -27,7 +27,7 @@
 ## 本地预览
 
 ```bash
-pip install -r requirements.txt          # 只有 Python 3.9+ 与 Pillow 两个要求
+pip install -r requirements.txt          # 只有 Python 3.10+ 与 Pillow 两个要求
 git clone https://github.com/zbhgis/GeoSciPlot.git
 cd GeoSciPlot
 python scripts/build_site.py --preview   # 生成静态站（含图片副本）

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import re
 import time
 from pathlib import Path
 
@@ -52,6 +53,7 @@ def esc(s) -> str:
 
 
 def doi_bare(v) -> str:
-    """展示用短 DOI：剥掉 https://doi.org/ 前缀（refs.json 存的是完整 URL），
-    链接场景由调用方自行拼接"""
-    return str(v or "").removeprefix("https://doi.org/").removeprefix("http://doi.org/")
+    """展示用短 DOI：剥掉 doi.org 前缀（含 dx. 与无协议形态；refs.json 存的是
+    完整 URL），链接场景由调用方自行拼接"""
+    s = str(v or "").strip()
+    return re.sub(r"^(?:https?://)?(?:dx\.)?doi\.org/", "", s, flags=re.I)

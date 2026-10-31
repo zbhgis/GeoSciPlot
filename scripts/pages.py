@@ -492,10 +492,15 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
     ) or "—"
 
     # refs.json 里 DOI 可能存的是完整 URL（管理端按粘贴原样入库），
-    # 统一剥掉前缀再用，避免拼出 https://doi.org/https://doi.org/… 的坏链
+    # 统一剥掉前缀再用，避免拼出 https://doi.org/https://doi.org/… 的坏链；
+    # 无协议的 doi.org/... 粘贴形态同样剥掉（管理台 parseDois 允许它入库）
     doi = str(it.get("doi") or "").strip()
-    doi = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", doi, flags=re.I)
-    if doi:
+    doi = re.sub(r"^(?:https?://)?(?:dx\.)?doi\.org/", "", doi, flags=re.I)
+    if re.match(r"^https?://", doi, flags=re.I):
+        # 非 DOI 的绝对链接（如 arXiv 作品页）：直接用原地址，不能再套 doi.org
+        doi_html = (f'<a href="{esc(doi)}" rel="noopener" target="_blank">'
+                    f'{esc(re.sub(r"^https?://", "", doi, flags=re.I))}</a>')
+    elif doi:
         doi_html = f'<a href="https://doi.org/{esc(doi)}" rel="noopener" target="_blank">{esc(doi)}</a>'
     else:
         doi_html = "—"

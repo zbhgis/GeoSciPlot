@@ -36,42 +36,55 @@ const pathQS = (u) => { const x = new URL(u); return x.pathname + x.search; };
   const page = await ctx.newPage();
   page.on('pageerror', (e) => jsErrors.push(String(e)));
 
-  /* ---------- T1 标签筛选 → 详情 → 返回全部 ---------- */
+  /* ---------- T0 页面结构自检：选择器漂移时快速明确失败（双轨重构曾让本测试静默失效） ---------- */
   await page.goto(BASE + '/');
+  const t0 = await page.evaluate(() => ({
+    scopeChips: !!document.querySelector('.chips[data-key="scope"] button.chip[data-v]'),
+    grid: !!document.querySelector('#grid a.card'),
+    sortseg: !!document.querySelector('#sortseg button[data-sort]'),
+  }));
+  log('T0 页面结构自检（scope chips / grid / sortseg）',
+    t0.scopeChips && t0.grid && t0.sortseg, JSON.stringify(t0));
+
+  /* ---------- T1 标签筛选 → 详情 → 返回全部（2026-10-24 双轨后 scope 组） ---------- */
   const tag = await page.evaluate(() => {
-    const btns = [...document.querySelectorAll('.chips[data-key="tag"] button')];
+    const btns = [...document.querySelectorAll('.chips[data-key="scope"] button.chip')];
+    let fallback = null;
     for (const b of btns) {
       const v = b.getAttribute('data-v');
       if (v && v !== '*') {
         const m = (b.textContent || '').match(/(\d+)\s*$/);
-        if (m && parseInt(m[1], 10) >= 2) return v;   // 选计数 ≥2 的标签，保证能测「下一张」
+        const n = m ? parseInt(m[1], 10) : 0;
+        // 首选 2 ≤ 计数 < 30：筛选后首屏不满页，T1c 的「网格收窄」断言才有意义
+        if (n >= 2 && n < 30) return v;
+        if (n >= 2 && !fallback) fallback = v;
       }
     }
-    return btns.length > 1 ? btns[1].getAttribute('data-v') : null;
+    return fallback;
   });
-  log('T1-prep 找到计数≥2的标签', !!tag, 'tag=' + tag);
+  log('T1-prep 找到计数≥2的范围标签', !!tag, 'scope=' + tag);
   await page.evaluate((t) => {
-    document.querySelector('.chips[data-key="tag"] button[data-v="' + t + '"]').click();
+    document.querySelector('.chips[data-key="scope"] button[data-v="' + t + '"]').click();
   }, tag);
-  await page.waitForFunction((t) => new URLSearchParams(location.search).get('tag') === t, tag);
+  await page.waitForFunction((t) => new URLSearchParams(location.search).get('scope') === t, tag);
   const t1url = await page.evaluate(() => location.pathname + location.search);
-  log('T1a 点击标签后 URL 带 ?tag=', t1url.indexOf('tag=') > -1, t1url);
+  log('T1a 点击标签后 URL 带 ?scope=', t1url.indexOf('scope=') > -1, t1url);
   const t1pressed = await page.evaluate((t) =>
-    document.querySelector('.chips[data-key="tag"] button[data-v="' + t + '"]').getAttribute('aria-pressed') === 'true', tag);
+    document.querySelector('.chips[data-key="scope"] button[data-v="' + t + '"]').getAttribute('aria-pressed') === 'true', tag);
   log('T1b 标签按钮选中态', t1pressed);
-  const t1count = await page.evaluate(() => document.getElementById('count').textContent);
-  log('T1c 计数文案变为「匹配 …」', t1count.indexOf('匹配') === 0, t1count);
+  const t1count = await page.evaluate(() => document.querySelectorAll('#grid a.card').length);
+  log('T1c 网格被筛选收窄（卡片数 < 每页上限）', t1count > 0 && t1count < 30, 'cards=' + t1count);
 
   await page.click('.grid a.card');
   await page.waitForFunction(() => document.getElementById('backLink') !== null);
   const t1back = await page.evaluate(() => document.getElementById('backLink').getAttribute('href'));
-  log('T1d 详情页返回链接指向带筛选的首页', t1back === '/?tag=' + encodeURIComponent(tag), 'href=' + t1back);
+  log('T1d 详情页返回链接指向带筛选的首页', t1back === '/?scope=' + encodeURIComponent(tag), 'href=' + t1back);
   await page.click('#backLink');
-  await page.waitForFunction((t) => new URLSearchParams(location.search).get('tag') === t, tag);
+  await page.waitForFunction((t) => new URLSearchParams(location.search).get('scope') === t, tag);
   const t1backPressed = await page.evaluate((t) =>
-    document.querySelector('.chips[data-key="tag"] button[data-v="' + t + '"]').getAttribute('aria-pressed') === 'true', tag);
-  log('T1e 返回后筛选态恢复（按钮选中 + 计数）', t1backPressed &&
-    (await page.evaluate(() => document.getElementById('count').textContent)).indexOf('匹配') === 0);
+    document.querySelector('.chips[data-key="scope"] button[data-v="' + t + '"]').getAttribute('aria-pressed') === 'true', tag);
+  log('T1e 返回后筛选态恢复（按钮选中 + 网格收窄）', t1backPressed &&
+    (await page.evaluate(() => document.querySelectorAll('#grid a.card').length)) > 0);
 
   /* ---------- T2 详情 → 下一张 → 返回全部 ---------- */
   await page.click('.grid a.card');
@@ -82,9 +95,9 @@ const pathQS = (u) => { const x = new URL(u); return x.pathname + x.search; };
     await page.waitForFunction(() =>
       document.getElementById('backLink') && /\/[0-9a-f]{8,}\/$/.test(location.pathname));
     const t2back = await page.evaluate(() => document.getElementById('backLink').getAttribute('href'));
-    log('T2a 跨详情跳转后返回链接仍带筛选', t2back === '/?tag=' + encodeURIComponent(tag), 'href=' + t2back);
+    log('T2a 跨详情跳转后返回链接仍带筛选', t2back === '/?scope=' + encodeURIComponent(tag), 'href=' + t2back);
     await page.click('#backLink');
-    await page.waitForFunction((t) => new URLSearchParams(location.search).get('tag') === t, tag);
+    await page.waitForFunction((t) => new URLSearchParams(location.search).get('scope') === t, tag);
     log('T2b 返回后仍在筛选结果', true);
   } else {
     log('T2 跳过（该标签只有 1 张图）', true);
@@ -108,18 +121,19 @@ const pathQS = (u) => { const x = new URL(u); return x.pathname + x.search; };
   log('T3b 浏览器返回后停在第 2 页', t3on === '2', 'active=' + t3on + ' card=' + t3id);
 
   /* ---------- T4 带参 URL 直开：筛选+页码+日期恢复 ---------- */
-  await page.goto(BASE + '/?tag=' + encodeURIComponent(tag) + '&page=1');
+  await page.goto(BASE + '/?scope=' + encodeURIComponent(tag) + '&page=1');
   const t4a = await page.evaluate((t) =>
-    document.querySelector('.chips[data-key="tag"] button[data-v="' + t + '"]').getAttribute('aria-pressed') === 'true', tag);
-  log('T4a ?tag= 直开恢复标签选中', t4a);
-  await page.goto(BASE + '/?from=2026-01-01&to=2099-12-31');
+    document.querySelector('.chips[data-key="scope"] button[data-v="' + t + '"]').getAttribute('aria-pressed') === 'true', tag);
+  log('T4a ?scope= 直开恢复标签选中', t4a);
+  await page.goto(BASE + '/?from=2020-01-01&to=2020-12-31');
   const t4b = await page.evaluate(() => ({
     from: document.getElementById('f-from').value,
     to: document.getElementById('f-to').value,
-    count: document.getElementById('count').textContent,
+    cards: document.querySelectorAll('#grid a.card').length,
+    emptyShown: document.getElementById('empty').style.display !== 'none',
   }));
-  log('T4b 日期参数回填输入框并生效',
-    t4b.from === '2026-01-01' && t4b.to === '2099-12-31' && t4b.count.indexOf('匹配') === 0,
+  log('T4b 日期参数回填输入框并生效（2020 年无收录 → 空态）',
+    t4b.from === '2020-01-01' && t4b.to === '2020-12-31' && t4b.cards === 0 && t4b.emptyShown,
     JSON.stringify(t4b));
 
   /* ---------- T5 搜索页 → 结果 → 返回全部 ---------- */
