@@ -238,9 +238,15 @@
         + ` style="stroke:${r.c || col(i)};stroke-dasharray:${pct} ${100 - pct};stroke-dashoffset:${off}"`
         + `><title>${esc(r.k)} · ${r.n} 张（${Math.round(pct)}%）</title></circle>`;
     }).join("");
+    /* 图例百分数用最大余数法（MacroBiodiv 同款同修）：逐项四舍五入合计 99/101 */
+    const floors = rows.map((r) => Math.floor((r.n / total) * 100));
+    let left = 100 - floors.reduce((s, x) => s + x, 0);
+    rows.map((r, i) => [(r.n / total) * 100 - Math.floor((r.n / total) * 100), i])
+      .sort((a, b) => b[0] - a[0])
+      .forEach(([_, i]) => { if (left > 0) { floors[i] += 1; left -= 1; } });
     const legend = rows.map((r, i) =>
       `<div class="st-lg" data-i="${i}" style="--lc:${r.c || col(i)}"><i></i>`
-      + `<span title="${esc(r.k)}">${esc(r.k)}</span><b>${r.n}</b><em>${Math.round(r.n / total * 100)}%</em></div>`
+      + `<span title="${esc(r.k)}">${esc(r.k)}</span><b>${r.n}</b><em>${floors[i]}%</em></div>`
     ).join("");
     box.innerHTML = `<svg viewBox="0 0 36 36" role="img" aria-label="主色构成（按色族归类）">`
       + `<circle cx="18" cy="18" r="15.9155" style="fill:none;stroke:var(--line);stroke-width:3.6"/>`

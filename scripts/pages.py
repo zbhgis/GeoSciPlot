@@ -150,11 +150,16 @@ def page_shell(
               f'\n<meta name="twitter:description" content="{esc(desc[:200])}">')
         if og_image:
             tw += f'\n<meta name="twitter:image" content="{esc(og_image)}">'
-    # bare=True（制图经验文章页）：正文不进 .wrap（自带 1400 三栏容器），仅 footer 包一层
+    # bare=True（制图经验文章页）：正文不进 .wrap（自带 1400 三栏容器），仅 footer 包一层。
+    # skip 链接（shell.html）跳 #main：普通页锚在 .wrap；bare 页 .wrap 里只剩 footer，
+    # 锚点改挂到文章三栏容器（render_guide_article 的 .wk-shell）上
     body_outer = body if bare else ""
     body_inner = "" if bare else body
+    main_attr = "" if bare else ' id="main" tabindex="-1"'
+    # defer 化：交互脚本不再阻塞解析，执行顺序按文档序先于 DOMContentLoaded，
+    # shell.html 里灯箱挂载的内联脚本随之包进 DOMContentLoaded（依赖此时序）
     extra_scripts = "".join(
-        f'<script src="{up}assets/{a}?v={asset_ver(a)}"></script>' for a in (extra_assets or []))
+        f'<script defer src="{up}assets/{a}?v={asset_ver(a)}"></script>' for a in (extra_assets or []))
     # GEO：每页 head 声明 llms.txt / llms-full.txt，AI 引擎从任意落地页都能发现
     # 语义索引；llms.txt 内部再指向全文（两层结构与 MacroBiodiv 对齐）
     llms_links = (f'<link rel="alternate" type="text/plain" href="{SITE_URL}/llms.txt" title="llms.txt">'
@@ -176,7 +181,7 @@ def page_shell(
         FOOTER_TITLE=esc(cfg["title"]), FOOTER_SUBTITLE=esc(cfg["subtitle"]),
         REPO_URL="https://github.com/{}/{}".format(
             esc(cfg.get("owner") or "OWNER"), esc(cfg["repo"])),
-        EXTRA_SCRIPTS=extra_scripts,
+        EXTRA_SCRIPTS=extra_scripts, MAIN_ATTR=main_attr,
     )
 
 
@@ -370,13 +375,13 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
 <main class="grid" id="grid">
 {chr(10).join(card_html(it, img_base) for it in first_page)}
 </main>
-<p class="empty" id="empty">没有符合条件的图片</p>
+<p class="empty" id="empty" role="status">没有符合条件的图片</p>
 
 <div class="pgbar">
   <button id="prev" type="button" title="上一页">{pg_ico_l}上一页</button>
   <span id="pgnums"></span>
   <button id="next" type="button" title="下一页">下一页{pg_ico_r}</button>
-  <span class="info" id="pageinfo">共 {max(1, -(-len(items) // PAGE_SIZE))} 页</span>
+  <span class="info" id="pageinfo" role="status">共 {max(1, -(-len(items) // PAGE_SIZE))} 页</span>
 </div>
 
 <script>window.GALLERY_PAGE = {PAGE_SIZE};</script>"""
@@ -474,7 +479,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
                   f' title="点击复制 {esc(hx)} · {esc(pct_txt)}"><i style="background:{esc(hx)}"></i>'
                   f'<b>{esc(hx)}</b><span data-pct="{esc(pct_txt)}">{esc(pct_txt)}</span></button>')
     swatches_html = "".join(sw)
-    swatches_row = (chr(10) + f'  <dt>配色</dt><dd class="swatches">{swatches_html}</dd>') if swatches_html else ""
+    swatches_row = (chr(10) + f'  <dt>配色</dt><dd class="swatches" aria-live="polite">{swatches_html}</dd>') if swatches_html else ""
 
     pager = ['<div class="pager">',
              pn_item(prev_it, False),
@@ -540,7 +545,7 @@ def build_detail(cfg: dict, items: list[dict], idx: int, abs_base: str) -> str:
   <dt>ID</dt><dd class="hl">{esc(it['id'])}</dd>
   <dt>DOI</dt><dd>{doi_html}</dd>
   <dt>上传日期</dt><dd>{esc(it.get('added'))}</dd>
-  <dt>被浏览</dt><dd><span id="views">…</span></dd>
+  <dt>被浏览</dt><dd><span id="views" aria-live="polite">…</span></dd>
   <dt>范围</dt><dd>{scope_html}</dd>
   <dt>样式</dt><dd>{style_html}</dd>{swatches_row}
 </dl>
@@ -631,7 +636,7 @@ def build_search_page(cfg: dict, items: list[dict]) -> str:
 </header>
 
 <input id="spage-q" class="spage-q" type="search" placeholder="输入关键词搜索 id / DOI / 标签…" autocomplete="off" autofocus>
-<div class="spage-count" id="spage-count"></div>
+<div class="spage-count" id="spage-count" role="status"></div>
 <div class="spage-list" id="spage-list" data-up="../"></div>"""
     # 搜索页是薄内容且查询参数无限，不让搜索引擎收录（与主站 /search 策略一致）
     return page_shell(cfg, "全站搜索", body, depth=1,
@@ -888,7 +893,7 @@ def render_guide_article(cfg: dict, posts: list[dict], i: int) -> str:
         return (f'<a class="{cls}" href="../{esc(pn["slug"])}/"><span class="wk-pn-dir">'
                 f'{lbl}{ico}</span><span class="wk-pn-ttl">{esc(pn["title"])}</span></a>')
 
-    body = f"""<div class="wk-shell">
+    body = f"""<div class="wk-shell" id="main" tabindex="-1">
 <aside class="wk-side"><div class="wk-side-in"><nav class="wk-side-nav">
 <div class="wk-side-hd">文章导航</div>{side_rows}</nav></div></aside>
 <main class="wk-main"><article>

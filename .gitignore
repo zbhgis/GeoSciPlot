@@ -29,3 +29,6 @@ debug.log
 
 # refs.json 损坏时的现场备份（load_refs / load_existing 抛错前落盘）
 meta/*.corrupt-*
+
+# ZCode 会话数据（AI 工作区，不入库）
+.zcode/

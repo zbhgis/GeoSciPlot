@@ -39,7 +39,7 @@ FAMILY_PRINTS = [
      r'a\.href\s*=\s*"https://doi\.org/"\s*\+\s*it\.doi', "FAIL",
      "剥 (?:https?://)?(?:dx\\.)?doi.org/ 前缀；非 DOI 绝对链接直用"),
     ("F7 索引损坏静默按空库继续", "scripts/admin.py",
-     r"except\s+json\.JSONDecodeError:\s*\n\s*.*\n\s*return\s*\{\}", "FAIL",
+     r"except\s+json\.JSONDecodeError:\s*\n(?:\s*[^\n]*\n){0,1}\s*return\s*\{", "FAIL",
      "备份现场并抛错（.corrupt-<时间戳>），绝不以空库覆盖"),
     ("F8 统计数据后写盘（asset_ver ?v= 滞后一轮）", "scripts/build_site.py",
      r"build_stats_page\(cfg[^\n]*\)\n\s*build_stats_data\(", "FAIL",
@@ -74,6 +74,9 @@ def scan(repo: Path) -> tuple[list[str], list[str]]:
 
 
 def main(argv: list[str]) -> int:
+    # GBK 控制台/管道下打印 ✓ 等字符会 UnicodeEncodeError——「通过」被报成失败
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     repos = [Path(a) for a in argv[1:]] or [Path(__file__).resolve().parent.parent]
     total_fails = 0
     for repo in repos:

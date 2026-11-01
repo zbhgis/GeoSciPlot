@@ -117,6 +117,28 @@
     });
   }
 
+  /* 桌面「更多」下拉（纯 CSS hover/焦点展开）：641–1024px 的触屏设备只有桌面
+     导航而没有汉堡菜单，触屏点按大概率不触发 :hover，下拉够不着——
+     click 切换 .open 类兜底，桌面鼠标 hover 行为不变、点击则固定开合 */
+  var more = document.querySelector(".mnav-more");
+  var moreTrig = more ? more.querySelector(".mnav-more-trigger") : null;
+  if (more && moreTrig) {
+    var moreSet = function (on) {
+      more.classList.toggle("open", on);
+      moreTrig.setAttribute("aria-expanded", String(on));
+    };
+    moreTrig.addEventListener("click", function (e) {
+      e.stopPropagation();
+      moreSet(!more.classList.contains("open"));
+    });
+    document.addEventListener("click", function (e) {
+      if (more.classList.contains("open") && !more.contains(e.target)) moreSet(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && more.classList.contains("open")) moreSet(false);
+    });
+  }
+
   /* ── 字号调节：FAB 的 A 按钮在 标准/放大 两档间切换，localStorage 记忆，
      head 内联脚本在渲染前恢复，切档无闪烁 ── */
   var fsBtn = document.getElementById("fsBtn");
@@ -206,7 +228,7 @@
       });
       sCount.textContent = "找到 " + hits.length + " / " + ITEMS.length + " 张";
       if (!hits.length) {
-        sList.innerHTML = '<p class="spage-empty">未找到与 “' + escHtml(raw) + '” 相关的图片</p>';
+        sList.innerHTML = '<p class="spage-empty" role="status">未找到与 “' + escHtml(raw) + '” 相关的图片</p>';
         return;
       }
       sList.innerHTML = hits.map(function (it) {
@@ -417,7 +439,9 @@
     if (!tagGroupPass(it, state.style, state.styleStrict, "st")) return false;
     if (state.from && (it.ad || "") < state.from) return false;
     if (state.to && (it.ad || "") > state.to) return false;
-    if (state.q && (it.se || "").indexOf(state.q) === -1) return false;
+    /* 首页搜索框按 se 字段匹配——多词按 AND 分词（2026-11-01 与全站搜索对齐，
+       MacroBiodiv 同款同修）：此前整串 indexOf，多词查询静默零结果；单词不变 */
+    if (state.q && !state.q.split(/\s+/).every((t) => (it.se || "").indexOf(t) > -1)) return false;
     if (state.color && !colorPass(it)) return false;
     return true;
   }
@@ -595,14 +619,26 @@
   function writeStrict() { TAG_GROUPS.forEach(function (g) { g.writeStrict(); }); }
 
   if (q) {
-    q.addEventListener("input", function () { state.q = q.value.trim().toLowerCase(); resetPage(); });
+    /* 输入防抖 160ms（与搜索页同款）：每击键全量重渲 30 张卡片 + 重绑缩略图，
+       连续打字卡顿；Enter / 搜索按钮仍立即执行，防抖只管 input 路径 */
+    var qDeb = null;
+    q.addEventListener("input", function () {
+      if (qDeb) clearTimeout(qDeb);
+      qDeb = setTimeout(function () {
+        qDeb = null;
+        state.q = q.value.trim().toLowerCase();
+        resetPage();
+      }, 160);
+    });
     q.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { q.value = ""; state.q = ""; resetPage(); }
+      if (e.key === "Escape") { if (qDeb) clearTimeout(qDeb); qDeb = null; q.value = ""; state.q = ""; resetPage(); }
       if (e.key === "Enter") { e.preventDefault(); runSearch(); }
     });
   }
   var qBtn = document.getElementById("qBtn");
   function runSearch() {
+    if (qDeb) clearTimeout(qDeb);
+    qDeb = null;
     state.q = (q ? q.value : "").trim().toLowerCase();
     resetPage();
     var g = document.getElementById("grid");
@@ -748,6 +784,15 @@
   if (filterBox) {
     var collapsed = false;
     try { collapsed = localStorage.getItem("gsp-filters") === "hidden"; } catch (e) {}
+    /* 移动端首屏让位给内容：无既有偏好时窄屏(≤640)默认收起；开合一次即记住偏好
+       （MacroBiodiv 同款同修） */
+    if (!collapsed) {
+      var savedFilters = null;
+      try { savedFilters = localStorage.getItem("gsp-filters"); } catch (e) {}
+      if (savedFilters === null && window.matchMedia("(max-width: 640px)").matches) {
+        collapsed = true;
+      }
+    }
     if (collapsed) filterBox.setAttribute("hidden", "");
   }
   if (filterBtn && filterBox) {
