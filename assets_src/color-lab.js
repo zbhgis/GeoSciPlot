@@ -14,11 +14,18 @@
    载入成功后工具栏下显示该图的信息条（id / DOI / 范围×样式标签 / 入库日期 /
    尺寸 / 详情页链接），数据与首页网格同源（gallery-data.js）。
    全部计算在浏览器本地完成。 */
-(function () {
+(function boot() {
   "use strict";
   var CFG = window.GALLERY, ITEMS = window.GALLERY_DATA || [];
   var $ = function (id) { return document.getElementById(id); };
-  if (!CFG || !$("cl-canvas")) return;
+  if (!CFG || !$("cl-canvas")) {
+    /* 本脚本 defer 且文档序最靠前（head 里），执行时 body 末尾的 gallery-data.js /
+       gallery.js（同为 defer）还没跑，window.GALLERY / GALLERY_DATA 尚未定义。
+       直接 return 会让整个工具静默失效（按钮无监听、载入无请求）。
+       DOMContentLoaded 在全部 defer 脚本执行完才触发，届时依赖必然就绪，重启一次即可。 */
+    document.addEventListener("DOMContentLoaded", boot);
+    return;
+  }
 
   var canvas = $("cl-canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
   var stageEl = $("cl-stage");
