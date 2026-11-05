@@ -274,8 +274,9 @@
     syncSelbox(); syncControls();
     redraw(); computePalette();
     placeholder.style.display = "none";
-    if (urlColor) {   // 详情页配色色块带 ?color= 跳入 → 只在首次载入预选一次
-      setTarget(urlColor);
+    var appliedColor = urlColor;   // 详情页配色色块带 ?color= 跳入 → 只在首次载入预选一次；
+    if (appliedColor) {            // 先存副本再清空 urlColor：下面 replaceState 要用它把
+      setTarget(appliedColor);     // color 参数留在地址栏（刷新/分享不丢深链参数）
       urlColor = "";
     }
     var isThumb = (img.getAttribute("data-src") || "").indexOf("/thumb/") > -1;
@@ -283,7 +284,7 @@
     renderMeta(id);
     try {
       history.replaceState(null, "", "?id=" + encodeURIComponent(id)
-        + (urlColor ? "&color=" + encodeURIComponent(urlColor) : ""));
+        + (appliedColor ? "&color=" + encodeURIComponent(appliedColor) : ""));
     } catch (e) {}
   }
 
@@ -585,7 +586,14 @@
   function copyText(s) {
     var done = function () { setStatus("已复制 " + s); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(s).then(done, function () { fallbackCopy(s, done); });
+      /* writeText 在部分内嵌环境 promise 永挂起（不 resolve 不 reject），
+         1s 内没结果就回落 execCommand，避免状态栏无反馈 */
+      var fell = false;
+      var fall = function () { if (!fell) { fell = true; fallbackCopy(s, done); } };
+      var timer = setTimeout(fall, 1000);
+      navigator.clipboard.writeText(s).then(function () {
+        clearTimeout(timer); fell = true; done();
+      }, function () { clearTimeout(timer); fall(); });
     } else fallbackCopy(s, done);
   }
   function fallbackCopy(s, done) {
