@@ -11,7 +11,7 @@ import re
 from collections import Counter
 from urllib.parse import quote
 
-from site_common import PAGE_SIZE, ROOT, SCOPE_TAGS, SITE_URL, asset_ver, doi_bare, esc
+from site_common import PAGE_SIZE, ROOT, SITE_URL, asset_ver, doi_bare, esc
 
 # 作者实体：与主站 /about 的 Person 共用同一 URL 与 sameAs，把子域内容归因到
 # 同一作者（E-E-A-T / GEO）。站点是品牌，publisher 仍用 Organization。
@@ -189,17 +189,16 @@ def flat(values, default: str = "—") -> Counter:
     return Counter([str(v) if v else default for v in values])
 
 
-# 范围组固定顺序（site_common.SCOPE_TAGS，用户策展：全球 → 大洲 → 中国地图 →
-# 其他）；样式组按热度排序。库里暂不存在的固定项不渲染（点不出结果）
+# 范围组与样式组均按数量降序自动排序（同数按名称，2026-11-08 起，
+# 取代原先范围组的 SCOPE_TAGS 固定策展顺序）
 
 
-def chips(values: Counter, key: str, pinned: list[str] | None = None) -> str:
+def chips(values: Counter, key: str) -> str:
     """多选标签 chips（正向选择语义，2026-10-14 与 MacroBiodiv 统一）：默认全不选，
     点击=选中该标签（组内选中值之间 OR）；全选/反选/严格 单独一排收尾，每组独立。
     严格=图片携带的该组每个标签都必须被选中（带任一未选中标签的图排除）。
-    pinned 给定时：固定组一排（按给定顺序）+ 其余一排（数量降序）+ 操作一排；
-    否则标签一排 + 操作一排。全部同在 .chips[data-key] 容器内 —— gallery.js 的
-    容器级事件委托与 querySelectorAll 均不受分组影响。"""
+    标签一排（数量降序，同数按名称）+ 操作一排。全部同在 .chips[data-key] 容器内
+    —— gallery.js 的容器级事件委托与 querySelectorAll 均不受分组影响。"""
     def chip_btn(name: str, n: int) -> str:
         return (f'<button type="button" class="chip" data-v="{esc(name)}" aria-pressed="false">'
                 f'{esc(name)}<i class="n">{n}</i></button>')
@@ -210,16 +209,8 @@ def chips(values: Counter, key: str, pinned: list[str] | None = None) -> str:
                 '<button type="button" class="chip chip-act" data-act="strict" data-on="false" aria-pressed="false" '
                 'title="严格模式：图片携带的每个标签都必须被选中，带任一未选中标签的图会被排除">严格</button>']
 
-    if pinned:
-        pinned_set = set(pinned)
-        row1 = [chip_btn(n, values[n]) for n in pinned if n in values]
-        row2 = [chip_btn(name, cnt) for name, cnt in
-                sorted(((k, v) for k, v in values.items() if k not in pinned_set),
-                       key=lambda kv: (-kv[1], str(kv[0])))]
-        rows = [row1, row2]
-    else:
-        rows = [[chip_btn(name, n) for name, n in
-                 sorted(values.items(), key=lambda kv: (-kv[1], str(kv[0])))]]
+    rows = [[chip_btn(name, n) for name, n in
+             sorted(values.items(), key=lambda kv: (-kv[1], str(kv[0])))]]
     rows.append(act_btns())
     inner = "".join(
         f'  <div class="chips-row{" chips-act-row" if r is rows[-1] else ""}">\n    '
@@ -358,7 +349,7 @@ def build_index(cfg: dict, items: list[dict], img_base: str) -> str:
   + ' <span class="flabel" style="min-width:auto">占比≥</span>'
   + '<input type="range" id="f-minpct" class="tolrange" min="0" max="100" value="0" aria-label="命中主色的最小占比">'
   + '<span id="f-minpctval">0%</span>')}
-{filter_row("范围", chips(scope_counter, "scope", pinned=SCOPE_TAGS))}
+{filter_row("范围", chips(scope_counter, "scope"))}
 {filter_row("样式", chips(style_counter, "style"))}
 {filter_row("上传", '<input type="date" id="f-from" class="dateinp">\n'
   + ' <span class="flabel" style="min-width:auto">至</span>\n'
