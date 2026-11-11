@@ -42,6 +42,33 @@ python scripts/admin.py        # 本地管理界面（仅本机可访问，自�
   与图库「暂存 → 一键推送」同一节奏。推送期间文章编辑接口会暂时拒绝。
 - 正文字数统计与构建同口径（`render_md.plain_text`，含导流模板剥离）。
 
+#### 制图经验配图：从公众号图床收进本站三档（2026-11-11）
+
+文章里的图原本直链 `cdn.jsdelivr.net/gh/zbhgis/BlogImg*`，只有一条链路、没有尺寸档，
+单篇 20 张图能到 20MB。现在改为**构建期改写渲染结果**（md 源文件一个字不动）：
+
+```bash
+python scripts/guide_images.py      # 扫 content/guide/*.md → 下载 → 出三档 + 映射表
+```
+
+- 产物：`images/guide/{thumb,disp,full}/{id}.{webp|原扩展名}` + `meta/guide_images.json`
+  （`id` = 内容 sha1 前 10 位，与图库同一套口径）。
+- **优先复用图库条目**：文章配图有约 35% 就是图库收录的那张图（文章里「收录于 /<id>」
+  即同一条目），脚本按 id 认出来后直接指向图库既有的三档，不再存第二份
+  （实测省下 86MB）。
+- 构建时 `build_site.build_guide` 把 `<img src="远端直链">` 换成
+  `src=展示档` + `data-rel` + `data-lightbox-src=原图` + `width/height`：
+  `data-rel` 交给 `gallery.js` 的 `bind()` 走**同一套逐源降级**
+  （当前 jsDelivr → GitHub raw；启用源站后 /images 排最前），
+  灯箱走 `image-lightbox.js`（文章页本来就加载）。
+- 页面体积：展示档 ≤1600px WebP，双变量那篇 20MB → 约 2MB。
+- 回退：删掉 `meta/guide_images.json` 重新构建，正文即恢复远端直链（不碰 md）。
+- **新增文章后要跑一次本脚本**，否则新图仍是远端单源——构建会打印
+  「N 张图未入库」提示，但不拦截发布。
+- `prepare.py` 的 `prune_unused` 已跳过 `images/guide/` 子树：图库入库时不会把
+  文章图片当孤儿删掉。`.cache/guide-images/` 是下载缓存（已 gitignore），
+  重跑/换机器不必再下一次。
+
 ### 发布前必查（踩坑清单）
 
 - **构建自检门禁**：build_site.py 末尾的 `verify_build` 会对全部产物跑 11 项断言
@@ -171,10 +198,13 @@ content/.trash/       文章回收站（管理界面软删除的本机暂存，�
 images/thumb/{日期}/  缩略图（≤480px WebP）
 images/disp/{日期}/   详情页展示档（≤1600px WebP，仅大图生成）
 images/full/{日期}/   原图逐字节副本（不压缩）
+images/guide/         制图经验配图的三档（扁平存放，脚本 guide_images.py 产出）
 meta/refs.json        索引（前端唯一数据源，自动生成）
+meta/guide_images.json 制图经验配图映射（原远端 URL → 三档相对路径）
 meta/titles.csv       人工编辑表（id, scope, style, doi 四列）
 scripts/admin.py      本地管理界面
 scripts/prepare.py    图片规范化 + 索引（含展示档）
+scripts/guide_images.py 制图经验配图入库（下载 → 三档 → 映射表）
 scripts/build_site.py 静态站生成
 scripts/compile_lightbox.mjs  图片灯箱 TS→JS 编译（node，零 npm 依赖）
 lib/image-lightbox.ts 图片灯箱源码（自 mystation 拷入；改后跑编译脚本再构建）

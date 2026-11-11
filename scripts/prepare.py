@@ -58,6 +58,10 @@ IMG_DIR = ROOT / "images"
 THUMB_DIR = IMG_DIR / "thumb"
 DISP_DIR = IMG_DIR / "disp"
 FULL_DIR = IMG_DIR / "full"
+# 制图经验文章的图（scripts/guide_images.py 产出，三档同一套命名但不在 refs.json
+# 里）：prune_unused 只清理图库条目产物，这个子树必须整体跳过，否则每次入库新图
+# 都会把文章图片当「不在产物集合内」全部删掉
+GUIDE_IMG_DIR = IMG_DIR / "guide"
 META_DIR = ROOT / "meta"
 REFS_JSON = META_DIR / "refs.json"
 TITLES_CSV = META_DIR / "titles.csv"
@@ -250,6 +254,8 @@ def prune_unused(keep: set[Path]) -> int:
     # 先物化完整文件列表再删除，避免「边遍历边删」在任何文件系统上的未知行为
     for p in list(IMG_DIR.rglob("*")):
         try:
+            if GUIDE_IMG_DIR in p.parents:      # 制图经验图片不归本脚本管
+                continue
             if p.is_file() and p not in keep:
                 p.unlink()
                 removed += 1

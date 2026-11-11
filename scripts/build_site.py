@@ -42,6 +42,7 @@ from site_common import PAGE_SIZE, ROOT, SITE_URL, doi_bare, esc
 
 CFG_PATH = ROOT / "gallery.config.json"
 REFS_JSON = ROOT / "meta" / "refs.json"
+GUIDE_IMG_JSON = ROOT / "meta" / "guide_images.json"
 SITE = ROOT / "site"
 IMAGES = ROOT / "images"
 ASSETS_SRC = ROOT / "assets_src"
@@ -169,7 +170,61 @@ def build_about(cfg: dict) -> str:
     return render_about_page(cfg, doc)
 
 
-def build_guide(cfg: dict) -> list[dict]:
+def load_guide_images() -> dict[str, dict]:
+    """制图经验图片映射（scripts/guide_images.py 产出）：原远端 URL → 本地三档路径。
+    文件缺失返回空表——文章退回原始远端直链，构建不因此中断。"""
+    if not GUIDE_IMG_JSON.is_file():
+        return {}
+    try:
+        data = json.loads(GUIDE_IMG_JSON.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    items = data.get("items")
+    return items if isinstance(items, dict) else {}
+
+
+# render_md 的图片输出形态是固定的（独立图片行 → 单 img），这里按结构精确匹配，
+# 不做模糊替换——正文里若出现行内图（理论上不会有）保持原样，不会被误伤
+WK_IMG_TAG_RE = re.compile(
+    r'<p class="wk-img"><img src="([^"]+)" alt="([^"]*)" loading="lazy"></p>')
+
+
+def rewrite_guide_images(doc: str, mapping: dict, img_base: str,
+                         full_base: str) -> tuple[str, int, int]:
+    """把文章正文的远端图床直链换成本站三档图 + 逐源降级属性（**只改渲染结果**）。
+
+    - src 指向展示档（≤1600px WebP），旁边带 data-rel：gallery.js 的 bind() 会按
+      CFG.sources 逐源重试（jsDelivr → GitHub raw → 启用源站后的 /images），
+      与图库详情页同一套降级链；
+    - data-lightbox-src 指向 full 原图，灯箱放大时取无压缩版本；
+    - 补 width/height：浏览器提前按真实比例预留位置，图片画出不抖动。
+
+    md 源文件保持原样，映射表在 meta/guide_images.json——想回退成远端直链，
+    删掉该文件重新构建即可。返回 (新 HTML, 命中数, 未入库数)。
+    """
+    if not mapping:
+        return doc, 0, 0
+    hit = miss = 0
+
+    def rep(m: re.Match) -> str:
+        nonlocal hit, miss
+        raw = html.unescape(m.group(1))
+        rec = mapping.get(raw)
+        if not rec:
+            miss += 1
+            return m.group(0)
+        hit += 1
+        disp, full = rec["disp"], rec["full"]
+        wh = (f' width="{int(rec["width"])}" height="{int(rec["height"])}"'
+              if rec.get("width") and rec.get("height") else "")
+        return (f'<p class="wk-img"><img src="{img_base}/{disp}" data-rel="{disp}"'
+                f' data-lightbox-src="{full_base}/{full}"{wh} alt="{m.group(2)}" loading="lazy"></p>')
+
+    return WK_IMG_TAG_RE.sub(rep, doc), hit, miss
+
+
+def build_guide(cfg: dict, img_base: str = "", full_base: str = "",
+                guide_imgs: dict | None = None) -> list[dict]:
     """制图经验（/guide/）：版式照搬 MacroBiodiv 每周速递。
 
     列表页 = header.site + 月份 chip + 按月分组条目；文章页 = 三栏骨架
@@ -187,9 +242,14 @@ def build_guide(cfg: dict) -> list[dict]:
         return []
 
     posts = []
+    n_local = n_remote = 0
     for md in sorted(src_dir.glob("*.md")):
         text = md.read_text(encoding="utf-8")
         meta, doc, toc, plain = parse_md(text)
+        # 图片：远端图床直链 → 本站三档图 + 逐源降级属性（只改渲染结果，md 不动）
+        doc, _hit, _miss = rewrite_guide_images(doc, guide_imgs or {}, img_base, full_base)
+        n_local += _hit
+        n_remote += _miss
         # 文件名：日期前缀 + 语义 slug；日期同时用于排序与列表日期
         m_date = re.match(r"^(\d{4}-\d{2}-\d{2})-(.+)$", md.stem)
         date = (m_date.group(1) if m_date else str(meta.get("date") or "")[:10])
@@ -250,7 +310,11 @@ def build_guide(cfg: dict) -> list[dict]:
                 d.rename(dest)
             except OSError:
                 pass
-    print(f"· 制图经验：列表页 + {len(posts)} 篇文章页 → guide/")
+    msg = f"· 制图经验：列表页 + {len(posts)} 篇文章页 → guide/"
+    if n_local or n_remote:
+        msg += f"（正文图片 {n_local} 张走本站三档图"
+        msg += f"，{n_remote} 张仍为远端直链）" if n_remote else "）"
+    print(msg)
     return posts
 
 
@@ -697,6 +761,25 @@ def verify_build(items: list[dict]) -> bool:
             if not bak.with_name(bak.name[:-4]).is_file():
                 problems.append(f"孤儿备份 {bak.name}（同名 md 不存在）")
 
+    # 2c-2) 制图经验图片：映射表登记的三档必须齐全（映射是构建期改写 img 的唯一
+    #      依据，缺文件会让正文指向 404）。md 里有未入库的图床直链只提示不拦截——
+    #      页面退回远端单源，仍可访问，跑一次 scripts/guide_images.py 即可补齐
+    gm = load_guide_images()
+    if guide_dir.is_dir() and gm:
+        for url, rec in gm.items():
+            for k in ("thumb", "disp", "full"):
+                rel = rec.get(k)
+                if rel and not (IMAGES / rel).is_file():
+                    problems.append(f"制图经验图片 {k} 缺失 {rel}（{url}）")
+        unmapped = 0
+        for md in guide_dir.glob("*.md"):
+            for u in re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", md.read_text(encoding="utf-8")):
+                if u not in gm:
+                    unmapped += 1
+        if unmapped:
+            print(f"! 制图经验：{unmapped} 张图未入库（仍用远端直链，"
+                  f"跑 python scripts/guide_images.py 可收进三档流水线）")
+
     # 2e) JS 产物语法校验（兑现 minify_js 曾声称的 node --check——状态机一旦
     #     误判正则字面量，坏 JS 会被 ?v= 主动强推全站）；node 缺失时跳过
     import shutil as _sh
@@ -751,6 +834,10 @@ def verify_build(items: list[dict]) -> bool:
     # 5) 孤儿文件：images/ 里不被任何 item 引用 → 只告警（prepare 会清理，
     #    构建期误杀风险大，不作为失败条件）
     referenced = {it.get(k) for it in items for k in ("thumb", "full", "disp") if it.get(k)}
+    # 制图经验的图不在 refs.json 里，但同样是「有主产物」——不参与孤儿判定，
+    # 否则每次构建都会把 360 个 guide 文件报成待清理
+    referenced |= {rec.get(k) for rec in load_guide_images().values()
+                   for k in ("thumb", "disp", "full") if rec.get(k)}
     actual = {p.as_posix().split("images/", 1)[1] for p in IMAGES.rglob("*") if p.is_file()}
     orphans = actual - referenced
     if orphans:
@@ -862,6 +949,21 @@ def main() -> int:
                     n += 1
         print(f"· 预览模式：{n} 个图片副本 → site/images/（缩略图 + 展示档 + 小图原图；"
               "大图原图走在线降级）")
+        # 制图经验的三档图：thumb/disp 复制到本地（正文直载），full 不复制
+        # ——灯箱的 data-lightbox-src 在预览构建里已指向 jsDelivr
+        n_guide = 0
+        for sub in ("thumb", "disp"):
+            src_dir = IMAGES / "guide" / sub
+            if not src_dir.is_dir():
+                continue
+            dst_dir = dst / "guide" / sub
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            for f in src_dir.iterdir():
+                if f.is_file():
+                    shutil.copyfile(f, dst_dir / f.name)
+                    n_guide += 1
+        if n_guide:
+            print(f"· 制图经验图片：{n_guide} 个副本 → site/images/guide/（full 原图走远端）")
     else:
         # 生产构建：把预览模式遗留的 site/images/ 挪进 site_trash/。
         # 它有几十 MB（原图 + 缩略图副本），而生产站点图片全部走 jsDelivr/GitHub raw，
@@ -939,7 +1041,12 @@ def main() -> int:
     (about_dir / "index.html").write_text(build_about(cfg), encoding="utf-8")
     guide_dir = SITE / "guide"
     guide_dir.mkdir(parents=True, exist_ok=True)
-    guide_posts = build_guide(cfg)
+    # 文章图与图库同源同链：src 用当前激活源的基址拼相对路径，data-rel 交给
+    # gallery.js 逐源重试。预览只复制 thumb/disp，full 原图仍在远端——灯箱放大
+    # （data-lightbox-src）指向 jsDelivr，否则本地 404 会打出空灯箱
+    full_base = img_base if not args.preview else next(
+        s["base"] for s in sources if s["id"] == "jsdelivr")
+    guide_posts = build_guide(cfg, img_base, full_base, load_guide_images())
     for i, it in enumerate(items):
         d = SITE / it["id"]
         d.mkdir(parents=True, exist_ok=True)
