@@ -36,6 +36,10 @@
         ph.textContent = "图片加载失败（图片托管于 GitHub，需具备 GitHub 访问能力）";
         /* 连 c-covbox 一起换掉：占位块就位的同时把「加载中」层撤掉 */
         var box = img.closest ? img.closest(".c-covbox") : null;
+        /* 制图经验正文图同理：.wk-img 的「加载中」是 CSS 占位层，失败后要撤掉，
+           否则「加载中」与失败文案会叠在同一个框里 */
+        var wrap = img.closest ? img.closest(".wk-img") : null;
+        if (wrap) wrap.classList.add("is-failed");
         if (box) box.parentNode.replaceChild(ph, box);
         else img.parentNode.replaceChild(ph, img);
       }

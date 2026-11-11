@@ -218,7 +218,8 @@ def rewrite_guide_images(doc: str, mapping: dict, img_base: str,
         wh = (f' width="{int(rec["width"])}" height="{int(rec["height"])}"'
               if rec.get("width") and rec.get("height") else "")
         return (f'<p class="wk-img"><img src="{img_base}/{disp}" data-rel="{disp}"'
-                f' data-lightbox-src="{full_base}/{full}"{wh} alt="{m.group(2)}" loading="lazy"></p>')
+                f' data-lightbox-src="{full_base}/{full}"{wh} alt="{m.group(2)}"'
+                f' loading="lazy" decoding="async"></p>')
 
     return WK_IMG_TAG_RE.sub(rep, doc), hit, miss
 

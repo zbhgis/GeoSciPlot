@@ -655,8 +655,20 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .wk-content em{font-style:italic}
 .wk-content a{color:var(--accent);overflow-wrap:anywhere}
 .wk-content a:hover{text-decoration:underline}
-.wk-content .wk-img{margin:24px 0}
-.wk-content .wk-img img{display:block;max-width:100%;height:auto;border:1px solid var(--line2);border-radius:8px}
+/* 正文图：外框交给 <p>，图片加载前就是一块「加载中」空位——高度由构建期写入的
+   width/height 属性撑开（真实像素比，零抖动），图加载后以 z-index 1 盖住占位层。
+   与详情页 figure.shot、列表卡片 .c-covbox 同一套占位语言（同一个 covpulse 呼吸）。*/
+.wk-content .wk-img{margin:24px 0;position:relative;overflow:hidden;border:1px solid var(--line2);border-radius:8px;background:var(--card)}
+.wk-content .wk-img::before{content:"加载中";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);letter-spacing:.14em;color:var(--faint);animation:covpulse 1.2s ease-in-out infinite alternate}
+@media (prefers-reduced-motion:reduce){.wk-content .wk-img::before{animation:none}}
+.wk-content .wk-img img{position:relative;z-index:1;display:block;max-width:100%;height:auto;border:0;border-radius:0}
+/* 降级链全部失败：gallery.js 把 img 换成 .ph 块，占位层同时撤掉（否则「加载中」
+   会和失败文案叠在一起）。边框也交还给 .ph，避免空框里挂一条虚线 */
+.wk-content .wk-img.is-failed{border-color:transparent;background:transparent}
+.wk-content .wk-img.is-failed::before{content:none}
+/* 未入库的图（构建会提示跑 guide_images.py）没有宽高属性，占位层撑不开：
+   给个最小高度兜底，免得退化成一条 1px 边框 */
+.wk-content .wk-img:not(:has(img[width])){min-height:96px}
 .wk-content blockquote{margin:0 0 16px;padding-left:16px;border-left:4px solid var(--line2);font-style:italic;color:var(--faint)}
 .wk-content hr{border:none;border-top:1px solid var(--line2);margin:32px 0}
 /* ── 代码块（移植主站 zbhgis.com 博客详情页，2026-10-22）：header 语言标签 +
