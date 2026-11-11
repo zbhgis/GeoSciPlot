@@ -81,11 +81,18 @@ def build_sources(cfg: dict, preview: bool = False, origin: bool = False) -> lis
     owner = cfg.get("owner") or "OWNER"
     repo = cfg["repo"]
     branch = cfg.get("branch", "main")
-    # 图片一律走 GitHub 链接（jsDelivr CDN → raw 直链），
-    # 本站不存图片不分发图片（服务器带宽留给站点本身）。
+    # 图片一律走 GitHub 链接，本地不存图不分发（服务器带宽留给站点本身）。
+    # 多级降级（与 MacroBiodiv / mystation 同一份源序）：jsDelivr 系 CDN 三跳之后
+    # 接 raw 直链与两个 raw 加速代理——jsDelivr 对超过 50MB 的仓库会拒发未缓存的
+    # 新文件（2026-11-11 实测 403 "Package size exceeded"），只有 raw 系稳定。
+    gh_raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/images"
     sources = [
         {"id": "jsdelivr", "label": "jsDelivr", "base": f"https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/images"},
-        {"id": "raw", "label": "GitHub raw", "base": f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/images"},
+        {"id": "fastly", "label": "jsDelivr Fastly", "base": f"https://fastly.jsdelivr.net/gh/{owner}/{repo}@{branch}/images"},
+        {"id": "gcore", "label": "jsDelivr Gcore", "base": f"https://gcore.jsdelivr.net/gh/{owner}/{repo}@{branch}/images"},
+        {"id": "ghfast", "label": "ghfast 代理", "base": "https://ghfast.top/" + gh_raw},
+        {"id": "ghproxy", "label": "gh-proxy 代理", "base": "https://gh-proxy.com/" + gh_raw},
+        {"id": "raw", "label": "GitHub raw", "base": gh_raw},
     ]
     if preview:
         # 本地预览：图片副本就在 site/images/，同源加载即可
@@ -194,7 +201,7 @@ def rewrite_guide_images(doc: str, mapping: dict, img_base: str,
     """把文章正文的远端图床直链换成本站三档图 + 逐源降级属性（**只改渲染结果**）。
 
     - src 指向展示档（≤1600px WebP），旁边带 data-rel：gallery.js 的 bind() 会按
-      CFG.sources 逐源重试（jsDelivr → GitHub raw → 启用源站后的 /images），
+      CFG.sources 逐源重试（jsDelivr 三跳 → raw 代理两跳 → raw），
       与图库详情页同一套降级链；
     - data-lightbox-src 指向 full 原图，灯箱放大时取无压缩版本；
     - 补 width/height：浏览器提前按真实比例预留位置，图片画出不抖动。

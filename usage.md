@@ -215,9 +215,19 @@ site_trash/           过期详情页的暂存区（已 gitignore，可随时手
 
 ## 图片源与降级
 
-图片不打包进站点，默认全部由 GitHub 分发，逐图自动降级（顺序在 `gallery.config.json` 的
-`activeSource`）：jsDelivr（CDN，默认首选）→ GitHub raw。启用源站图片
-（`--origin-images`）后同源 `/images` 排在最前，jsDelivr/raw 仍作在线降级。
+图片不打包进站点，默认全部由 GitHub 分发。`gallery.config.json` 的 `activeSource`
+决定起始源，失败后按 `build_site.build_sources()` 的源序逐级重试（与 MacroBiodiv /
+mystation 同一份清单）：
+
+```
+jsDelivr cdn → jsDelivr fastly → jsDelivr gcore → ghfast 代理 → gh-proxy 代理 → GitHub raw
+（启用源站图片 --origin-images 时，同源 /images 插在最前）
+```
+
+jsDelivr 系对超过 50MB 的仓库会拒发**未缓存**的新文件（2026-11-11 实测
+`data.jsdelivr.com` 返回 `403 Package size exceeded the configured limit of 50 MB`，
+已缓存的旧文件仍正常），所以必须有 raw 系兜底；两个代理是 raw 的加速镜像。
+降级链全部失败时换成「图片加载失败」占位块，并按图片真实宽高比占位，页面不塌。
 
 **加载占位**：卡片 / 搜索结果行 / 详情页大图在图片加载前显示「加载中」占位层——
 `<img>` 带缩略图真实 `width/height`（refs.json 提供），浏览器提前预留同比例空间

@@ -33,7 +33,11 @@
         img.removeAttribute("src");
         var ph = document.createElement("div");
         ph.className = "ph";
-        ph.textContent = "图片加载失败（图片托管于 GitHub，需具备 GitHub 访问能力）";
+        ph.textContent = "图片加载失败（图源暂时不可用）";
+        /* 按真实比例占位：失败块也和图片一样高，整页不再因一张图塌陷
+           （与 MacroBiodiv 的 .img-ph 同口径） */
+        var pw = img.getAttribute("width"), phh = img.getAttribute("height");
+        if (pw && phh) { ph.style.aspectRatio = pw + "/" + phh; ph.style.width = "100%"; }
         /* 连 c-covbox 一起换掉：占位块就位的同时把「加载中」层撤掉 */
         var box = img.closest ? img.closest(".c-covbox") : null;
         /* 制图经验正文图同理：.wk-img 的「加载中」是 CSS 占位层，失败后要撤掉，
