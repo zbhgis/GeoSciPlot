@@ -66,11 +66,19 @@ def file_id(data: bytes) -> str:
     return hashlib.sha1(data).hexdigest()[:10]
 
 
-def collect_urls() -> dict[str, list[str]]:
-    """URL → 出现在哪些文章里（同一张图可被多篇复用，入库只做一份）。"""
+def collect_urls(scan_paths: list[Path]) -> dict[str, list[str]]:
+    """URL → 出现在哪些文章里（同一张图可被多篇复用，入库只做一份）。
+    scan_paths 可以是目录（递归）或单个 md 文件——其他站点的内容目录（如
+    mystation 的博客/笔记）也能接同一套三档流水线。"""
+    files: list[Path] = []
+    for p in scan_paths:
+        if p.is_dir():
+            files += sorted(p.rglob("*.md"))
+        elif p.is_file() and p.suffix.lower() == ".md":
+            files.append(p)
     out: dict[str, list[str]] = {}
-    for md in sorted(GUIDE_DIR.glob("*.md")):
-        text = md.read_text(encoding="utf-8")
+    for md in files:
+        text = md.read_text(encoding="utf-8", errors="ignore")
         for url in MD_IMG_RE.findall(text):
             out.setdefault(url, []).append(md.stem)
     return out
@@ -82,6 +90,19 @@ def cache_path(url: str) -> Path:
     return CACHE_DIR / (hashlib.sha1(url.encode()).hexdigest()[:16] + ext)
 
 
+def raw_url(url: str) -> str | None:
+    """jsDelivr gh 直链 → GitHub raw 等价地址。
+
+    BlogImg2 整包已超 jsDelivr 的 50MB 上限（data.jsdelivr.com 直接返回
+    status 403 "Package size exceeded ..."）：已缓存的图还能命中，没缓存的新图
+    一律 403，只有 raw 取得到。所以下载必须带 raw 兜底。"""
+    m = GH_RE.match(url)
+    if not m:
+        return None
+    owner, repo, branch, path = m.groups()
+    return f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
+
+
 def fetch(url: str, force: bool = False) -> bytes:
     """下载原图（带磁盘缓存）：重跑/换机器都不必再下一次 100MB。"""
     cp = cache_path(url)
@@ -89,19 +110,22 @@ def fetch(url: str, force: bool = False) -> bytes:
         return cp.read_bytes()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     last_err = ""
+    candidates = [url] + ([raw_url(url)] if raw_url(url) else [])
     for attempt in range(3):
-        try:
-            req = Request(url, headers={"User-Agent": UA})
-            with urlopen(req, timeout=60) as r:
-                data = r.read()
-            if not data:
-                raise OSError("空响应")
-            cp.write_bytes(data)
-            return data
-        except Exception as e:          # 网络抖动重试两次
-            last_err = str(e)
+        for cand in candidates:
+            try:
+                req = Request(cand, headers={"User-Agent": UA})
+                with urlopen(req, timeout=60) as r:
+                    data = r.read()
+                if not data:
+                    raise OSError("空响应")
+                cp.write_bytes(data)
+                return data
+            except Exception as e:          # 网络抖动/403 换下一个候选
+                last_err = f"{cand} → {e}"
+        if attempt < 2:
             time.sleep(1 + attempt * 2)
-    raise OSError(f"下载失败（{last_err}）：{url}")
+    raise OSError(f"下载失败（{last_err}）")
 
 
 def build_tiers(data: bytes, ext: str, fid: str) -> tuple[int, int, dict]:
@@ -156,16 +180,30 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="制图经验文章图片入库")
     ap.add_argument("--force", action="store_true", help="忽略已有产物，全部重下重生成")
     ap.add_argument("--dry-run", action="store_true", help="只报告，不写文件")
+    ap.add_argument("--scan", action="append", metavar="DIR",
+                    help="额外的 md 目录（可重复）；缺省只扫 content/guide")
+    ap.add_argument("--md", action="append", metavar="FILE",
+                    help="指定的 md 文件（可重复），比 --scan 更精确")
+    ap.add_argument("--scope", default="guide",
+                    help="本批条目归属标记（默认 guide）；只清理同 scope 的失效映射，"
+                         "不同站点互不误删")
     args = ap.parse_args()
 
-    urls = collect_urls()
+    scan_paths = [Path(p) for p in (args.scan or [])] + [Path(p) for p in (args.md or [])]
+    if not scan_paths:
+        scan_paths = [GUIDE_DIR]
+    for p in scan_paths:
+        if not p.exists():
+            print(f"! 路径不存在：{p}")
+            return 2
+    urls = collect_urls(scan_paths)
     if not urls:
-        print("! content/guide/ 下没有图片引用")
+        print(f"! {len(scan_paths)} 个路径下没有图片引用")
         return 0
     mapping = load_mapping()
     gallery = load_gallery_items()
-    print(f"扫描 content/guide/：{len(urls)} 个图片 URL（映射表现有 {len(mapping)} 条，"
-          f"图库可复用条目 {len(gallery)} 条）")
+    print(f"扫描 {len(scan_paths)} 个路径：{len(urls)} 个图片 URL（映射表现有 {len(mapping)} 条，"
+          f"图库可复用条目 {len(gallery)} 条，scope={args.scope}）")
 
     todo = [(u, arts) for u, arts in urls.items() if GH_RE.match(u)]
     skipped = [u for u in urls if not GH_RE.match(u)]
@@ -219,7 +257,8 @@ def main() -> int:
                 mapping[url] = {
                     "id": fid, "width": hit.get("width"), "height": hit.get("height"),
                     "thumb": hit["thumb"], "disp": disp_rel, "full": hit["full"],
-                    "bytes": hit.get("bytes") or 0, "articles": arts, "reuse": "gallery",
+                    "bytes": hit.get("bytes") or 0, "articles": arts, "scope": args.scope,
+                    "reuse": "gallery",
                 }
                 n_reuse += 1
                 print(f"  复用图库 {fid}  {hit.get('width')}x{hit.get('height')}  {url.rsplit('/', 1)[-1]}")
@@ -236,6 +275,7 @@ def main() -> int:
                 "full": f"guide/full/{fid}.{ext}",
                 "bytes": sizes["full"],
                 "articles": arts,
+                "scope": args.scope,
             }
             n_new += 1
             bytes_full += sizes["full"]
@@ -252,8 +292,10 @@ def main() -> int:
         print("\n[dry-run] 未写入任何文件")
         return 0
 
-    # 只保留仍被文章引用的条目（文章删图后映射表不积累死链）
-    stale = [u for u in mapping if u not in urls]
+    # 只清理本批 scope 的失效条目：不同站点（guide / blog / note）共用一张表，
+    # 互相不能误删
+    stale = [u for u in mapping
+             if u not in urls and mapping[u].get("scope", "guide") == args.scope]
     for u in stale:
         mapping.pop(u, None)
     if stale:
