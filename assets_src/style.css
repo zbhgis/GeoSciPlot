@@ -123,16 +123,16 @@ h1 img.logo{height:clamp(44px,5.4vw,58px);width:auto;flex:none}
 @media (hover:hover){.searchbox button:hover{color:var(--accent);background:var(--card)}}
 .search:focus{outline:none;border-color:var(--accent)}
 .search::placeholder{color:var(--faint)}
-select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:7px 12px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--dim)}
-.reset{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:7px 14px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--faint);cursor:pointer}
+select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:7px 12px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--dim)}
+.reset{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:7px 14px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--faint);cursor:pointer}
 @media (hover:hover){.reset:hover{color:var(--accent);border-color:var(--accent)}}
 #filters[hidden]{display:none}
-.sorter{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line2);border-radius:999px;background:var(--card)}
-.sorter button{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:6px 13px;border:none;border-radius:999px;background:transparent;color:var(--dim);cursor:pointer;transition:color .15s,background-color .15s}
+.sorter{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line2);border-radius:6px;background:var(--card)}
+.sorter button{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:6px 13px;border:none;border-radius:3px;background:transparent;color:var(--dim);cursor:pointer;transition:color .15s,background-color .15s}
 @media (hover:hover){.sorter button:hover{color:var(--text)}}
 .sorter button[aria-pressed=true]{background:var(--accent);color:var(--bg)}
 .sorter button svg{width:13px;height:13px;flex:none}
-.dateinp{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:6px 12px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--dim);color-scheme:dark light}
+.dateinp{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:6px 12px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--dim);color-scheme:dark light}
 .fgroup{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 0;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .flabel{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint);min-width:44px;letter-spacing:.06em}
 .chips{display:flex;flex-direction:column;gap:14px}
@@ -142,9 +142,9 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 /* 筛选 chips（多选模型，正向选择，2026-10-14 与 MacroBiodiv 统一）：默认全不选=
    灰描边胶囊；点击=选中（accent 实底，选中值之间 OR）；
    hover=accent-soft 预选；行尾 全选/反选 为虚线胶囊。与排序胶囊同形状语言 */
-.chips button{display:inline-flex;align-items:center;gap:7px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:5px 13px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--text);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s,opacity .16s}
+.chips button{display:inline-flex;align-items:center;gap:7px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:5px 13px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--text);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s,opacity .16s}
 @media (hover:hover){.chips button:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}}
-.chips button .n{font-style:normal;min-width:22px;padding:0 7px;border-radius:999px;background:var(--line);color:var(--faint);font-size:var(--fs-xs);line-height:19px;text-align:center;font-variant-numeric:tabular-nums}
+.chips button .n{font-style:normal;min-width:22px;padding:0 7px;border-radius:4px;background:var(--line);color:var(--faint);font-size:var(--fs-xs);line-height:19px;text-align:center;font-variant-numeric:tabular-nums}
 .chips button[aria-pressed=false]{color:var(--faint);border-color:var(--line)}
 .chips button[aria-pressed=false] .n{opacity:.55;text-decoration:none}
 .chips .chip-act{border-style:dashed;color:var(--faint);font-size:var(--fs-xs);padding:5px 11px}
@@ -159,7 +159,7 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .colorbox input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 .colorbox input[type=color]::-webkit-color-swatch{border:1px solid var(--line2);border-radius:50%}
 .colorbox input[type=color]::-moz-color-swatch{border:1px solid var(--line2);border-radius:50%}
-.hexinp{width:150px;padding:6px 12px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color-scheme:dark light}
+.hexinp{width:150px;padding:6px 12px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color-scheme:dark light}
 .hexinp:focus{outline:none;border-color:var(--accent)}
 .hexinp.bad{border-color:#f85149}
 .hexinp::placeholder{color:var(--faint)}
@@ -188,7 +188,7 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
    flex-wrap 逐枚换行 —— 标签再多也不截断；无标签的 — 弱化显示 */
 .card .cap{display:block;padding:8px 10px 10px}
 .card .cap .tags{display:flex;flex-wrap:wrap;gap:5px}
-.card .cap .tags i{font-style:normal;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);line-height:1.7;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:999px;padding:0 8px;white-space:nowrap;max-width:12em;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.card .cap .tags i{font-style:normal;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);line-height:1.7;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:4px;padding:0 8px;white-space:nowrap;max-width:12em;overflow:hidden;text-overflow:ellipsis;min-width:0}
 /* 范围徽章（.sc）：MacroBiodiv 体裁徽章（.c-ty）同款灰色——灰字灰描边，与
    样式徽章（accent 蓝描边，.c-j 同款）构成双轨视觉区分 */
 .card .cap .tags i.sc{color:var(--dim);border-color:var(--line2)}
@@ -199,14 +199,14 @@ select{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-siz
 .img-ph{display:flex;align-items:center;justify-content:center;width:100%;min-height:120px;padding:12px;border:1px dashed var(--line2);border-radius:6px;background:var(--card);color:var(--faint);font-size:var(--fs-sm);text-align:center}
 .pgbar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;margin:44px 0 0;padding-top:24px;border-top:1px solid var(--line)}
 /* 步进按钮：只有文字 + 一枚内联箭头，hover 才点亮（与主站 .v3-pager-step 同语言） */
-.pgbar button{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);line-height:1.35;padding:5px 13px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
+.pgbar button{display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);line-height:1.35;padding:5px 13px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
 @media (hover:hover){.pgbar button:hover:not(:disabled){color:var(--accent);border-color:var(--accent);background:var(--card)}}
 .pgbar button:disabled{opacity:.3;cursor:not-allowed}
 /* 箭头 hover 时朝翻页方向平移 2px；禁用态不动 */
 @media (hover:hover){#prev:hover:not(:disabled) .ico-l{transform:translateX(-2px)}
 #next:hover:not(:disabled) .ico-r{transform:translateX(2px)}}
 /* 页码：等宽 + 定宽定高，选中态用强调色描边配极淡底，不填色（保持克制的工程感） */
-.pgnum{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 9px;border:1px solid var(--line2);border-radius:999px;background:transparent;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);font-variant-numeric:tabular-nums;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
+.pgnum{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 9px;border:1px solid var(--line2);border-radius:6px;background:transparent;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);font-variant-numeric:tabular-nums;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
 @media (hover:hover){.pgnum:hover{color:var(--text);border-color:var(--accent)}}
 .pgnum[data-on=true]{color:var(--accent);border-color:var(--accent);background:var(--card)}
 /* 当前页附近被"窗口"截断时用省略号占位，不可点 */
@@ -222,11 +222,11 @@ dl.meta{display:grid;grid-template-columns:104px 1fr;gap:11px 18px;margin:36px 0
 dl.meta dt{font-size:var(--fs-sm);color:var(--faint);padding-top:4px;letter-spacing:.06em}
 dl.meta dd{margin:0;color:var(--text);word-break:break-all}
 dl.meta dd .hl{color:var(--text)}
-dl.meta dd a.tag{display:inline-block;margin:0 8px 8px 0;padding:3px 12px;border:1px solid var(--line2);border-radius:999px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--dim);transition:color .16s,border-color .16s,background-color .16s}
+dl.meta dd a.tag{display:inline-block;margin:0 8px 8px 0;padding:3px 12px;border:1px solid var(--line2);border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--dim);transition:color .16s,border-color .16s,background-color .16s}
 @media (hover:hover){dl.meta dd a.tag:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}}
 /* 详情页「配色」：meta 里的主色色块（≤20），点击复制色号（gallery.js 接管） */
 dl.meta dd .swatches{display:flex;flex-wrap:wrap;gap:8px}
-.swchip{display:inline-flex;align-items:center;gap:7px;padding:3px 10px 3px 5px;border:1px solid var(--line2);border-radius:999px;background:transparent;text-align:left;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--text);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
+.swchip{display:inline-flex;align-items:center;gap:7px;padding:3px 10px 3px 5px;border:1px solid var(--line2);border-radius:6px;background:transparent;text-align:left;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--text);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
 @media (hover:hover){.swchip:hover{color:var(--accent);border-color:var(--accent);background:var(--card)}}
 .swchip i{flex:none;width:26px;height:18px;border-radius:3px;border:1px solid rgba(127,127,127,.4)}
 .swchip b{font-weight:500}
@@ -248,7 +248,7 @@ dl.meta dd .swatches{display:flex;flex-wrap:wrap;gap:8px}
 .pager .pn-next .dir{justify-content:flex-end}
 .pager .pn-empty{min-height:68px;border:1px dashed var(--line);border-radius:6px}
 /* ── 返回全部：发丝边框小按钮，箭头 hover 左移 ── */
-.back{display:inline-flex;align-items:center;gap:7px;margin:36px 0 20px;padding:6px 14px 6px 11px;border:1px solid var(--line2);border-radius:999px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);line-height:1.35;color:var(--dim);transition:color .16s,border-color .16s,background-color .16s}
+.back{display:inline-flex;align-items:center;gap:7px;margin:36px 0 20px;padding:6px 14px 6px 11px;border:1px solid var(--line2);border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);line-height:1.35;color:var(--dim);transition:color .16s,border-color .16s,background-color .16s}
 @media (hover:hover){.back:hover{color:var(--accent);border-color:var(--accent);background:var(--card)}
 .back:hover .ico-l{transform:translateX(-2px)}}
 /* ── 窄屏收尾（必须写在上面这些规则之后，否则同优先级会被覆盖） ──
@@ -323,7 +323,7 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .cl-meta a{color:var(--accent);text-decoration:none;overflow-wrap:anywhere}
 .cl-meta a:hover{text-decoration:underline}
 .cl-meta .cl-mid{color:var(--text);font-weight:600}
-.cl-meta .cl-mtag{font-style:normal;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent);border-radius:999px;padding:0 8px;line-height:1.7;white-space:nowrap;max-width:12em;overflow:hidden;text-overflow:ellipsis}
+.cl-meta .cl-mtag{font-style:normal;border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent);border-radius:6px;padding:0 8px;line-height:1.7;white-space:nowrap;max-width:12em;overflow:hidden;text-overflow:ellipsis}
 .cl-meta .cl-mtag.sc{color:var(--dim);border-color:var(--line2)}
 .cl-stage{position:relative;margin-top:14px;border:1px solid var(--line);border-radius:8px;background:var(--card);overflow:hidden;min-height:240px;max-width:100%}
 .cl-stage canvas{display:block;width:100%;height:auto}
@@ -343,10 +343,15 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .cl-spin{flex:none;width:16px;height:16px;border:2px solid var(--line2);border-top-color:var(--accent);border-radius:50%;animation:cl-rotate .8s linear infinite}
 @keyframes cl-rotate{to{transform:rotate(360deg)}}
 .cl-stagebar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--dim)}
+/* 舞台条按功能分组（框选 / 高亮辅助 / 色觉模拟），组间发丝竖线分隔；
+   组作为整体折行，窄屏撤掉竖线避免行首孤边框 */
+.cl-group{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;padding-right:12px;border-right:1px solid var(--line2)}
+.cl-stagebar .cl-group:last-child{padding-right:0;border-right:none}
+@media (max-width:640px){.cl-group{border-right:none;padding-right:0}}
 .cl-check{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 .cl-check input,.cl-row input[type=range]{accent-color:var(--accent)}
 .cl-status{margin:8px 0 0;min-height:1.3em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--faint)}
-.cl-btn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:7px 13px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
+.cl-btn{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);padding:7px 13px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--dim);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
 .cl-btn:hover:not(:disabled){color:var(--accent);border-color:var(--accent);background:var(--bg)}
 .cl-btn:disabled{opacity:.35;cursor:not-allowed}
 .cl-btn[data-on=true]{color:var(--accent);border-color:var(--accent)}
@@ -357,9 +362,11 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 /* 工具栏「载入」是入口动作，同样实底突出 */
 .cl-toolbar .searchbox button{background:var(--accent);color:var(--bg);font-weight:600}
 .cl-toolbar .searchbox button:hover{color:var(--bg);background:var(--accent);filter:brightness(1.1)}
+/* 工具栏内独立按钮与连体搜索框同排：同为 36px 胶囊，同排半径语言一致 */
+.cl-toolbar .cl-btn{height:36px;padding:0 16px;border-radius:999px;display:inline-flex;align-items:center}
 /* 下方操作面板：宽屏三列横排（主色 / 替换 / 结果），窄屏退化为纵向堆叠 */
 .cl-panel{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
-.cl-panel h3{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);font-weight:500;letter-spacing:.1em;color:var(--faint)}
+.cl-panel h3{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);font-weight:500;letter-spacing:.1em;color:var(--faint);padding-bottom:8px;border-bottom:1px solid var(--line)}
 .cl-panel section{min-width:0}
 .cl-panel section+section{border-left:1px solid var(--line);padding-left:16px}
 /* 色板可能列出 20 个色块：限高滚动，避免左列把下方面板整体撑长 */
@@ -374,15 +381,15 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .cl-meta{min-width:0;flex:1}
 .cl-hex{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-sm);color:var(--text)}
 .cl-sub{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint)}
-.cl-copy{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint);border:1px solid var(--line2);border-radius:999px;padding:2px 9px;transition:color .16s,border-color .16s}
+.cl-copy{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint);border:1px solid var(--line2);border-radius:4px;padding:2px 9px;transition:color .16s,border-color .16s}
 .cl-swatch:hover .cl-copy{color:var(--accent);border-color:var(--accent)}
-.cl-ban{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint);border:1px solid var(--line2);border-radius:999px;padding:2px 9px;transition:color .16s,border-color .16s}
+.cl-ban{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint);border:1px solid var(--line2);border-radius:4px;padding:2px 9px;transition:color .16s,border-color .16s}
 .cl-swatch:hover .cl-ban{color:#f85149;border-color:#f85149}
 .cl-blacklist{margin-top:12px;padding:8px 10px;border:1px dashed var(--line2);border-radius:6px}
 .cl-bl-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint)}
 .cl-mini{font-size:var(--fs-xs);padding:2px 8px}
 .cl-bl-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.cl-bl-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 5px 2px 9px;border:1px solid var(--line2);border-radius:999px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--dim)}
+.cl-bl-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 5px 2px 9px;border:1px solid var(--line2);border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--dim)}
 .cl-bl-chip i{width:14px;height:14px;border-radius:2px;border:1px solid rgba(127,127,127,.4)}
 .cl-bl-chip a{cursor:pointer;color:var(--faint);padding:3px 6px;margin:-3px -4px;line-height:1}
 .cl-bl-chip a:hover{color:#f85149}
@@ -421,7 +428,7 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
    JS 折行检测也不可靠（RO 回调在后台标签页延迟投递），纯连排零分支最稳 */
 .cl-cb{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px}
 .cl-cb>label{font-size:var(--fs-sm);color:var(--dim)}
-.cl-cb select{padding:4px 11px;font-size:var(--fs-sm)}
+.cl-cb select{padding:6px 11px;font-size:var(--fs-sm)}
 .cl-cb input[type=range]{width:86px}
 .cl-cb>.mono{min-width:32px;font-size:var(--fs-sm);color:var(--dim)}
 /* ── 色彩实验 · 放大镜层：单击画布打开，滚轮缩放/拖拽平移/＋−/适配/1:1，
@@ -434,10 +441,11 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .cl-zoom-view:active{cursor:grabbing}
 .cl-zoom-view canvas{display:block;box-shadow:0 6px 40px rgba(0,0,0,.35);border:1px solid var(--line2)}
 /* ── 详情页「转到色彩实验」按钮：详情页主 CTA，用强调色实底胶囊突出，
-   hover 抬升 + 光晕；对比度：accent 底 × --bg 字，明暗两套都过线 ── */
+   hover 仅 brightness 过渡（2026-11-13 unslop 审计：去彩色辉光与抬升）；
+   对比度：accent 底 × --bg 字，明暗两套都过线 ── */
 .cl-go-row{margin:18px 0 0}
-.cl-go{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border:1px solid var(--accent);border-radius:999px;background:var(--accent);color:var(--bg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-md);font-weight:600;letter-spacing:.01em;box-shadow:0 2px 12px color-mix(in srgb,var(--accent) 35%,transparent);transition:color .16s,transform .16s,box-shadow .16s,filter .16s}
-.cl-go:hover{color:var(--bg);filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 4px 16px color-mix(in srgb,var(--accent) 48%,transparent)}
+.cl-go{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border:1px solid var(--accent);border-radius:999px;background:var(--accent);color:var(--bg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-md);font-weight:600;letter-spacing:.01em;transition:color .16s,filter .16s}
+.cl-go:hover{color:var(--bg);filter:brightness(1.08)}
 .cl-go .mnav-ico{width:15px;height:15px}
 /* ── 详情页原图信息行：正文图换展示档后，原图大小与直达链接放在图下，
    访客对「要下多大的图」有预期（弱化样式，别抢主 CTA） ── */
@@ -538,7 +546,7 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 /* 主色构成卡的屏蔽色工具行：快捷白/黑/灰 + 拾色器 + 已屏 chips（同色彩实验黑名单语言） */
 .st-bl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
 .st-bl-label{font-size:var(--fs-xs);color:var(--faint)}
-.st-bl-q{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--dim);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
+.st-bl-q{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border:1px solid var(--line2);border-radius:6px;background:transparent;color:var(--dim);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);cursor:pointer;transition:color .16s,border-color .16s,background-color .16s}
 .st-bl-q i{flex:none;width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 1px var(--line2)}
 .st-bl-q:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 .st-bl-note{margin:10px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint)}
@@ -591,7 +599,7 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 /* 列表：月份 chip + 分组 + 条目行 */
 .wk-quicknav{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:24px 0 36px}
 .wk-group{scroll-margin-top:80px}
-.wk-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);line-height:1.3;border:1px solid var(--line2);border-radius:999px;color:var(--dim);background:transparent;transition:color .16s,border-color .16s,background-color .16s}
+.wk-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);line-height:1.3;border:1px solid var(--line2);border-radius:6px;color:var(--dim);background:transparent;transition:color .16s,border-color .16s,background-color .16s}
 .wk-btn:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 .wk-btn .n{color:var(--faint)}
 .wk-groups{display:flex;flex-direction:column;gap:40px}
@@ -609,7 +617,7 @@ mark{background:color-mix(in srgb,var(--accent) 24%,transparent);color:inherit;b
 .wk-line-tags{display:flex;gap:6px;flex-wrap:wrap}
 .wk-line-date{display:block;margin:6px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);color:var(--faint);font-variant-numeric:tabular-nums}
 @media (min-width:640px){.wk-line-in{flex-direction:row;justify-content:space-between;align-items:flex-start;gap:24px}.wk-line-main{flex:1}.wk-line-side{text-align:right}}
-.wk-tag{display:inline-flex;align-items:center;height:19px;padding:0 6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);line-height:1;border:1px solid var(--line2);border-radius:999px;color:var(--dim);white-space:nowrap}
+.wk-tag{display:inline-flex;align-items:center;height:19px;padding:0 6px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:var(--fs-xs);line-height:1;border:1px solid var(--line2);border-radius:4px;color:var(--dim);white-space:nowrap}
 /* 文章三栏骨架 */
 .wk-shell{display:flex;max-width:1400px;margin:0 auto}
 .wk-side{display:none;width:250px;flex:none;border-right:1px solid var(--line)}

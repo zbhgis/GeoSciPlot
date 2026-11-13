@@ -647,7 +647,7 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
     body = f"""<header class="site">
   <p class="kicker">GEOSCIPILOT · COLOR LAB</p>
   <h1 class="spage-title">色彩实验</h1>
-  <p class="lede">框选（或不框选=整张图）统计图中占比最高的几个颜色并提供色号，再把指定颜色替换成新颜色，方便调色试色；可叠加色觉模拟（红盲 / 绿盲 / 蓝盲 / 全色盲视角），检查配色对色觉障碍读者是否分得开。全部计算在浏览器本地完成，可下载结果图。</p>
+  <p class="lede">框选统计主色、替换指定颜色、叠加色觉模拟——全部在浏览器本地完成，可下载结果图。</p>
 </header>
 
 <div class="clayout">
@@ -660,17 +660,23 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
     <div class="cl-stage" id="cl-stage">
       <canvas id="cl-canvas" width="0" height="0"></canvas>
       <div class="cl-overlay" id="cl-overlay"><div class="cl-selbox" id="cl-selbox"></div></div>
-      <p class="cl-placeholder" id="cl-placeholder">先在上方输入图片 id 载入原图</p>
+      <p class="cl-placeholder" id="cl-placeholder">输入图片 id 载入原图</p>
       <i class="cl-grip" id="cl-grip" title="拖动调整显示大小（40%–100%）" aria-hidden="true"></i>
       <div class="cl-loading" id="cl-loading" hidden><span class="cl-spin"></span>载入中…</div>
     </div>
     <div class="cl-stagebar">
-      <button id="cl-selmode" class="cl-btn" type="button" aria-pressed="false" title="开启后拖拽框选统计区域；关闭时单击画布打开放大镜">开始框选</button>
-      <span id="cl-selinfo"></span>
-      <button id="cl-clearsel" class="cl-btn" type="button" disabled>清除框选</button>
-      <label class="cl-check"><input type="checkbox" id="cl-highlight"> 高亮将被替换的像素</label>
-      <label class="cl-check" title="高亮遮罩的颜色，可自选"><input type="color" id="cl-hlcolor" value="#FF4081"> 高亮色</label>
-      <span class="cl-cb"><label for="cl-cbtype">色觉模拟</label><select id="cl-cbtype" title="按二色视觉矩阵近似模拟色觉障碍读者看到的成图效果"><option value="">不模拟</option><option value="prot" title="红色盲：缺失红锥，红/绿/橙互混">Protanopia</option><option value="deut" title="绿色盲：缺失绿锥，最常见的色觉缺陷">Deuteranopia</option><option value="trit" title="蓝色盲：缺失蓝锥，蓝/绿、黄/红互混">Tritanopia</option><option value="achroma" title="全色盲：只剩明暗层次">Achromatopsia</option></select><input type="range" id="cl-cbstrength" class="tolrange" min="10" max="100" step="5" value="100" aria-label="色觉模拟强度" title="模拟强度：100% = 完全二色视觉，调低近似红色弱 / 绿色弱等部分色觉缺陷"><span class="mono" id="cl-cbstrengthval">100%</span></span>
+      <span class="cl-group">
+        <button id="cl-selmode" class="cl-btn" type="button" aria-pressed="false" title="开启后拖拽框选统计区域；关闭时单击画布打开放大镜">开始框选</button>
+        <span id="cl-selinfo"></span>
+        <button id="cl-clearsel" class="cl-btn" type="button" disabled>清除框选</button>
+      </span>
+      <span class="cl-group">
+        <label class="cl-check"><input type="checkbox" id="cl-highlight"> 高亮将被替换的像素</label>
+        <label class="cl-check" title="高亮遮罩的颜色，可自选"><input type="color" id="cl-hlcolor" value="#FF4081"> 高亮色</label>
+      </span>
+      <span class="cl-group">
+        <span class="cl-cb"><label for="cl-cbtype">色觉模拟</label><select id="cl-cbtype" title="只改预览显示、不改图像像素；按二色视觉矩阵近似模拟色觉障碍读者看到的成图效果"><option value="">不模拟</option><option value="prot" title="红色盲：缺失红锥，红/绿/橙互混">Protanopia</option><option value="deut" title="绿色盲：缺失绿锥，最常见的色觉缺陷">Deuteranopia</option><option value="trit" title="蓝色盲：缺失蓝锥，蓝/绿、黄/红互混">Tritanopia</option><option value="achroma" title="全色盲：只剩明暗层次">Achromatopsia</option></select><input type="range" id="cl-cbstrength" class="tolrange" min="10" max="100" step="5" value="100" aria-label="色觉模拟强度" title="模拟强度：100% = 完全二色视觉，调低近似红色弱 / 绿色弱等部分色觉缺陷"><span class="mono" id="cl-cbstrengthval">100%</span></span>
+      </span>
     </div>
     <p class="cl-status" id="cl-status"></p>
   </section>
@@ -679,8 +685,7 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
     <section>
       <h3>主色 · 当前区域</h3>
       <div class="cl-row"><label>数量</label><input type="range" id="cl-count" min="4" max="20" step="1" value="8" aria-label="主色数量"><span class="mono" id="cl-countval">8</span></div>
-      <div class="cl-palette" id="cl-palette"><p class="cl-note">载入图片后自动统计（按占比排序）</p></div>
-      <p class="cl-note">点击色块设为「目标色」；「复制」拿色号；「屏蔽」把背景色（含相近色）移出统计。开启色觉模拟时，色块右侧并排显示模拟后的颜色。</p>
+      <div class="cl-palette" id="cl-palette"><p class="cl-note">载入图片后自动统计</p></div>
       <div class="cl-blacklist" id="cl-blacklist" hidden>
         <div class="cl-bl-head"><span>黑名单 · 以下颜色不计入主色统计</span><button id="cl-blclear" class="cl-btn cl-mini" type="button">清空</button></div>
         <div class="cl-bl-chips" id="cl-blchips"></div>
@@ -702,7 +707,6 @@ def build_colorlab_page(cfg: dict, items: list[dict]) -> str:
         <button id="cl-cbapply" class="cl-btn" type="button" disabled title="把当前色觉模拟的结果真正写进图像像素（可撤销），写回后下载 PNG 即为模拟图">固化模拟效果</button>
         <button id="cl-download" class="cl-btn cl-primary" type="button" disabled>下载 PNG</button>
       </div>
-      <p class="cl-note">色觉模拟只改显示、不改像素；「固化模拟效果」才把模拟结果写回图像（可撤销 / 还原原图），写回后预览自动关闭以免叠加两次。</p>
     </section>
   </aside>
 </div>
